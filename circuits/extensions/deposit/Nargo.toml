@@ -1,0 +1,8 @@
+[package]
+name = "cblc_extension_deposit"
+type = "bin"
+authors = ["Maintainers"]
+compiler_version = "=1.0.0-beta.26"
+
+[dependencies]
+core = { path = "../core" }

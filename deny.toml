@@ -1,5 +1,13 @@
 [advisories]
-ignore = []
+# Narrow inherited libSQL exceptions; see docs/DEPENDENCIES.md.
+ignore = [
+    { id = "RUSTSEC-2025-0134", reason = "libSQL native-root loader uses rustls-pemfile 2.2.0; thin wrapper over rustls-pki-types, upstream transport migration pending" },
+    { id = "RUSTSEC-2026-0258", reason = "libSQL 0.9.30 built-in connector enables HTTP/1 only; crlt exposes no custom connector, source guard in CI" },
+    { id = "RUSTSEC-2026-0049", reason = "libSQL 0.9.30 default TLS connector configures no CRLs; tracked transport upgrade" },
+    { id = "RUSTSEC-2026-0104", reason = "libSQL 0.9.30 default TLS connector configures no CRLs; tracked transport upgrade" },
+    { id = "RUSTSEC-2026-0098", reason = "OPEN remote TLS name-constraint risk requiring CA misissuance; libSQL 0.9.30 still pins rustls 0.22/webpki 0.102 with no compatible patch" },
+    { id = "RUSTSEC-2026-0099", reason = "OPEN remote TLS wildcard/name-constraint risk requiring CA misissuance; fixed webpki 0.103 is outside libSQL transport compatibility" },
+]
 
 [licenses]
 allow = [

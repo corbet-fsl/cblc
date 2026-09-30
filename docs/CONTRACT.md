@@ -1,7 +1,5 @@
-> **Not production ready:** default builds reject `with_extensions`. The
-> `extension-issuer-harness` feature enables storage/authorization experiments
-> only. The complete seven-constraint Noir relation and cwlt witness are absent.
-> Passing the signed-boundary tests does not establish hidden extension semantics.
+> Extension activation requires a real genesis proof through the pinned worker.
+> See [security status](SECURITY-STATUS.md) for current validation and trust limits.
 
 # Implemented balance contract
 
@@ -39,8 +37,8 @@ acceptance counts/recovery, deliberately changed to the current-only boundary.
 
 No plaintext allocation ledger or holder/prover API is exported. Historical
 holder and browser harnesses are test fixtures, not deployment code. Existing
-proof artifacts do not yet support punishment, change tokens or public counters;
-extension activation must be separate from v2 acceptance.
+v2 artifacts do not support punishment, change tokens or public counters; the
+three extension circuits and cwlt witness use a separate pinned proof scope.
 
 Extension issuer APIs (`with_extensions`, `apply_extended`, `deposit_batch`,
 `obligations`, `public_record`) and their activation boundary are specified in
@@ -79,8 +77,9 @@ current-state and replay checks run before anonymous proof verification; cthl
 then admits global and per-subject work. Limits are ephemeral and reset with the
 handle, so composition must reuse its handle and enforce transport-level limits.
 `ProcessExtensionVerifier` uses independent cvfy process pools for authenticated
-updates and anonymous deposits/record checks. The generic verifier trait remains
-a trusted host boundary; custom implementations must honor the same separation.
+updates and anonymous deposits/record checks. The extension trait is sealed;
+activation accepts the shipped process adapter and a real genesis probe. Host
+configuration of the executable and artifacts remains trusted.
 
 `pins::change_binding` length-prefixes community, canonical cpsd member hex and
 field, followed by the old revision and both 32-byte fingerprints, under a

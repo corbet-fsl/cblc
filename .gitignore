@@ -4,3 +4,6 @@
 **/dist/
 **/target/
 .proof-test/
+.extension-test/
+.extension-wasm/
+dependency-metadata.json

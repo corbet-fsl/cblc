@@ -17,18 +17,13 @@ crate-type = ["rlib"]
 unsafe_code = "forbid"
 missing_docs = "warn"
 
-[features]
-default = []
-# Storage/authorization test harness only; no production extension relation ships.
-extension-issuer-harness = []
-
 [dependencies]
 cthl = { git = "https://github.com/corbet-foss/cthl", rev = "7f1a38de4285dee4b15ee8f9e82c1cb257513644" }
 cpns = { git = "https://github.com/corbet-foss/cpns", rev = "23968a9fa338791e70078c6070a6f1f3cf185ff7", default-features = false }
 futures = "0.3"
 czkp = { git = "https://github.com/corbet-foss/czkp", rev = "8444749e98ea192353ccc82c56a33a43fcaa588c" }
-cvfy = { git = "https://github.com/corbet-foss/cvfy", rev = "03d1f87e5edfa5a60ddd9e0a71d23864f0dbfb69" }
-cssr = { git = "https://github.com/corbet-foss/cssr", rev = "b1e062fc1c0f581257668389988fcb17550711fa" }
+cvfy = { git = "https://github.com/corbet-foss/cvfy", rev = "b1bbc914cd8e193404111e64555998652d7921eb" }
+cssr = { git = "https://github.com/corbet-foss/cssr", rev = "736db98ad6ba272dd32b8f3d6e20f2e8f54da8bb" }
 crlt = { git = "https://github.com/corbet-foss/crlt", rev = "6b94dacd7fa04aa8847c62c6471a1fc5c0f6c9dc" }
 data-encoding = "2.9"
 ed25519-dalek = "2.2"

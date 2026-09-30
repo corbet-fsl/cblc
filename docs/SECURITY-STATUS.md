@@ -1,76 +1,123 @@
 # Security status
 
-The extension feature is **not ready for production**. The complete extension
-circuit and cwlt-side witness have not been implemented. Default builds reject
-activation before any database configuration is written. The explicitly named
-`extension-issuer-harness` feature exists for integration tests at a trusted,
-synthetic verifier boundary. It must not be enabled in a deployed service.
+The three extension circuits and cwlt witness implementation are shipped in source.
+The complete real-proof integration suite passed on 2026-09-30 at d145c4c in
+[GitHub Actions](https://github.com/corbet-libs/cblc/actions/runs/36743686840).
+This is not an independent audit or deployment approval. The synthetic extension
+verifier and harness feature have been removed. Activation verifies a real extended genesis
+probe through the configured worker before writing configuration; that probe
+does not create an account.
 
-## Proven and tested boundaries
+## What the cryptography establishes
 
-The existing Noir/Barretenberg v2 relation proves private account transitions,
-enrollment membership, receipt signatures, budget/range constraints and indexed
-map preservation. CI generates actual genesis and reservation proofs and checks
-them through the shipped process verifier and a real libSQL issuer. These tests
-are distinct from the larger legacy policy/holder test suites.
+Under the pinned Noir/Barretenberg implementation, keys and setup:
 
-Real Ed25519 signatures authenticate admissions, device authorizations, root
-continuity and issuer acceptances. The admission issuer is trusted to verify cpsd
-and sign the hash of its canonical community pseudonym; cblc does not re-verify
-BBS presentations. Root rotation preserves the account and settlement keys and
-requires both roots, the current state/version and a monotonic authority revision.
-The issuer enforces one lifetime genesis under that pseudonym.
+1. **Complete ingestion and state preservation.** Updates open the previous
+   commitment, prove enrollment/policy/budget constraints and preserve authenticated
+   maps. A proof bundle consumes every entry of the SHA-256 inbox chain before
+   its final action. Intermediate commitments reblind the state at the old
+   version; the final action increments the version once.
+2. **Authorized deposits.** A deposit proves knowledge of a hidden issuer-signed
+   state containing the exact outcome authorization. The update circuit creates
+   it only after contact/receipt signature checks and, for punishment, self-burn.
+   The proof binds community, target, scope, minimum age and secret-derived replay
+   nullifiers. The target recovers the opening from its authenticated transcript
+   by checking four outcomes; no reporter-only secret is needed.
+3. **Both burns and debt.** First-contact punishment burns the incoming bond and
+   forces the target's outgoing bond to burn, or available credit/debt if already
+   refunded. Punished slots cannot receive later Answer/timeout refunds.
+   Established punishment burns one credit per party. Every refund/refill pays
+   outstanding debt before making credit spendable.
+   Reordered Answer/established-punishment deliveries remain consumable and cannot
+   turn a later Answer into a refund.
+4. **Private blocks.** Self-punishment changes the committed pair entry to blocked;
+   the reservation relation cannot open another contact with that pair.
+5. **Hidden counters.** Receipt-authorized outcomes update the sender's counters
+   once. Direct Answer and later delivery cannot count or refund twice.
+   Established punishment replaces the target's earlier accepted sent contact
+   with punished; an original recipient instead gains one punished outcome.
+   Own punishment does not improve the punisher's record.
+6. **Quorum and shares.** Record proofs bind the current commitment/inbox and
+   purpose/challenge/expiry. Presence is equivalent to the hidden total reaching
+   quorum. Accepted/declined basis points are floored; punished gets the remainder.
+7. **Change debit.** A change proof subtracts the configured cost, binds a nonzero
+   field commitment and unique marker, and preserves other obligations.
+   PinSpendVerifier checks the completed acceptance against the exact canonical
+   cpns owner, field, old revision and replacement binding.
 
-Memory and libSQL integration tests exercise stale/racing updates, previous inbox
-binding, exact retry after new deliveries, batched queue writes, atomic consumption
-and deletion, current-version record checks, action/challenge/expiry binding,
-cthl admission, and completed cpns spends bound to the exact owner and pin revision.
-The restored cssr test also exercises the official sqld server over verified TLS.
+See [EXTENSIONS.md](EXTENSIONS.md) for the relation and wire domains. Member
+openings stay in cwlt. cssr uses RustCrypto P-256 for certificates, cvfy bounds
+the verifier subprocess, and czkp wraps upstream proof/ABI operations.
 
-## Still trusted or incomplete
+## What remains trusted or outside the proof
 
-None of the seven hidden extension constraints is currently established by a
-shipped proof relation. Specifically, the synthetic test verifier does not prove:
+- **Issuer and database:** the deposit circuit verifies an issuer certificate,
+  not a recursive proof of issuance history. The P-256 key must certify only
+  committed states accepted by the correct relation. cblc checks its own signed
+  acceptance first. Key custody, clock, non-equivocating durable storage, atomic
+  predecessor/marker checks and one lifetime genesis remain issuer duties.
+  An issuer controlling its keys can lie about acceptance.
+- **Admission and executable policy:** cmnt must verify cpsd before signing the
+  canonical community pseudonym. cblc checks that binding, not BBS proofs.
+  Host configuration must authenticate the circuit/key/issuer-key manifest and
+  run the shipped worker. The activation probe detects invalid proofs under that
+  worker; it cannot make an operator-selected dishonest executable trustworthy.
+  Compiler, backend, setup provenance and cryptographic assumptions remain trusted.
+- **Contact protocol and wallet:** signatures authenticate transcripts/outcomes,
+  not message truth or honest counterparts. Clients retain transcripts/openings,
+  verify acceptances before adopting successors and coordinate protected release
+  with accepted accounting. They must apply private blocks to ephemeral matching
+  rules and key release. A circuit cannot force a modified client to do this.
+- **External gates:** every first-contact/forum-listing consumer must call
+  check_record with its independently selected context. Those consumers are not
+  wired or deployed here. A pending obligation prevents fresh account actions and
+  records; it cannot make an offline member act or invalidate an external cache.
+- **Privacy and availability:** named updates expose owner, commitment, version,
+  marker and time; deliveries expose recipient and opaque replay markers.
+  There is no public punishment tag, shared cross-owner event hash or lifetime
+  inbox sequence. Delay/batch size do not prove anonymity against timing analysis,
+  retries, sparse traffic or a global observer. A mixing relay with ordinary
+  outcomes is still required and is not implemented here. The 64-entry cap and
+  finite verifier pools bound resources but do not eliminate denial of service.
+  Lost private openings require client recovery; the issuer cannot recreate them.
+- **Retention and migration:** consumed pending rows are deleted atomically,
+  but replay markers remain for the account lifetime. Backups and operator
+  recordings are outside deletion guarantees. No proof-backed conversion from
+  legacy v2 openings is supplied; never reset an identity with a second genesis.
+  No production artifact release or deployment occurred.
 
-1. Correct opening and processing of every obligation from the old to new root.
-2. An authentic contact receipt, accepted self-burn, deposit unlinkability,
-   minimum authorization age, or the recipient's ability to open an obligation.
-3. Punishment of both participants, termination without refund, and zero-balance
-   debt paid before future spendable refill.
-4. A committed private block. Client enforcement of matching/key-release rules
-   also remains a client trust boundary even with such a proof.
-5. Complete, exactly-once hidden outcome counters, including a finalized rule
-   for established-conversation punishment.
-6. The quorum inequality and deterministic rounding of the hidden counters.
-7. The actual debit behind a field-bound change permission while preserving
-   every other obligation.
+## Validation and performance
 
-The new facade and storage checks enforce their public predicates, but a trusted
-callback is not a substitute for these constraints. No real extension proof has
-passed an end-to-end test and no cwlt extension implementation is shipped.
+tests/extensions-proof.mjs generates proofs from cwlt's wasm Rust planner and
+sends them through the real cvfy worker into a libSQL-backed cblc issuer. It
+exercises both burns, forced ingestion, three outcomes, debt-first refill,
+quorum/rounding and the real cpns change API. Negative cases include corrupt
+activation, forged openings/certificates, wrong owner/field, change replay, stale
+frontiers, false shares and punishment refund attempts. It also rejects a deposit
+nullifier computed from the public receipt marker without the owner secret.
+All these scenarios passed with real proofs; legacy v2 proof and issuer tests
+remain separate checks in the same workflow.
 
-Every consuming contact/listing flow must call `check_record` with its independently
-selected context. This repository cannot enforce that call in an external forum
-or messaging implementation. Batched envelopes contain no punishment tag or
-lifetime sequence, but direct transport submissions still leak timing and origin;
-a mixing relay and ordinary settlement traffic remain necessary. Removing pending
-rows does not erase database backups or an operator's independent recordings.
+Benchmarks select native and wasm Barretenberg explicitly on one CI runner.
+The wasm Rust planner also shares native test vectors. Node wasm results are
+not browser/mobile latency measurements; loading, setup, transport and queue
+delay are separate costs. See [README](../README.md).
 
-## Dependency audit blocker
+## Dependency audit exceptions
 
-The new cargo-deny audit is intentionally failing for the pinned libsql 0.9.30
-transport graph through crlt. No ignore entries or continue-on-error bypasses are
-configured. The affected dependencies require incompatible-version upgrades
-outside this repository's small storage adapter:
+The six inherited libSQL transport advisories are documented in
+[DEPENDENCIES.md](DEPENDENCIES.md). CI checks their exact locked versions and
+upstream connector source. HTTP/2 is unused and CRLs are not configured; two remote
+TLS name-constraint risks and the unmaintained parser remain open. A green
+exception-policy audit is not an advisory-free dependency graph. The optional
+Turso integration still requires externally supplied credentials.
 
-- `h2 0.3.27`: [RUSTSEC-2026-0258](https://rustsec.org/advisories/RUSTSEC-2026-0258).
-- `rustls-webpki 0.102.8`: [RUSTSEC-2026-0049](https://rustsec.org/advisories/RUSTSEC-2026-0049),
-  [RUSTSEC-2026-0098](https://rustsec.org/advisories/RUSTSEC-2026-0098),
-  [RUSTSEC-2026-0099](https://rustsec.org/advisories/RUSTSEC-2026-0099),
-  [RUSTSEC-2026-0104](https://rustsec.org/advisories/RUSTSEC-2026-0104).
-- The graph also reports the unmaintained `rustls-pemfile` dependency
-  ([RUSTSEC-2025-0134](https://rustsec.org/advisories/RUSTSEC-2025-0134)).
-
-The dependency audit and full extension proof implementation are release blockers,
-regardless of functional test results. Optional real Turso tests require both
-`TURSO_URL` and `TURSO_TOKEN`; CI uses no real Turso credentials.
+The locked graph also predates two concurrent leaf-review fixes. cthl at
+7f1a38d can scan its bounded key table on repeated full-capacity denials; upstream
+[6939c3c](https://github.com/corbet-foss/cthl/commit/6939c3c6b586bf057451f47673c261ad757ffd7e)
+adds the recovery checkpoint. crlt at 6b94dac accepts namespace-changing foreign-key
+SET DEFAULT/SET NULL actions; upstream
+[4ba0656](https://github.com/corbet-foss/crlt/commit/4ba065601b93a710aab56104ab070ab0521cf33e)
+rejects them. cblc's issuer schema does not use those foreign-key actions.
+Coordinated downstream pin adoption remains separate integration work; this
+extension implementation does not claim to repair those older leaf revisions.

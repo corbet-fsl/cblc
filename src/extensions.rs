@@ -45,6 +45,13 @@ pub struct PendingObligation {
     pub previous: Inbox,
     pub commitment: [u8; 32],
 }
+/// Private input to a delayed deposit proof, returned only to the accepting holder.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StateCertificate {
+    pub accepted_at: u64,
+    pub signature: Vec<u8>,
+}
 /// The public effect to prove in addition to all ordinary account constraints.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
@@ -120,13 +127,26 @@ pub enum ExtensionStatement {
         record: PublicRecord,
     },
 }
-/// Trusted backend for the COMPLETE extension relation, not a signature substitute.
-/// See docs/EXTENSIONS.md for mandatory circuit constraints. There is no default.
-pub trait ExtensionVerifier: Send {
+pub(crate) mod sealed {
+    pub trait Sealed {}
+}
+/// Required transport budget for 64 ingestion proofs plus one final action.
+/// The pinned proof encoding and its JSON framing fit within this bounded size.
+pub const EXTENSION_PROOF_BYTES: usize = 4 * 1024 * 1024;
+/// Backend for the complete extension relation. Only the shipped process adapter
+/// implements this sealed trait; a caller cannot substitute a signed verdict.
+pub trait ExtensionVerifier: sealed::Sealed + Send {
     fn scope(&self) -> AccountProofScope;
     fn verify(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error>;
     /// Use a separate bounded pool for unauthenticated work.
     fn verify_anonymous(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error>;
+}
+/// A real genesis proof used to check the configured relation before activation.
+/// This probe does not admit or create an account. Normal authenticated issuance
+/// must still verify and atomically accept that member's request afterward.
+pub struct ExtensionActivation {
+    pub account: AccountStatement,
+    pub proof: Vec<u8>,
 }
 pub(crate) struct Extensions {
     pub policy: ExtensionPolicy,

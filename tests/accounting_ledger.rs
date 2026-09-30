@@ -778,10 +778,6 @@ fn inspect(path: &Path) -> Connection {
     Connection::open(path).unwrap()
 }
 
-#[path = "accounting_ledger/extensions.rs"]
-#[cfg(feature = "extension-issuer-harness")]
-mod extensions;
-
 #[test]
 fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
     let dir = tempfile::tempdir().unwrap();
@@ -839,37 +835,38 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
     assert!(ledger.apply(&g, &auth, &next, || 130).is_ok());
 }
 
-#[cfg(not(feature = "extension-issuer-harness"))]
 #[test]
-fn default_build_rejects_extension_activation() {
-    struct Reject;
-    impl cblc::extensions::ExtensionVerifier for Reject {
-        fn scope(&self) -> AccountProofScope {
-            AccountProofScope {
-                circuit_digest: [71; 32],
-                verifying_key_digest: [72; 32],
-            }
-        }
-        fn verify(&self, _: &cblc::extensions::ExtensionStatement, _: &[u8]) -> Result<(), Error> {
-            Err(Error::CryptoProvider)
-        }
-        fn verify_anonymous(
-            &self,
-            _: &cblc::extensions::ExtensionStatement,
-            _: &[u8],
-        ) -> Result<(), Error> {
-            Err(Error::CryptoProvider)
-        }
-    }
+fn extension_activation_requires_a_real_proof() {
     let f = Fixture::new();
+    let mut settings = policy();
+    settings.max_proof_bytes = cblc::extensions::EXTENSION_PROOF_BYTES;
+    let activation = cblc::extensions::ExtensionActivation {
+        account: genesis(&f).statement,
+        proof: vec![],
+    };
     let ledger = AccountLedger::with_store(
         cblc::storage::MemoryStore::default(),
         f.trust,
-        policy(),
+        settings,
         StorageOnlyVerifier::default(),
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap();
+    let config = cvfy::ProcessVerifierConfig {
+        node: "/unavailable/node".into(),
+        script: "/unavailable/verifier.mjs".into(),
+        artifact_config: "/unavailable/config.json".into(),
+        scope: AccountProofScope {
+            circuit_digest: [71; 32],
+            verifying_key_digest: [72; 32],
+        },
+        timeout: Duration::from_secs(1),
+        maximum_parallel: 1,
+        max_proof_bytes: cblc::extensions::EXTENSION_PROOF_BYTES,
+        node_heap_megabytes: 64,
+    };
+    let verifier =
+        cblc::verification::ProcessExtensionVerifier::new(config.clone(), config).unwrap();
     let result = ledger.with_extensions(
         cblc::extensions::ExtensionPolicy {
             revision: 1,
@@ -878,15 +875,16 @@ fn default_build_rejects_extension_activation() {
             deposit_delay_seconds: 10,
             minimum_deposit_batch: 2,
         },
-        Reject,
+        verifier,
         cblc::verification::ExtensionLimits {
             global_burst: 10,
             subject_burst: 2,
             replenish: Duration::from_secs(10),
             maximum_keys: std::num::NonZeroUsize::new(16).unwrap(),
         },
+        activation,
     );
-    assert!(matches!(result, Err(Error::UnsupportedCapability)));
+    assert!(matches!(result, Err(Error::InvalidInput)));
 }
 
 #[test]

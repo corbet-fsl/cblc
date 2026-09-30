@@ -1,5 +1,9 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore: ['**.md']
+  pull_request:
+    paths-ignore: ['**.md']
 permissions:
   contents: read
 concurrency:
@@ -8,7 +12,7 @@ concurrency:
 jobs:
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
     steps:
@@ -17,6 +21,7 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           cache-on-failure: true
@@ -27,6 +32,13 @@ jobs:
           node-version: 24
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm test
+      - run: node runtime/extensions/compile.mjs
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
+        with:
+          tool: wasm-pack
+      - run: wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
+      - run: cargo build --locked --example extension_issuer
+      - run: node tests/extensions-proof.mjs
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         id: proof-cache
         with:
@@ -35,7 +47,6 @@ jobs:
       - if: steps.proof-cache.outputs.cache-hit != 'true'
         run: node tests/real-proof.mjs
       - run: cargo test --locked
-      - run: cargo test --locked --features extension-issuer-harness --test accounting_ledger
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -43,6 +54,8 @@ jobs:
           path: |
             Cargo.lock
             package-lock.json
+            .extension-test/results.json
+            .extension-test/manifest.json
 
   audit:
     runs-on: ubuntu-latest
@@ -52,4 +65,9 @@ jobs:
       - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
         with:
           tool: cargo-deny
-      - run: cargo deny check advisories licenses
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: cargo metadata --locked --format-version 1 > dependency-metadata.json
+      - run: node .github/check-advisory-exposure.mjs
+      - run: cargo deny --locked check advisories licenses

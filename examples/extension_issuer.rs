@@ -1,0 +1,291 @@
+//! CI-only interactive issuer fixture. All inputs are public statements/proofs.
+#[path = "../tests/common/mod.rs"]
+mod common;
+use cblc::{
+    Error,
+    accounting::*,
+    accounting_ledger::*,
+    extensions::*,
+    pins::{PinSpendVerifier, SpentChange, change_binding},
+    verification::{ExtensionLimits, ProcessExtensionVerifier},
+};
+use cpns::{
+    Fingerprint,
+    server::{Change, ChangeTokenVerifier, MemoryStore, Pin, Pins},
+};
+use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
+use ed25519_dalek::{Signer, SigningKey};
+use serde_json::{Value, json};
+use std::{
+    io::{self, BufRead, Write},
+    num::NonZeroUsize,
+    path::PathBuf,
+    time::Duration,
+};
+
+struct RejectLegacy;
+impl AccountProofVerifier for RejectLegacy {
+    fn scope(&self) -> AccountProofScope {
+        AccountProofScope {
+            circuit_digest: [11; 32],
+            verifying_key_digest: [12; 32],
+        }
+    }
+    fn verify(&self, _: &AccountStatement, _: &[u8]) -> Result<(), Error> {
+        Err(Error::UnsupportedCapability)
+    }
+}
+fn config(scope: AccountProofScope) -> cvfy::ProcessVerifierConfig {
+    cvfy::ProcessVerifierConfig {
+        node: std::env::split_paths(&std::env::var_os("PATH").unwrap())
+            .map(|p| p.join("node"))
+            .find(|p| p.is_absolute() && p.is_file())
+            .unwrap(),
+        script: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("runtime/extensions/node-verifier.mjs"),
+        artifact_config: PathBuf::from(std::env::args().nth(1).unwrap()),
+        scope,
+        timeout: Duration::from_secs(180),
+        maximum_parallel: 1,
+        max_proof_bytes: EXTENSION_PROOF_BYTES,
+        node_heap_megabytes: 4096,
+    }
+}
+fn main() {
+    let fixture = common::Fixture::new();
+    let directory = tempfile::tempdir().unwrap();
+    let mut ledger: Option<AccountLedger<RejectLegacy>> = None;
+    let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
+    let mut tokens = std::collections::BTreeMap::new();
+    let mut sequence = 0_u8;
+    let mut policy = None;
+    let mut scope = None;
+    for line in io::stdin().lock().lines() {
+        let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        let result = (|| -> Result<Value, Error> {
+            match v["op"].as_str().unwrap() {
+                "init" => {
+                    let proof_scope: AccountProofScope =
+                        serde_json::from_value(v["scope"].clone()).unwrap();
+                    let extension: ExtensionPolicy =
+                        serde_json::from_value(v["extension"].clone()).unwrap();
+                    let settings = AccountLedgerPolicy {
+                        account: serde_json::from_value(v["policy"].clone()).unwrap(),
+                        max_authorization_seconds: 100,
+                        max_proof_bytes: EXTENSION_PROOF_BYTES,
+                        checkpoint_period_seconds: 1000,
+                    };
+                    let verifier = ProcessExtensionVerifier::new(
+                        config(proof_scope.clone()),
+                        config(proof_scope.clone()),
+                    )?;
+                    let mut opened = AccountLedger::open(
+                        directory.path().join("issuer.db"),
+                        fixture.trust.clone(),
+                        settings,
+                        RejectLegacy,
+                        SigningKey::from_bytes(&[9; 32]),
+                    )?
+                    .with_extensions(
+                        extension.clone(),
+                        verifier,
+                        ExtensionLimits {
+                            global_burst: 1000,
+                            subject_burst: 500,
+                            replenish: Duration::from_secs(1),
+                            maximum_keys: NonZeroUsize::new(32).unwrap(),
+                        },
+                        ExtensionActivation {
+                            account: serde_json::from_value(v["activation"]["account"].clone())
+                                .unwrap(),
+                            proof: HEXLOWER
+                                .decode(v["activation"]["proof"].as_str().unwrap().as_bytes())
+                                .unwrap(),
+                        },
+                    )?;
+                    opened
+                        .admit_checkpoint(0, serde_json::from_value(v["root"].clone()).unwrap())?;
+                    ledger = Some(opened);
+                    policy = Some(extension);
+                    scope = Some(proof_scope);
+                    Ok(json!(true))
+                }
+                "apply" => {
+                    let update: ExtendedUpdate =
+                        serde_json::from_value(v["update"].clone()).unwrap();
+                    let statement: AccountStatement =
+                        serde_json::from_value(v["statement"].clone()).unwrap();
+                    let member = v["member"].as_u64().unwrap() as u8;
+                    sequence = sequence.checked_add(1).unwrap();
+                    let mut request = AccountRequest {
+                        issued_at: statement.now,
+                        expires_at: statement.valid_until,
+                        statement,
+                        request_id: [sequence; 32],
+                        proof_scope: scope.clone().unwrap(),
+                        chat_public_key: B64.encode(&fixture.device.verifying_key().to_bytes()),
+                        proof: HEXLOWER
+                            .decode(v["proof"].as_str().unwrap().as_bytes())
+                            .unwrap(),
+                        signature: String::new(),
+                    };
+                    request.signature = B64.encode(
+                        &fixture
+                            .device
+                            .sign(&account_request_bytes(&request)?)
+                            .to_bytes(),
+                    );
+                    let ledger = ledger.as_mut().unwrap();
+                    let now = request.issued_at;
+                    let accepted = ledger.apply_extended(
+                        &fixture.grant(member, &fixture.device),
+                        &fixture.authorize(member, &fixture.device),
+                        &request,
+                        &update,
+                        || now,
+                    )?;
+                    let certificate = ledger.certify_extended(&accepted, &issuer)?;
+                    if matches!(update.effect, Effect::Change { .. }) {
+                        tokens.insert(
+                            member,
+                            SpentChange {
+                                acceptance: accepted,
+                                request,
+                                update,
+                            },
+                        );
+                    }
+                    Ok(json!(certificate))
+                }
+                "deposit" => {
+                    let batch: Vec<(Deposit, Vec<u8>)> = v["batch"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|e| {
+                            (
+                                serde_json::from_value(e["deposit"].clone()).unwrap(),
+                                HEXLOWER
+                                    .decode(e["proof"].as_str().unwrap().as_bytes())
+                                    .unwrap(),
+                            )
+                        })
+                        .collect();
+                    ledger
+                        .as_mut()
+                        .unwrap()
+                        .deposit_batch(&batch, || v["now"].as_u64().unwrap())?;
+                    Ok(json!(true))
+                }
+                "inbox" => {
+                    let (root, entries) = ledger
+                        .as_mut()
+                        .unwrap()
+                        .obligations(serde_json::from_value(v["owner"].clone()).unwrap())?;
+                    Ok(json!({"root":root,"entries":entries}))
+                }
+                "record" => {
+                    let record: PublicRecord = serde_json::from_value(v["record"].clone()).unwrap();
+                    let proof = HEXLOWER
+                        .decode(v["proof"].as_str().unwrap().as_bytes())
+                        .unwrap();
+                    Ok(json!(ledger.as_mut().unwrap().check_record(
+                        record.owner,
+                        &record.context,
+                        &record,
+                        &proof,
+                        || v["now"].as_u64().unwrap()
+                    )?))
+                }
+                "binding" | "pins" => {
+                    let member = v["member"].as_u64().unwrap() as u8;
+                    let name = HEXLOWER.encode(&[member; 48]);
+                    let change = Change {
+                        community: "community.example",
+                        member: &name,
+                        field: "age",
+                        expected: Pin {
+                            fingerprint: Fingerprint::from_bytes([1; 32]),
+                            revision: 1,
+                        },
+                        replacement: Fingerprint::from_bytes([2; 32]),
+                    };
+                    if v["op"] == "binding" {
+                        return Ok(json!(change_binding(&change)?));
+                    }
+                    let verifier = PinSpendVerifier {
+                        operator_key: SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes(),
+                        scope: scope.clone().unwrap(),
+                        policy: policy.clone().unwrap(),
+                    };
+                    let token = tokens.get(&member).unwrap();
+                    futures::executor::block_on(async {
+                        verifier.verify_spent(&change, token).await.unwrap();
+                        let wrong = HEXLOWER.encode(&[member + 1; 48]);
+                        assert!(
+                            verifier
+                                .verify_spent(
+                                    &Change {
+                                        member: &wrong,
+                                        ..change
+                                    },
+                                    token
+                                )
+                                .await
+                                .is_err()
+                        );
+                        assert!(
+                            verifier
+                                .verify_spent(
+                                    &Change {
+                                        field: "location",
+                                        ..change
+                                    },
+                                    token
+                                )
+                                .await
+                                .is_err()
+                        );
+                        let store = MemoryStore::new("community.example").unwrap();
+                        let pins = Pins::new(store, verifier);
+                        pins.pin(change.member, change.field, change.expected.fingerprint)
+                            .await
+                            .unwrap();
+                        let changed = pins
+                            .change(
+                                change.member,
+                                change.field,
+                                change.expected,
+                                change.replacement,
+                                token,
+                            )
+                            .await
+                            .unwrap();
+                        assert_eq!(changed.revision, 2);
+                        assert!(
+                            pins.change(
+                                change.member,
+                                change.field,
+                                change.expected,
+                                change.replacement,
+                                token
+                            )
+                            .await
+                            .is_err()
+                        );
+                    });
+                    Ok(json!(true))
+                }
+                _ => Err(Error::InvalidInput),
+            }
+        })();
+        println!(
+            "{}",
+            match result {
+                Ok(value) => json!({"ok":true,"value":value}),
+                Err(e) => json!({"ok":false,"error":format!("{e:?}")}),
+            }
+        );
+        io::stdout().flush().unwrap();
+    }
+}
