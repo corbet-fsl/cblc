@@ -14,8 +14,8 @@
     "test": "node --test ../../tests/holder/test/*.test.mjs"
   },
   "dependencies": {
-    "@aztec/bb.js": "5.0.0",
-    "@noir-lang/noir_js": "1.0.0-beta.26",
+    "@aztec/bb.js": "5.2.0",
+    "@noir-lang/noir_js": "1.0.0-rc.3",
     "@libsql/client": "0.18.0"
   },
   "license": "SEE LICENSE IN ../../LICENSE.md"
