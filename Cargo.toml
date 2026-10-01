@@ -18,13 +18,13 @@ unsafe_code = "forbid"
 missing_docs = "warn"
 
 [dependencies]
-cthl = { git = "https://github.com/corbet-foss/cthl", rev = "7f1a38de4285dee4b15ee8f9e82c1cb257513644" }
-cpns = { git = "https://github.com/corbet-foss/cpns", rev = "23968a9fa338791e70078c6070a6f1f3cf185ff7", default-features = false }
+cthl = { git = "https://github.com/corbet-foss/cthl", rev = "a41533a255cefc0757078205bff87c03e6c7bbbe" }
+cpns = { git = "https://github.com/corbet-foss/cpns", rev = "d68a3f3a2df322c513d0e754e452ee02aab7a5b9", default-features = false }
 futures = "0.3"
-czkp = { git = "https://github.com/corbet-foss/czkp", rev = "8444749e98ea192353ccc82c56a33a43fcaa588c" }
-cvfy = { git = "https://github.com/corbet-foss/cvfy", rev = "b1bbc914cd8e193404111e64555998652d7921eb" }
-cssr = { git = "https://github.com/corbet-foss/cssr", rev = "736db98ad6ba272dd32b8f3d6e20f2e8f54da8bb" }
-crlt = { git = "https://github.com/corbet-foss/crlt", rev = "6b94dacd7fa04aa8847c62c6471a1fc5c0f6c9dc" }
+czkp = { git = "https://github.com/corbet-foss/czkp", rev = "e1782da1f7193a26ca0aea23137784896b780c03" }
+cvfy = { git = "https://github.com/corbet-foss/cvfy", rev = "5b31dde13fd9bafc115dbc8ff7f51cccc3debf29" }
+cssr = { git = "https://github.com/corbet-foss/cssr", rev = "6dbff220fc47dfb6e44403ecde9eb3af13cd75f5" }
+crlt = { git = "https://github.com/corbet-foss/crlt", rev = "80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2" }
 data-encoding = "2.9"
 ed25519-dalek = "2.2"
 serde = { version = "1", features = ["derive"] }

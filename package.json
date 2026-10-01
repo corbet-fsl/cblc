@@ -7,8 +7,8 @@
     "experiments/private-accounting"
   ],
   "dependencies": {
-    "@corbet-labs/czkp": "github:corbet-foss/czkp#82c1618e8cff8636fd71d71cd77f57acaa1fda94",
-    "@corbet-labs/cwlt": "git+https://github.com/corbet-foss/cwlt.git#e015acda50710c0b0c44d93bfc0071d36951fad9"
+    "@corbet-labs/czkp": "github:corbet-foss/czkp#e1782da1f7193a26ca0aea23137784896b780c03",
+    "@corbet-labs/cwlt": "git+https://github.com/corbet-foss/cwlt.git#8f30d71401af1c6559885ee8865096cdf07ac37b"
   },
   "scripts": {
     "test": "node --test tests/holder/test/*.test.mjs"
