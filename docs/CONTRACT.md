@@ -123,7 +123,36 @@ The response is not a current-record permission or proof of absent later changes
 
 There is still no production settlement ingress: delayed batches do not satisfy
 the no-counterpart-disclosure transport requirement. Forum/Waves local current
-record verification and authenticated verifier publication remain unresolved.
+record authority and production publication composition remain unresolved.
+
+The optional `publication` feature owns `publication::PublicVerifierMaterial`.
+`AccountService::public_verifier_material(revision, policy_epoch)` projects its
+actual activated ledger and configured certificate issuer. The lower ledger port
+takes that same configured issuer explicitly. Both are host publication ports,
+absent from `AccountServiceRequest`; no member endpoint or lookup is introduced.
+The existing Policy workflow supplies durable publication revision/epoch and
+signature lifetime. A stale ledger snapshot must be reloaded before projection.
+
+The canonical document implements Beacon's `document::Document`, requiring the
+protected `SettingsSnapshot` kind, strict `cblc.public-verifier.v1` purpose and
+community issuer. It contains only public owner policies/bounds, their digest,
+proof scope, manifest SHA256 and actual account/certificate public keys. Its
+manifest binding is captured after real activation and must still match the
+configured files, proof scope and certificate issuer at publication. Current
+ledger and extension database configuration are checked transactionally.
+
+Consumers authenticate original signed bytes with their independently configured
+Charter/Policy ring and monotonic publication floors through Beacon, then call
+`validate_at(expected_community, now)` for economic-policy validity. A ring carried
+by a response is never publication authority. The existing verifier configuration
+uses the authenticated manifest hash and scope; its worker authenticates the
+entire circuit/key groups and setup files before real proof verification.
+
+This document contains no member, account version, inbox observation or record
+certificate. It authenticates material, never current membership or the absence
+of later obligations. It cannot construct a current-record, reservation, release
+or punishment capability. G2 local currentness and G5 transport privacy still
+require their independent decided constructions and review.
 
 The optional `schema` feature derives Utoipa6 schemas from the exact serde
 request/response and nested owner types. Door may compose `AccountServiceRequest`

@@ -49,10 +49,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         policy.validate()?;
         let budget = crate::verification::Budget::new(&self.trust.community_id, limits)?;
         let scope = verifier.scope();
-        if scope == self.proof_scope
-            || scope.circuit_digest == [0; 32]
-            || scope.verifying_key_digest == [0; 32]
-        {
+        // ProcessExtensionVerifier construction already rejects zero digests.
+        if scope == self.proof_scope {
             return Err(Error::PolicyMismatch);
         }
         if self.policy.max_proof_bytes < extensions::EXTENSION_PROOF_BYTES
@@ -77,6 +75,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             },
             &activation.proof,
         )?;
+        #[cfg(feature = "publication")]
+        let artifact_binding =
+            crate::publication::binding::configured(&verifier.artifact_config, &scope)?;
         let config =
             serde_json::to_vec(&(policy.clone(), &scope)).map_err(|_| Error::InvalidInput)?;
         let mut tx = self.connection.transaction()?;
@@ -87,6 +88,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.put(b"extensions", &config)?;
         tx.commit()?;
         self.extensions = Some(Extensions {
+            #[cfg(feature = "publication")]
+            artifact_config: verifier.artifact_config.clone(),
+            #[cfg(feature = "publication")]
+            artifact_binding,
             policy,
             budget,
             verifier: Box::new(verifier),
@@ -175,9 +180,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             let next = extensions::advance(&previous, deposit)?;
             let count_key = key(10, &[&deposit.recipient]);
             let count: u8 = tx.get(&count_key)?.unwrap_or(0);
-            if count >= 64 {
-                return Err(Error::Capacity);
-            }
+            // check_deposit just checked this exact count in the same transaction.
             tx.put(&count_key, &(count + 1))?;
             tx.put(&key(8, &[&deposit.nullifier]), &deposit_digest(deposit)?)?;
             tx.put(&key(9, &[&deposit.authorization_nullifier]), &true)?;
@@ -368,3 +371,7 @@ pub(super) fn read_obligations(
     values.reverse();
     Ok((frontier, values))
 }
+
+#[cfg(test)]
+#[path = "../../tests/internal/extension_storage.rs"]
+mod tests;

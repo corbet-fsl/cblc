@@ -49,6 +49,8 @@ fn valid<T: ToSchema + Serialize + schemars::JsonSchema>(value: &T) -> Value {
 fn generated_projection_preserves_every_serde_constraint() {
     validator::<AccountServiceRequest>();
     validator::<AccountServiceResponse>();
+    #[cfg(feature = "publication")]
+    validator::<cblc::publication::PublicVerifierMaterial>();
 }
 
 #[test]

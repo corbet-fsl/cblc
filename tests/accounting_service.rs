@@ -5,7 +5,7 @@ use common::{
     Fixture,
     proofs::{self, RealVerifier},
 };
-use ed25519_dalek::SigningKey;
+use ed25519_dalek::{Signer, SigningKey};
 use std::{
     path::Path,
     sync::{
@@ -84,6 +84,45 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
         serde_json::from_slice::<serde_json::Value>(&response).unwrap()["action"],
         "apply"
     );
+    let (configured, tuning) = service.policy().unwrap();
+    assert_eq!(configured, policy().account);
+    assert_eq!(tuning.revision, 0);
+    let original = genesis(&f);
+    let mut request = AccountStatusRequest {
+        community: original.statement.community,
+        owner: original.statement.owner,
+        request_id: None,
+        challenge: [37; 32],
+        chat_public_key: original.chat_public_key,
+        issued_at: 110,
+        expires_at: 170,
+        signature: String::new(),
+    };
+    request.signature = data_encoding::BASE64URL_NOPAD.encode(
+        &f.device
+            .sign(&account_status_bytes(&request).unwrap())
+            .to_bytes(),
+    );
+    let observed = service
+        .handle_for_member(
+            &[7; 48],
+            AccountServiceRequest::Status {
+                grant: f.grant(7, &f.device),
+                authorization: f.authorize(7, &f.device),
+                request: request.clone(),
+            },
+        )
+        .unwrap();
+    let AccountServiceResponse::Status(observed) = observed else {
+        panic!("status response")
+    };
+    verify_account_status_response(
+        &observed,
+        &request,
+        &SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes(),
+    )
+    .unwrap();
+    assert_eq!(observed.acceptance.unwrap().request_id, original.request_id);
 }
 
 #[test]

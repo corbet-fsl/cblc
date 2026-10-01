@@ -37,6 +37,50 @@ fn invalid_host_bounds_fail_before_state_creation() {
 }
 
 #[test]
+fn malformed_scope_cannot_activate_a_real_verifier() {
+    struct Misconfigured(RealVerifier, AccountProofScope);
+    impl AccountProofVerifier for Misconfigured {
+        fn scope(&self) -> AccountProofScope {
+            self.1.clone()
+        }
+        fn verify(&self, statement: &AccountStatement, proof: &[u8]) -> Result<(), Error> {
+            self.0.verify(statement, proof)
+        }
+    }
+    let f = Fixture::new();
+    for field in 0..2 {
+        let mut scope = RealVerifier::default().scope();
+        if field == 0 {
+            scope.circuit_digest = [0; 32];
+        } else {
+            scope.verifying_key_digest = [0; 32];
+        }
+        assert!(matches!(
+            AccountLedger::with_store(
+                MemoryStore::default(),
+                f.trust.clone(),
+                policy(),
+                Misconfigured(RealVerifier::default(), scope),
+                SigningKey::from_bytes(&[9; 32]),
+            ),
+            Err(Error::InvalidInput)
+        ));
+    }
+}
+
+#[test]
+fn policy_cannot_be_tuned_before_its_validity_start() {
+    let f = Fixture::new();
+    let mut configured = policy();
+    configured.account.policy_valid_from = 10;
+    let mut ledger = memory(&f, configured).unwrap();
+    assert_eq!(
+        ledger.update_waiting_period(0, 1100, || 9),
+        Err(Error::Expired)
+    );
+}
+
+#[test]
 fn common_checkpoint_bounds_and_idempotent_publication() {
     let f = Fixture::new();
     let mut ledger = memory(&f, policy()).unwrap();

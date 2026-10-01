@@ -112,3 +112,30 @@ fn missing_worker_refuses_both_pools_and_releases_capacity() {
         );
     }
 }
+
+#[test]
+fn extension_policy_requires_every_explicit_positive_economic_bound() {
+    let policy = ExtensionPolicy {
+        revision: 1,
+        public_record_quorum: 5,
+        change_token_cost: 1,
+        deposit_delay_seconds: 10,
+        minimum_deposit_batch: 2,
+    };
+    policy.validate().unwrap();
+    for variant in 0..9 {
+        let mut changed = policy.clone();
+        match variant {
+            0 => changed.revision = 0,
+            1 => changed.revision = czkp::MAX_INTEGER + 1,
+            2 => changed.public_record_quorum = 0,
+            3 => changed.change_token_cost = 0,
+            4 => changed.deposit_delay_seconds = 0,
+            5 => changed.deposit_delay_seconds = czkp::MAX_INTEGER + 1,
+            6 => changed.minimum_deposit_batch = 0,
+            7 => changed.minimum_deposit_batch = 1,
+            _ => changed.minimum_deposit_batch = 65,
+        }
+        assert_eq!(changed.validate(), Err(Error::InvalidInput));
+    }
+}

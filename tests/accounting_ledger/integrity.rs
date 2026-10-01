@@ -83,3 +83,64 @@ fn directory_cannot_be_opened_as_an_account_database() {
         Err(Error::Storage)
     ));
 }
+
+#[test]
+fn missing_storage_table_does_not_turn_into_an_empty_configuration() {
+    let f = Fixture::new();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("missing.sqlite");
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    inspect(&path)
+        .execute_batch("DROP TABLE cssr_records")
+        .unwrap();
+    assert_eq!(ledger.reload_policy(), Err(Error::Storage));
+}
+
+#[test]
+fn real_signed_acceptance_moved_to_another_owner_is_refused() {
+    let f = Fixture::new();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("wrong-owner.sqlite");
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    let first = genesis(&f);
+    ledger
+        .admit_checkpoint(0, first.statement.enrollment_root)
+        .unwrap();
+    for (member, request) in [(7, first.clone()), (8, proofs::request(2, 12, &f))] {
+        ledger
+            .apply(
+                &f.grant(member, &f.device),
+                &f.authorize(member, &f.device),
+                &request,
+                || 120,
+            )
+            .unwrap();
+    }
+    let database = inspect(&path);
+    let rows = database.snapshot();
+    let owner = first.statement.owner;
+    let target = rows
+        .iter()
+        .find(|(key, _)| key.first() == Some(&2) && key.ends_with(&owner))
+        .unwrap();
+    let other = rows
+        .iter()
+        .find(|(key, _)| key.first() == Some(&2) && !key.ends_with(&owner))
+        .unwrap();
+    database
+        .execute_batch(&format!(
+            "UPDATE cssr_records SET value=X'{}' WHERE key=X'{}'",
+            HEXLOWER.encode(&other.1),
+            HEXLOWER.encode(&target.0)
+        ))
+        .unwrap();
+    assert_eq!(
+        ledger.apply(
+            &f.grant(7, &f.device),
+            &f.authorize(7, &f.device),
+            &first,
+            || 120
+        ),
+        Err(Error::Storage)
+    );
+}

@@ -160,6 +160,10 @@ pub struct ExtensionActivation {
     pub proof: Vec<u8>,
 }
 pub(crate) struct Extensions {
+    #[cfg(feature = "publication")]
+    pub artifact_config: std::path::PathBuf,
+    #[cfg(feature = "publication")]
+    pub artifact_binding: crate::publication::binding::Binding,
     pub policy: ExtensionPolicy,
     pub verifier: Box<dyn ExtensionVerifier>,
     pub config: Vec<u8>,
@@ -199,7 +203,7 @@ pub fn extended_request_digest(
         config,
         update,
     ))
-    .map_err(|_| Error::InvalidInput)?;
+    .or(Err(Error::InvalidInput))?;
     Ok(Sha256::digest(binding).into())
 }
 /// Verify a returned acceptance for the exact effect before consuming permission

@@ -91,3 +91,37 @@ not an assumed target-directory environment variable. Every report step imports
 the same external-instrumentation environment. Reports are retained even when a
 real execution fails; its failure still blocks the workflow and cannot be replaced
 by the resulting partial coverage. The compiler-artifact stream is retained too.
+
+The first complete instrumented extension replay also exposed redundant guards:
+`HEXLOWER` has exactly the maintained lowercase alphabet, no ignored symbols or
+aliases ([upstream definition](https://docs.rs/data-encoding/latest/data_encoding/constant.HEXLOWER.html));
+re-encoding a successfully decoded fixed-length pseudonym cannot differ. The
+existing uppercase/length/wrong-member vectors still refuse. An acceptance must
+precede its statement's validated proof horizon, already bounded by MAX_INTEGER;
+request expiry is similarly bounded by that horizon and the matched policy.
+Both ledger preflight and final transactions call check_root before check_pending,
+without intervening writes, so a second root comparison is redundant. The sealed
+ProcessExtensionVerifier constructor rejects zero scopes before activation.
+Finally, deposit commit calls check_deposit immediately before reading/incrementing
+the same count in the same transaction; that call already refuses counts >=64.
+These duplicate conditions are removed without exclusions. Actual scope, policy,
+clock, frontier, root-rotation and count checks remain at their owning boundary.
+
+The separate extension_adversaries executable activates the shipped relation with
+the real public genesis proof, issues four real accounts, and checks signed scope,
+frontier, completion-time expiry, malformed configuration and capacity refusals.
+It executes after public fixtures exist in both ordinary and instrumented CI.
+An imported overlong 65-entry chain is tested through the actual storage helpers
+with rollback; this is corrupt-state refusal, never simulated proof acceptance.
+Primitive-only request-digest serialization keeps the same error normalization
+with Result::or rather than an unreachable error closure; encoded bytes do not change.
+
+With all features, the explicit extension fixture also projects the actual
+activated issuer's public material, uses real csgn signatures and Beacon cache
+floors, and verifies a real record through the authenticated scope/manifest.
+The fixture separately rejects altered context, manifest hash, circuit/key group
+bytes, wrong certificate issuer, post-activation manifest replacement and stale
+publication floors. Its complete copied artifact directory must verify before
+tampering, avoiding a false pass caused by absent setup files. Pure bounded
+metadata parsing uses the original public manifest and real malformed files;
+it never supplies a successful proof verdict. No new production exclusion exists.

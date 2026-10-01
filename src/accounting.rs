@@ -89,7 +89,7 @@ pub use czkp::ProofScope as AccountProofScope;
 /// Security-critical host dependency, configured independently of a request.
 /// `verify` must verify the actual proof against *all* supplied public inputs
 /// with the circuit and VK named by `scope`. There is no permissive default.
-/// A mock implementation tests storage only, never cryptographic acceptance.
+/// Hosts use the shipped process adapter; test wrappers preserve real verification.
 pub trait AccountProofVerifier {
     fn scope(&self) -> AccountProofScope;
     fn verify(&self, statement: &AccountStatement, proof: &[u8]) -> Result<(), Error>;
@@ -155,7 +155,6 @@ pub fn account_acceptance_bytes(value: &AccountAcceptance) -> Result<Vec<u8>, Er
     if value.request_id == [0; 32]
         || value.accepted_at < value.statement.now
         || value.accepted_at >= value.statement.valid_until
-        || value.accepted_at > MAX_INTEGER
     {
         return Err(Error::InvalidInput);
     }

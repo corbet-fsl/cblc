@@ -106,6 +106,23 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
         self
     }
 
+    /// Project the actual ledger and certificate issuer for Policy/Beacon.
+    /// This is a host publication port, absent from member request variants.
+    #[cfg(feature = "publication")]
+    pub fn public_verifier_material(
+        &mut self,
+        revision: u64,
+        policy_epoch: u64,
+    ) -> Result<crate::publication::PublicVerifierMaterial, Error> {
+        self.ledger.public_verifier_material(
+            revision,
+            policy_epoch,
+            self.extension_issuer
+                .as_ref()
+                .ok_or(Error::UnsupportedCapability)?,
+        )
+    }
+
     /// Recover composition ownership without duplicating or recreating state.
     pub fn into_ledger(self) -> AccountLedger<V> {
         self.ledger

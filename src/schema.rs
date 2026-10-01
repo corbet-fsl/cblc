@@ -32,3 +32,12 @@ impl utoipa::PartialSchema for AccountServiceResponse {
     }
 }
 impl utoipa::ToSchema for AccountServiceResponse {}
+
+#[cfg(feature = "publication")]
+impl utoipa::PartialSchema for crate::publication::PublicVerifierMaterial {
+    fn schema() -> RefOr<Schema> {
+        schema::<Self>()
+    }
+}
+#[cfg(feature = "publication")]
+impl utoipa::ToSchema for crate::publication::PublicVerifierMaterial {}

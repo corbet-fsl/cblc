@@ -44,9 +44,8 @@ pub fn admission_bytes(grant: &AdmissionGrant) -> Result<Vec<u8>, Error> {
         .map_err(|_| Error::Admission)?
         .try_into()
         .map_err(|_| Error::Admission)?;
-    if data_encoding::HEXLOWER.encode(&pseudonym) != grant.pseudonym
-        || member_id(&pseudonym) != grant.member_id
-    {
+    // HEXLOWER already rejects every noncanonical symbol and length.
+    if member_id(&pseudonym) != grant.member_id {
         return Err(Error::Admission);
     }
     for value in [

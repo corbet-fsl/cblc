@@ -5,6 +5,8 @@ mod bounds;
 mod common;
 #[path = "accounting_ledger/integrity.rs"]
 mod integrity;
+#[path = "accounting_ledger/refusals.rs"]
+mod refusals;
 #[path = "accounting_ledger/wire.rs"]
 mod wire;
 use cblc::{Error, accounting::*, accounting_ledger::*};
