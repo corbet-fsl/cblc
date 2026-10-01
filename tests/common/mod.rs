@@ -1,3 +1,4 @@
+pub mod proofs;
 use cblc::admission::{AdmissionGrant, AdmissionTrust, DeviceAuthorization};
 use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};

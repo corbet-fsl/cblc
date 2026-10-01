@@ -1,5 +1,4 @@
-//! Real SQLite/authority tests with the parent module's synthetic proof verifier.
-//! These do not prove the circuit's immutable slot-deadline relation.
+//! Real maintained proofs with SQLite, signed authority and policy-change races.
 
 use super::*;
 
@@ -12,6 +11,13 @@ fn with_policy(
     account: &AccountPolicy,
     f: &Fixture,
 ) -> AccountRequest {
+    if !request.statement.genesis && account.abandon_after == 1500 {
+        let actual = proofs::record(4);
+        request.statement = actual.statement;
+        request.proof = data_encoding::HEXLOWER
+            .decode(actual.proof.as_bytes())
+            .unwrap();
+    }
     request.statement.policy = account.clone();
     request.statement.policy_digest = account.digest(&request.statement.community).unwrap();
     request.statement.valid_until = account.proof_valid_until(request.statement.now).unwrap();
@@ -24,8 +30,10 @@ fn invalid_tuning_revision_clock_and_storage_failure_are_atomic() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     ledger
         .apply(
             &f.grant(7, &f.device),
@@ -102,12 +110,14 @@ fn restart_loads_durable_wait_and_preserves_genesis_and_exact_old_retry() {
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let accepted = ledger.apply(&g, &a, &first, || 120).unwrap();
     let tuning = ledger.update_waiting_period(0, 1500, || 130).unwrap();
     drop(ledger);
-    let verifier = StorageOnlyVerifier::default();
+    let verifier = RealVerifier::default();
     let calls = verifier.calls.clone();
     // open() supplies the old bootstrap wait; persisted configuration wins.
     let mut reopened = open(&path, &f, verifier);
@@ -136,7 +146,7 @@ fn state_binding_and_restart_pin_every_policy_field_except_wait() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
+    let mut ledger = open(&path, &f, RealVerifier::default());
     let original = ledger.waiting_period().unwrap();
     let tuned = ledger.update_waiting_period(0, 1500, || 120).unwrap();
     assert_eq!(original.state_policy_digest, tuned.state_policy_digest);
@@ -169,7 +179,7 @@ fn state_binding_and_restart_pin_every_policy_field_except_wait() {
             &path,
             f.trust.clone(),
             supplied,
-            StorageOnlyVerifier::default(),
+            RealVerifier::default(),
             SigningKey::from_bytes(&[9; 32]),
         );
         assert!(matches!(reopened, Err(Error::PolicyMismatch)), "{field}");
@@ -185,10 +195,12 @@ fn stale_handles_and_old_proofs_reject_before_verify_then_reload_accepts_success
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
-    let mut writer = open(&path, &f, StorageOnlyVerifier::default());
-    writer.admit_checkpoint(0, fr(8)).unwrap();
+    let mut writer = open(&path, &f, RealVerifier::default());
+    writer
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     writer.apply(&g, &a, &first, || 120).unwrap();
-    let verifier = StorageOnlyVerifier::default();
+    let verifier = RealVerifier::default();
     let calls = verifier.calls.clone();
     let mut stale = open(&path, &f, verifier);
     let tuning = writer.update_waiting_period(0, 1500, || 130).unwrap();
@@ -235,15 +247,17 @@ fn tuning_during_blocked_verification_rejects_the_stale_transition_atomically() 
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
-        let mut writer = open(&path, &f, StorageOnlyVerifier::default());
-        writer.admit_checkpoint(0, fr(8)).unwrap();
+        let mut writer = open(&path, &f, RealVerifier::default());
+        writer
+            .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
         writer.apply(&g, &a, &first, || 120).unwrap();
         let request = successor(&first, &f, 11);
         let (verifier, entered, release) = blocked_verifier();
         let mut slow = open(&path, &f, verifier);
         std::thread::scope(|scope| {
             let worker = scope.spawn(|| slow.apply(&g, &a, &request, || 130));
-            entered.recv_timeout(Duration::from_secs(10)).unwrap();
+            entered.recv_timeout(Duration::from_secs(180)).unwrap();
             let changed = writer.update_waiting_period(0, seconds, || 130);
             let after_tuning = stored(&path);
             release.send(()).unwrap();
@@ -265,8 +279,8 @@ fn competing_tuning_connections_commit_exactly_one_expected_revision() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
-    let mut first = open(&path, &f, StorageOnlyVerifier::default());
-    let mut second = open(&path, &f, StorageOnlyVerifier::default());
+    let mut first = open(&path, &f, RealVerifier::default());
+    let mut second = open(&path, &f, RealVerifier::default());
     let results = std::thread::scope(|scope| {
         let left = scope.spawn(|| first.update_waiting_period(0, 1500, || 120));
         let right = scope.spawn(|| second.update_waiting_period(0, 1700, || 120));
@@ -283,7 +297,7 @@ fn competing_tuning_connections_commit_exactly_one_expected_revision() {
     let winner = results.into_iter().find_map(Result::ok).unwrap();
     assert_eq!(winner.revision, 1);
     assert_eq!(
-        open(&path, &f, StorageOnlyVerifier::default())
+        open(&path, &f, RealVerifier::default())
             .waiting_period()
             .unwrap(),
         winner

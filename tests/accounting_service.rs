@@ -1,10 +1,11 @@
-//! Service boundary tests use a storage-only verifier; real crypto has a separate runtime check.
+//! Service boundary tests use actual maintained holder proofs and the shipped verifier.
 mod common;
 use cblc::{Error, accounting::*, accounting_ledger::*, accounting_service::*};
-use common::Fixture;
-use data_encoding::BASE64URL_NOPAD as B64;
-use ed25519_dalek::{Signer, SigningKey};
-use sha2::{Digest, Sha256};
+use common::{
+    Fixture,
+    proofs::{self, RealVerifier},
+};
+use ed25519_dalek::SigningKey;
 use std::{
     path::Path,
     sync::{
@@ -12,28 +13,6 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-#[derive(Default)]
-struct StorageOnlyVerifier;
-impl AccountProofVerifier for StorageOnlyVerifier {
-    fn scope(&self) -> AccountProofScope {
-        AccountProofScope {
-            circuit_digest: [41; 32],
-            verifying_key_digest: [42; 32],
-        }
-    }
-    fn verify(&self, _: &AccountStatement, proof: &[u8]) -> Result<(), Error> {
-        if proof == [1, 2, 3] {
-            Ok(())
-        } else {
-            Err(Error::CryptoProvider)
-        }
-    }
-}
-fn fr(n: u8) -> [u8; 32] {
-    let mut value = [0; 32];
-    value[31] = n;
-    value
-}
 fn policy() -> AccountLedgerPolicy {
     // Test values only. Library consumers must choose their own complete policy.
     AccountLedgerPolicy {
@@ -54,7 +33,7 @@ fn policy() -> AccountLedgerPolicy {
             abandon_after: 1000,
         },
         max_authorization_seconds: 100,
-        max_proof_bytes: 20000,
+        max_proof_bytes: 1024 * 1024,
         checkpoint_period_seconds: 1000,
     }
 }
@@ -68,47 +47,8 @@ fn open<V: AccountProofVerifier>(path: &Path, fixture: &Fixture, verifier: V) ->
     )
     .unwrap()
 }
-fn sign(request: &mut AccountRequest, key: &SigningKey) {
-    request.signature = B64.encode(
-        &key.sign(&account_request_bytes(request).unwrap())
-            .to_bytes(),
-    );
-}
 fn genesis(fixture: &Fixture) -> AccountRequest {
-    let community: [u8; 32] = Sha256::digest(fixture.trust.community_id.as_bytes()).into();
-    let owner = B64
-        .decode(common::member_id(7).as_bytes())
-        .unwrap()
-        .try_into()
-        .unwrap();
-    let account = policy().account;
-    let mut request = AccountRequest {
-        statement: AccountStatement {
-            protocol_version: 2,
-            community,
-            owner,
-            policy_digest: account.digest(&community).unwrap(),
-            enrollment_root: fr(8),
-            now: 110,
-            valid_until: account.proof_valid_until(110).unwrap(),
-            genesis: true,
-            previous_version: 0,
-            next_version: 0,
-            previous_state: fr(0),
-            next_state: fr(1),
-            settlement_marker: fr(0),
-            policy: account,
-        },
-        request_id: [10; 32],
-        proof_scope: StorageOnlyVerifier.scope(),
-        chat_public_key: B64.encode(&fixture.device.verifying_key().to_bytes()),
-        issued_at: 110,
-        expires_at: 180,
-        proof: vec![1, 2, 3],
-        signature: String::new(),
-    };
-    sign(&mut request, &fixture.device);
-    request
+    proofs::request(0, 10, fixture)
 }
 
 #[test]
@@ -116,15 +56,17 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
     let dir = tempfile::tempdir().unwrap();
     let f = Fixture::new();
     let mut service = AccountService::new(
-        open(&dir.path().join("accounts"), &f, StorageOnlyVerifier),
+        open(&dir.path().join("accounts"), &f, RealVerifier::default()),
         || 110,
         100_000,
     )
     .unwrap();
-    service.publish_verified_checkpoint(0, fr(8)).unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     for body in [
         serde_json::json!({"action":"tuneWaitingPeriod","seconds":1000}),
-        serde_json::json!({"action":"publishCheckpoint","root":fr(8)}),
+        serde_json::json!({"action":"publishCheckpoint","root":proofs::record(0).statement.enrollment_root}),
         serde_json::json!({"action":"apply","grant":f.grant(7,&f.device),"authorization":f.authorize(7,&f.device),"request":genesis(&f),"now":110}),
     ] {
         assert_eq!(
@@ -151,12 +93,14 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
     let clock = Arc::new(AtomicU64::new(181));
     let observed = clock.clone();
     let mut service = AccountService::new(
-        open(&dir.path().join("accounts"), &f, StorageOnlyVerifier),
+        open(&dir.path().join("accounts"), &f, RealVerifier::default()),
         move || observed.load(Ordering::SeqCst),
         100_000,
     )
     .unwrap();
-    service.publish_verified_checkpoint(0, fr(8)).unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let request = AccountServiceRequest::Apply {
         grant: f.grant(7, &f.device),
         authorization: f.authorize(7, &f.device),
@@ -188,12 +132,14 @@ fn invalid_authority_cannot_register_an_account() {
     let dir = tempfile::tempdir().unwrap();
     let f = Fixture::new();
     let mut service = AccountService::new(
-        open(&dir.path().join("accounts"), &f, StorageOnlyVerifier),
+        open(&dir.path().join("accounts"), &f, RealVerifier::default()),
         || 110,
         100_000,
     )
     .unwrap();
-    service.publish_verified_checkpoint(0, fr(8)).unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let bad = AccountServiceRequest::Apply {
         grant: f.grant(8, &f.device),
         authorization: f.authorize(8, &f.device),
@@ -247,12 +193,14 @@ fn actual_js_client_request_is_accepted_by_rust_and_js_checks_the_signed_rust_re
         "chatPublicKey":request.chat_public_key,"expiresAt":request.expires_at,"requestId":request.request_id}}),
     );
     let mut service = AccountService::new(
-        open(&dir.path().join("accounts"), &f, StorageOnlyVerifier),
+        open(&dir.path().join("accounts"), &f, RealVerifier::default()),
         || 110,
         100_000,
     )
     .unwrap();
-    service.publish_verified_checkpoint(0, fr(8)).unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let response: serde_json::Value =
         serde_json::from_slice(&service.handle_json(&body).unwrap()).unwrap();
     let envelope: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -285,10 +233,10 @@ fn verifier_kills_and_reaps_timeout_then_releases_capacity_and_rejects_large_std
         node,
         script: script.clone(),
         artifact_config: config,
-        scope: StorageOnlyVerifier.scope(),
+        scope: proofs::record(0).proof_scope,
         timeout: Duration::from_millis(500),
         maximum_parallel: 1,
-        max_proof_bytes: 20000,
+        max_proof_bytes: 1024 * 1024,
         node_heap_megabytes: 64,
     })
     .unwrap();
@@ -308,9 +256,9 @@ fn verifier_kills_and_reaps_timeout_then_releases_capacity_and_rejects_large_std
         verifier.verify(&statement, &[1, 2, 3]),
         Err(Error::CryptoProvider)
     );
-    // This worker deliberately stands in for cryptography, testing the process protocol only.
-    let verdict =
-        serde_json::json!({"verified":true,"proofScope":StorageOnlyVerifier.scope()}).to_string();
+    // A well-formed refusal tests framing after cleanup; this worker never accepts a proof.
+    let verdict = serde_json::json!({"verified":false,"proofScope":proofs::record(0).proof_scope})
+        .to_string();
     fs::write(
         &script,
         format!(
@@ -319,9 +267,12 @@ fn verifier_kills_and_reaps_timeout_then_releases_capacity_and_rejects_large_std
         ),
     )
     .unwrap();
-    assert_eq!(verifier.verify(&statement, &[1, 2, 3]), Ok(()));
     assert_eq!(
-        verifier.verify(&statement, &vec![0; 20001]),
+        verifier.verify(&statement, &[1, 2, 3]),
+        Err(Error::CryptoProvider)
+    );
+    assert_eq!(
+        verifier.verify(&statement, &vec![0; 1024 * 1024 + 1]),
         Err(Error::InvalidInput)
     );
 }

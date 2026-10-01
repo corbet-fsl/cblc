@@ -1,20 +1,15 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
-import { AccountClient, AccountWitness, accountAcceptanceBytes, accountRequestBytes } from '../index.mjs';
+import { Barretenberg, BackendType } from '@aztec/bb.js';
+import { AccountWitness } from '../index.mjs';
 import { accountHashes, checkpointFromVerified } from '../../../runtime/accounting/hashes.mjs';
-import { fieldBytes, FR_MODULUS } from '@corbet-labs/czkp/primitives';
-import { cat, hex, sha } from '@corbet-labs/czkp/encoding';
+import { fieldBytes } from '@corbet-labs/czkp/primitives';
+import { hex } from '@corbet-labs/czkp/encoding';
 
-// Storage and reconstruction contracts only. This deterministic synthetic hash
-// backend is not Poseidon2 and produces no valid account proof or acceptance.
-function storageHashes() {
-  return accountHashes({ async poseidon2Hash({ inputs }) {
-    const digest = createHash('sha256');
-    for (const input of inputs) digest.update(input);
-    return { hash: fieldBytes(BigInt(`0x${digest.digest('hex')}`) % FR_MODULUS) };
-  } });
-}
+// Use the maintained native Poseidon2 engine for every persisted commitment.
+const hashApi = await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
+after(async () => { await hashApi.destroy(); });
+const storageHashes = () => accountHashes(hashApi);
 const bytes = n => new Uint8Array(32).fill(n);
 const limits = { maxBytes: 65536, maxMapEntries: 16, maxSlots: 8 };
 const policy = { initialCredit: 3, maximumAvailable: 4, outgoingReservation: 1, incomingReservation: 1,
@@ -249,47 +244,5 @@ test('asynchronous hash callbacks cannot mutate caller-owned recovery inputs aft
   assert.deepEqual(restored.exportCheckpoint(limits), expectedBytes);
 });
 
-test('lost-reply recovery retains old and pending states until exact signed retry verifies acceptance', async () => {
-  const f = await fixture();
-  const candidate = await f.genesis.next.reserve({ peerIndex: 1, role: 0, nonce: bytes(50), group: bytes(51), contactPolicy: bytes(52), now: 111 });
-  const operator = generateKeyPairSync('ed25519'), device = generateKeyPairSync('ed25519');
-  const raw = key => new Uint8Array(key.export({ format: 'der', type: 'spki' }).subarray(-32));
-  const b64 = (n, length = 32) => Buffer.alloc(length, n).toString('base64url');
-  const chatPublicKey = Buffer.from(raw(device.publicKey)).toString('base64url');
-  const identity = { grant: { version: 1, issuerKeyId: b64(1), communityId: 'checkpoint-test', memberId: b64(2),
-    chatPublicKey, policyDigest: b64(3), issuedAt: 100, expiresAt: 1000, signature: b64(4, 64) },
-  authorization: { version: 1, communityId: 'checkpoint-test', memberId: b64(2), rootPublicKey: b64(5),
-    devicePublicKey: chatPublicKey, issuedAt: 100, expiresAt: 1000, signature: b64(6, 64) } };
-  let accepted, originalRequest, lost = true;
-  const clientOptions = { operatorPublicKey: raw(operator.publicKey), sign: async message => sign(null, message, device.privateKey),
-    async transport(envelope) {
-      const request = envelope.request, signingBytes = await accountRequestBytes(request);
-      assert(verify(null, signingBytes, device.publicKey, Buffer.from(request.signature, 'base64url')));
-      if (!accepted) {
-        originalRequest = JSON.stringify(request);
-        // A storage-only simulated acceptance; no synthetic proof is claimed valid.
-        accepted = { statement: request.statement, requestId: request.requestId, proofScope: request.proofScope,
-          requestDigest: Array.from(await sha(cat(signingBytes, Buffer.from(request.signature, 'base64url')))), acceptedAt: 112, signature: '' };
-        accepted.signature = sign(null, await accountAcceptanceBytes(accepted), operator.privateKey).toString('base64url');
-      } else assert.equal(JSON.stringify(request), originalRequest);
-      if (lost) { lost = false; throw new Error('Simulated lost reply after durable acceptance'); }
-      return { action: 'apply', value: structuredClone(accepted) };
-    } };
-  const client = new AccountClient(clientOptions);
-  const request = await client.prepareApply({ record: { statement: candidate.statement, proof: '010203',
-    proofScope: { circuitDigest: Array.from(bytes(41)), verifyingKeyDigest: Array.from(bytes(42)) } }, chatPublicKey, expiresAt: 190 });
-  const journal = { old: f.genesis.next.exportCheckpoint(limits), successor: candidate.next.exportCheckpoint(limits), requestBytes: encode(request) };
-  await assert.rejects(client.apply({ ...identity, request }), /lost reply/);
-  const old = await AccountWitness.restoreCheckpoint({ ...restoreOptions(f, f.genesis), checkpointBytes: journal.old });
-  const persistedRequest = decode(journal.requestBytes);
-  const successor = await AccountWitness.restoreCheckpoint({ ...restoreOptions(f, candidate), checkpointBytes: journal.successor,
-    expectedStatement: persistedRequest.statement });
-  assert.equal(old.commitment, f.genesis.next.commitment);
-  assert.equal(successor.commitment, candidate.next.commitment);
-  const acceptance = await new AccountClient(clientOptions).apply({ ...identity, request: persistedRequest });
-  const confirmed = await AccountWitness.restoreCheckpoint({ ...restoreOptions(f, candidate), checkpointBytes: journal.successor,
-    expectedStatement: acceptance.statement });
-  assert.equal(confirmed.commitment, successor.commitment);
-  assert.equal(hex(fieldBytes(confirmed.commitment)), hex(Uint8Array.from(acceptance.statement.nextState)));
-  assert.notEqual(old.commitment, successor.commitment);
-});
+// Lost replies and exact signed retries run against the actual issuer in
+// tests/accounting_ledger.rs and the JS/Rust service bridge, with real proofs.

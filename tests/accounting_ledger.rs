@@ -1,9 +1,13 @@
-//! These are storage/authorization tests with an explicitly synthetic verifier.
-//! Real circuit acceptance is exercised separately by the browser proof suite.
+//! Real maintained proofs, signed authority and libSQL storage adversaries.
 
 mod common;
+#[path = "accounting_ledger/wire.rs"]
+mod wire;
 use cblc::{Error, accounting::*, accounting_ledger::*};
-use common::Fixture;
+use common::{
+    Fixture,
+    proofs::{self, RealVerifier},
+};
 use data_encoding::BASE64URL_NOPAD as B64;
 use ed25519_dalek::{Signer, SigningKey};
 #[path = "support/inspect.rs"]
@@ -15,36 +19,14 @@ use std::{
     path::Path,
     sync::{
         Arc,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicU64, Ordering},
         mpsc::{self, Receiver, Sender},
     },
     time::Duration,
 };
 
-#[derive(Clone, Default)]
-struct StorageOnlyVerifier {
-    calls: Arc<AtomicUsize>,
-    reject: bool,
-}
-impl AccountProofVerifier for StorageOnlyVerifier {
-    fn scope(&self) -> AccountProofScope {
-        AccountProofScope {
-            circuit_digest: [41; 32],
-            verifying_key_digest: [42; 32],
-        }
-    }
-    fn verify(&self, _: &AccountStatement, proof: &[u8]) -> Result<(), Error> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        if self.reject || proof != [1, 2, 3] {
-            Err(Error::CryptoProvider)
-        } else {
-            Ok(())
-        }
-    }
-}
-
 struct BlockedVerifier {
-    inner: StorageOnlyVerifier,
+    inner: RealVerifier,
     entered: Sender<()>,
     release: Receiver<()>,
 }
@@ -57,7 +39,7 @@ impl AccountProofVerifier for BlockedVerifier {
         self.inner.verify(statement, proof)?;
         self.entered.send(()).map_err(|_| Error::CryptoProvider)?;
         self.release
-            .recv_timeout(Duration::from_secs(10))
+            .recv_timeout(Duration::from_secs(180))
             .map_err(|_| Error::CryptoProvider)
     }
 }
@@ -67,7 +49,7 @@ fn blocked_verifier() -> (BlockedVerifier, Receiver<()>, Sender<()>) {
     let (release, resume) = mpsc::channel();
     (
         BlockedVerifier {
-            inner: StorageOnlyVerifier::default(),
+            inner: RealVerifier::default(),
             entered,
             release: resume,
         },
@@ -101,7 +83,7 @@ fn policy() -> AccountLedgerPolicy {
             abandon_after: 1000,
         },
         max_authorization_seconds: 100,
-        max_proof_bytes: 20000,
+        max_proof_bytes: 1024 * 1024,
         checkpoint_period_seconds: 1000,
     }
 }
@@ -123,51 +105,19 @@ fn sign(request: &mut AccountRequest, key: &SigningKey) {
 }
 
 fn genesis(fixture: &Fixture) -> AccountRequest {
-    let community: [u8; 32] = Sha256::digest(fixture.trust.community_id.as_bytes()).into();
-    let owner = B64
-        .decode(common::member_id(7).as_bytes())
-        .unwrap()
-        .try_into()
-        .unwrap();
-    let account = policy().account;
-    let mut request = AccountRequest {
-        statement: AccountStatement {
-            protocol_version: 2,
-            community,
-            owner,
-            policy_digest: account.digest(&community).unwrap(),
-            enrollment_root: fr(8),
-            now: 110,
-            valid_until: account.proof_valid_until(110).unwrap(),
-            genesis: true,
-            previous_version: 0,
-            next_version: 0,
-            previous_state: fr(0),
-            next_state: fr(1),
-            settlement_marker: fr(0),
-            policy: account,
-        },
-        request_id: [10; 32],
-        proof_scope: StorageOnlyVerifier::default().scope(),
-        chat_public_key: B64.encode(&fixture.device.verifying_key().to_bytes()),
-        issued_at: 110,
-        expires_at: 180,
-        proof: vec![1, 2, 3],
-        signature: String::new(),
-    };
-    sign(&mut request, &fixture.device);
-    request
+    proofs::request(0, 10, fixture)
 }
+
 fn successor(prior: &AccountRequest, fixture: &Fixture, id: u8) -> AccountRequest {
-    let mut request = prior.clone();
-    request.statement.genesis = false;
-    request.statement.previous_version = prior.statement.next_version;
-    request.statement.next_version = prior.statement.next_version + 1;
-    request.statement.previous_state = prior.statement.next_state;
-    request.statement.next_state = fr(prior.statement.next_state[31] + 1);
-    request.statement.settlement_marker = fr(15);
-    request.request_id = [id; 32];
-    sign(&mut request, &fixture.device);
+    let mut request = proofs::request(1, id, fixture);
+    if prior.statement.next_version != 0 {
+        // Deliberately replay the already spent marker at a newer version;
+        // this invalid public statement must fail before proof verification.
+        request.statement.previous_version = prior.statement.next_version;
+        request.statement.next_version = prior.statement.next_version + 1;
+        request.statement.previous_state = prior.statement.next_state;
+        sign(&mut request, &fixture.device);
+    }
     request
 }
 
@@ -179,21 +129,19 @@ fn rejected_proof_cannot_register_and_genesis_is_lifetime_unique_after_restart()
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
-    let mut ledger = open(
-        &path,
-        &f,
-        StorageOnlyVerifier {
-            reject: true,
-            ..Default::default()
-        },
-    );
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
+    let mut corrupt = request.clone();
+    corrupt.proof[0] ^= 1;
+    sign(&mut corrupt, &f.device);
     assert_eq!(
-        ledger.apply(&g, &a, &request, || 120),
+        ledger.apply(&g, &a, &corrupt, || 120),
         Err(Error::CryptoProvider)
     );
     drop(ledger);
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
+    let mut ledger = open(&path, &f, RealVerifier::default());
     let accepted = ledger.apply(&g, &a, &request, || 120).unwrap();
     verify_account_acceptance(
         &accepted,
@@ -201,7 +149,7 @@ fn rejected_proof_cannot_register_and_genesis_is_lifetime_unique_after_restart()
     )
     .unwrap();
     drop(ledger);
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
+    let mut ledger = open(&path, &f, RealVerifier::default());
     let mut second = request.clone();
     second.request_id = [11; 32];
     sign(&mut second, &f.device);
@@ -213,10 +161,12 @@ fn rejected_proof_cannot_register_and_genesis_is_lifetime_unique_after_restart()
 fn exact_retry_does_not_verify_or_debit_again_and_changed_bytes_are_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let f = Fixture::new();
-    let v = StorageOnlyVerifier::default();
+    let v = RealVerifier::default();
     let calls = v.calls.clone();
     let mut ledger = open(&dir.path().join("ledger.sqlite"), &f, v);
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
@@ -234,7 +184,7 @@ fn exact_retry_does_not_verify_or_debit_again_and_changed_bytes_are_rejected() {
 fn real_authority_and_common_checkpoint_are_required_before_verifying() {
     let dir = tempfile::tempdir().unwrap();
     let f = Fixture::new();
-    let v = StorageOnlyVerifier::default();
+    let v = RealVerifier::default();
     let calls = v.calls.clone();
     let mut ledger = open(&dir.path().join("ledger.sqlite"), &f, v);
     let g = f.grant(7, &f.device);
@@ -244,7 +194,9 @@ fn real_authority_and_common_checkpoint_are_required_before_verifying() {
         ledger.apply(&g, &a, &request, || 120),
         Err(Error::Admission)
     );
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     assert_eq!(
         ledger.admit_checkpoint(0, fr(9)),
         Err(Error::PolicyMismatch)
@@ -274,9 +226,11 @@ fn expiry_and_clock_changes_during_verification_have_no_effect() {
     let mut ledger = open(
         &dir.path().join("ledger.sqlite"),
         &f,
-        StorageOnlyVerifier::default(),
+        RealVerifier::default(),
     );
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
@@ -307,27 +261,22 @@ fn blocked_proof_allows_another_owner_to_commit_and_rechecks_shared_clock_floor(
         let f = Fixture::new();
         let (verifier, entered, release) = blocked_verifier();
         let mut slow = open(&path, &f, verifier);
-        slow.admit_checkpoint(0, fr(8)).unwrap();
+        slow.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
         let other_grant = f.grant(8, &f.device);
         let other_authorization = f.authorize(8, &f.device);
-        let mut other = genesis(&f);
-        other.statement.owner = B64
-            .decode(other_grant.member_id.as_bytes())
-            .unwrap()
-            .try_into()
-            .unwrap();
-        other.request_id = [21; 32];
-        sign(&mut other, &f.device);
+        let other = proofs::request(2, 21, &f);
         std::thread::scope(|scope| {
             let worker = scope.spawn(move || slow.apply(&g, &a, &first, || 120));
-            entered.recv_timeout(Duration::from_secs(10)).unwrap();
+            entered.recv_timeout(Duration::from_secs(180)).unwrap();
             // Open/configuration and checkpoint publication must also remain
             // possible while the first verifier is deliberately blocked.
-            let mut fast = open(&path, &f, StorageOnlyVerifier::default());
-            fast.admit_checkpoint(0, fr(8)).unwrap();
+            let mut fast = open(&path, &f, RealVerifier::default());
+            fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+                .unwrap();
             let accepted = fast.apply(&other_grant, &other_authorization, &other, || other_time);
             release.send(()).unwrap();
             let resumed = worker.join().unwrap();
@@ -357,22 +306,20 @@ fn successor_losing_during_verification_cannot_commit_its_marker_or_response() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("ledger.sqlite");
         let f = Fixture::new();
-        let mut fast = open(&path, &f, StorageOnlyVerifier::default());
-        fast.admit_checkpoint(0, fr(8)).unwrap();
+        let mut fast = open(&path, &f, RealVerifier::default());
+        fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
         fast.apply(&g, &a, &first, || 120).unwrap();
         let losing = successor(&first, &f, 11);
-        let mut winning = successor(&first, &f, if same_request_id { 11 } else { 12 });
-        winning.statement.next_state = fr(3);
-        winning.statement.settlement_marker = fr(16);
-        sign(&mut winning, &f.device);
+        let winning = proofs::request(3, if same_request_id { 11 } else { 12 }, &f);
         let (verifier, entered, release) = blocked_verifier();
         let mut slow = open(&path, &f, verifier);
         std::thread::scope(|scope| {
             let worker = scope.spawn(|| slow.apply(&g, &a, &losing, || 130));
-            entered.recv_timeout(Duration::from_secs(10)).unwrap();
+            entered.recv_timeout(Duration::from_secs(180)).unwrap();
             let accepted = fast.apply(&g, &a, &winning, || 130);
             release.send(()).unwrap();
             let resumed = worker.join().unwrap();
@@ -391,7 +338,7 @@ fn successor_losing_during_verification_cannot_commit_its_marker_or_response() {
             db.query_row("SELECT marker FROM markers", [], |row| row
                 .get::<_, Vec<u8>>(0))
                 .unwrap(),
-            fr(16)
+            winning.statement.settlement_marker
         );
         assert_eq!(
             db.query_row("SELECT count(*) FROM latest_acceptances", [], |row| row
@@ -408,8 +355,9 @@ fn concurrently_cached_request_bypasses_original_expiry_but_requires_live_author
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("ledger.sqlite");
         let f = Fixture::new();
-        let mut fast = open(&path, &f, StorageOnlyVerifier::default());
-        fast.admit_checkpoint(0, fr(8)).unwrap();
+        let mut fast = open(&path, &f, RealVerifier::default());
+        fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
@@ -421,7 +369,7 @@ fn concurrently_cached_request_bypasses_original_expiry_but_requires_live_author
         std::thread::scope(|scope| {
             let worker =
                 scope.spawn(|| slow.apply(&g, &a, &request, || now.load(Ordering::SeqCst)));
-            entered.recv_timeout(Duration::from_secs(10)).unwrap();
+            entered.recv_timeout(Duration::from_secs(180)).unwrap();
             let accepted = fast.apply(&g, &a, &request, || 130);
             now.store(completed, Ordering::SeqCst);
             release.send(()).unwrap();
@@ -460,11 +408,13 @@ fn checkpoint_slot_expiry_during_verification_cannot_commit() {
         &path,
         f.trust.clone(),
         configured,
-        StorageOnlyVerifier::default(),
+        RealVerifier::default(),
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap();
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let times = [120, 120, 150];
     let index = Cell::new(0);
     let result = ledger.apply(
@@ -499,8 +449,10 @@ fn root_authorized_devices_share_one_compare_and_swap_frontier() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
@@ -539,8 +491,10 @@ fn failure_after_marker_insertion_rolls_back_marker_state_response_and_clock() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
@@ -586,9 +540,11 @@ fn recovered_device_status_is_challenge_bound_and_returns_no_new_genesis() {
     let mut ledger = open(
         &dir.path().join("ledger.sqlite"),
         &f,
-        StorageOnlyVerifier::default(),
+        RealVerifier::default(),
     );
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let first = genesis(&f);
     let accepted = ledger
         .apply(
@@ -661,7 +617,7 @@ fn canonical_fields_versions_unknown_wire_fields_and_policy_scope_fail_closed() 
     assert!(serde_json::from_value::<AccountRequest>(json).is_err());
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ledger.sqlite");
-    drop(open(&path, &f, StorageOnlyVerifier::default()));
+    drop(open(&path, &f, RealVerifier::default()));
     let mut changed = policy();
     changed.account.initial_credit = 2;
     assert!(matches!(
@@ -669,7 +625,7 @@ fn canonical_fields_versions_unknown_wire_fields_and_policy_scope_fail_closed() 
             &path,
             f.trust,
             changed,
-            StorageOnlyVerifier::default(),
+            RealVerifier::default(),
             SigningKey::from_bytes(&[9; 32])
         ),
         Err(Error::PolicyMismatch)
@@ -686,8 +642,8 @@ fn ledger_process_worker() {
         .unwrap();
     let gate = std::env::var("CFRM_ACCOUNT_TEST_GATE").unwrap();
     let f = Fixture::new();
-    let mut ledger = open(Path::new(&path), &f, StorageOnlyVerifier::default());
-    let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut ledger = open(Path::new(&path), &f, RealVerifier::default());
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(180);
     while !Path::new(&gate).exists() {
         assert!(std::time::Instant::now() < until);
         std::thread::sleep(std::time::Duration::from_millis(5));
@@ -708,8 +664,10 @@ fn independent_processes_race_and_reopen_returns_the_committed_winner() {
     let path = dir.path().join("ledger.sqlite");
     let gate = dir.path().join("go");
     let f = Fixture::new();
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     ledger
         .apply(
             &f.grant(7, &f.device),
@@ -754,7 +712,7 @@ fn independent_processes_race_and_reopen_returns_the_committed_winner() {
             |r| r.get(0),
         )
         .unwrap();
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
+    let mut ledger = open(&path, &f, RealVerifier::default());
     let request = successor(&genesis(&f), &f, winner[0]);
     assert_eq!(
         ledger
@@ -783,8 +741,10 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("continuity.sqlite");
     let f = Fixture::new();
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
-    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let mut ledger = open(&path, &f, RealVerifier::default());
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let g = f.grant(7, &f.device);
     let old = f.authorize(7, &f.device);
     let first = genesis(&f);
@@ -821,7 +781,7 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
     ledger.rotate_root(&rotation).unwrap();
     assert_eq!(ledger.rotate_root(&rotation), Err(Error::Replay));
     drop(ledger);
-    let mut ledger = open(&path, &f, StorageOnlyVerifier::default());
+    let mut ledger = open(&path, &f, RealVerifier::default());
     assert_eq!(
         ledger.apply(&g, &old, &first, || 120),
         Err(Error::Admission)
@@ -848,7 +808,7 @@ fn extension_activation_requires_a_real_proof() {
         cblc::storage::MemoryStore::default(),
         f.trust,
         settings,
-        StorageOnlyVerifier::default(),
+        RealVerifier::default(),
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap();
@@ -879,7 +839,7 @@ fn extension_activation_requires_a_real_proof() {
         cblc::verification::ExtensionLimits {
             global_burst: 10,
             subject_burst: 2,
-            replenish: Duration::from_secs(10),
+            replenish: Duration::from_secs(180),
             maximum_keys: std::num::NonZeroUsize::new(16).unwrap(),
         },
         activation,

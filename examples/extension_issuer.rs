@@ -251,6 +251,18 @@ fn main() {
                                 .is_err()
                         );
                     }
+                    for (before, after) in [(now, now + 1), (now, now - 1), (0, now)] {
+                        let tick = std::cell::Cell::new(before);
+                        assert!(
+                            ledger
+                                .as_mut()
+                                .unwrap()
+                                .authenticated_obligations(&grant, &authority, &request, || {
+                                    tick.replace(after)
+                                })
+                                .is_err()
+                        );
+                    }
                     let mut service =
                         AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?;
                     let operation = AccountServiceRequest::Obligations {
@@ -283,6 +295,44 @@ fn main() {
                     tampered.inbox.root[0] ^= 1;
                     assert!(
                         cblc::obligations::verify_response(&request, &tampered, &key, now).is_err()
+                    );
+                    for field in 0..3 {
+                        let mut invalid = response.clone();
+                        match field {
+                            0 => invalid.observed_at = request.issued_at - 1,
+                            1 => invalid.observed_at = now + 1,
+                            _ => {
+                                invalid.entries = vec![
+                                    cblc::extensions::PendingObligation {
+                                        previous: Default::default(),
+                                        commitment: [1; 32],
+                                    };
+                                    65
+                                ];
+                            }
+                        }
+                        assert!(
+                            cblc::obligations::verify_response(&request, &invalid, &key, now)
+                                .is_err()
+                        );
+                    }
+                    for field in 0..4 {
+                        let mut invalid = request.clone();
+                        match field {
+                            0 => invalid.request_id = Some([1; 32]),
+                            1 => invalid.chat_public_key = "invalid".into(),
+                            2 => invalid.signature = "invalid".into(),
+                            _ => invalid.challenge = [0; 32],
+                        }
+                        assert!(
+                            cblc::obligations::verify_response(&invalid, &response, &key, now)
+                                .is_err()
+                        );
+                    }
+                    let foreign_key = SigningKey::from_bytes(&[10; 32]).verifying_key().to_bytes();
+                    assert!(
+                        cblc::obligations::verify_response(&request, &response, &foreign_key, now)
+                            .is_err()
                     );
                     Ok(json!({"root":response.inbox,"entries":response.entries}))
                 }
@@ -348,6 +398,56 @@ fn main() {
                                 .await
                                 .is_err()
                         );
+                        for member in ["invalid", "aa", "AA"] {
+                            assert!(
+                                verifier
+                                    .verify_spent(&Change { member, ..change }, token)
+                                    .await
+                                    .is_err()
+                            );
+                        }
+                        assert!(
+                            verifier
+                                .verify_spent(
+                                    &Change {
+                                        community: "foreign",
+                                        ..change
+                                    },
+                                    token
+                                )
+                                .await
+                                .is_err()
+                        );
+                        assert!(
+                            verifier
+                                .verify_spent(
+                                    &Change {
+                                        replacement: change.expected.fingerprint,
+                                        ..change
+                                    },
+                                    token
+                                )
+                                .await
+                                .is_err()
+                        );
+                        for variant in 0..8 {
+                            let mut damaged = SpentChange {
+                                acceptance: token.acceptance.clone(),
+                                request: token.request.clone(),
+                                update: token.update.clone(),
+                            };
+                            match variant {
+                                0 => damaged.request.proof_scope.circuit_digest[0] ^= 1,
+                                1 => damaged.acceptance.statement.next_state[31] ^= 1,
+                                2 => damaged.acceptance.request_id[0] ^= 1,
+                                3 => damaged.acceptance.proof_scope.verifying_key_digest[0] ^= 1,
+                                4 => damaged.acceptance.request_digest[0] ^= 1,
+                                5 => damaged.acceptance.signature = "invalid".into(),
+                                6 => damaged.update.inbox.root[0] ^= 1,
+                                _ => damaged.update.effect = Effect::Update,
+                            }
+                            assert!(verifier.verify_spent(&change, &damaged).await.is_err());
+                        }
                         let store = MemoryStore::new("community.example").unwrap();
                         let pins = Pins::new(store, verifier);
                         pins.pin(change.member, change.field, change.expected.fingerprint)

@@ -288,7 +288,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 [[package]]
 name = "cpns"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cpns?branch=main#85674ab2e70f11051ba30ab44a8c7d3301ac6ec1"
+source = "git+https://github.com/corbet-foss/cpns?branch=main#bc9a2d53797b864ee58ae36e331336193ce14aa8"
 dependencies = [
  "getrandom 0.4.3",
  "sha2 0.11.0",
@@ -317,7 +317,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crlt?branch=main#80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2"
+source = "git+https://github.com/corbet-foss/crlt?branch=main#6ca3bd1035fcf17c2c88cdae3ed913da49740252"
 dependencies = [
  "deadpool",
  "libsql",
@@ -364,7 +364,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cssr?branch=main#cbcefe607f46835660ecb52708e867dfd1176791"
+source = "git+https://github.com/corbet-foss/cssr?branch=main#5ca86e4624a56e43e9df7dbc169bcca967b8f817"
 dependencies = [
  "crlt",
  "p256",
@@ -410,7 +410,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cvfy?branch=main#3445fce1552b534b98871c027b2d3e19cd064386"
+source = "git+https://github.com/corbet-foss/cvfy?branch=main#b5749ac38ea444d963bf0d979523c04839e4ceeb"
 dependencies = [
  "czkp",
  "data-encoding",
@@ -421,7 +421,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/czkp?branch=main#976435f44c6e387f76387c945bd39c0122f6c650"
+source = "git+https://github.com/corbet-foss/czkp?branch=main#d2e969d3c631c6baf9d4e129b62dda0f10129a0b"
 dependencies = [
  "data-encoding",
  "ed25519-dalek",

@@ -1,4 +1,4 @@
-// CI-only synthetic holder. Prove the actual migrated account circuit, then retain
+// CI-only holder for fictional members. Prove the actual migrated account circuit, then retain
 // PUBLIC proofs/artifacts for the independent Rust issuer test. No private witness is written.
 import assert from 'node:assert/strict';
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
@@ -26,7 +26,7 @@ await writeFile(resolve(directory,'circuit.json'),circuitBytes);
 const lock = JSON.parse(await readFile('experiments/private-accounting/account-state/setup-lock.json'));
 const setup = {};
 for(const spec of lock.files) {
-  const response=await fetch(spec.url,{headers:spec.range?{Range:`bytes=0-${spec.bytes-1}`}:{},redirect:'error',signal:AbortSignal.timeout(120000)});
+  const response=await fetch(spec.url,{headers:{'User-Agent':'LibraryValidation/1.0',...(spec.range?{Range:`bytes=0-${spec.bytes-1}`}:{})},redirect:'error',signal:AbortSignal.timeout(120000)});
   assert.equal(response.status,spec.range?206:200);
   const chunks=[];let size=0;
   for await(const chunk of response.body) {size+=chunk.length;assert(size<=spec.bytes);chunks.push(chunk);}
@@ -35,7 +35,8 @@ for(const spec of lock.files) {
 }
 const api=await Barretenberg.new({backend:BackendType.Wasm,threads:1,skipSrsInit:true,memory:{initial:2048,maximum:32768}});
 const records=[];
-let candidates, artifacts, scope;
+const needLedger=process.env.CBLC_LEDGER_FIXTURES==='1';
+let candidates, ledgerCandidates, artifacts, scope;
 try {
   await api.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2Point:setup['g2.dat']});
   const backend=new UltraHonkBackend(compiled.program.bytecode,api);
@@ -64,20 +65,42 @@ try {
   const checkpoint=await checkpointFromVerified(community,entries,hashes);
   const genesis=await AccountWitness.genesis({hashes,community,policy,checkpoint,ownerIndex:0,ownerSecret:bytes(10),now:110});
   const reserve=await genesis.next.reserve({peerIndex:1,role:0,nonce:bytes(50),group:bytes(51),contactPolicy:bytes(52),now:120});
+  const limits={maxBytes:1024*1024,maxMapEntries:256,maxSlots:64};
+  for(const candidate of [genesis,reserve]) {
+    const restored=await AccountWitness.restoreCheckpoint({hashes,enrollment:checkpoint,
+      ownerSecret:bytes(10),expectedStatement:candidate.statement,
+      checkpointBytes:candidate.next.exportCheckpoint(limits),limits});
+    assert.equal(restored.commitment,candidate.next.commitment);
+    assert.deepEqual(restored.exportCheckpoint(limits),candidate.next.exportCheckpoint(limits));
+    candidate.next=restored;
+  }
   candidates=[genesis,reserve];
+  ledgerCandidates=[];
+  if(needLedger) {
+    const otherGenesis=await AccountWitness.genesis({hashes,community,policy,checkpoint,ownerIndex:1,ownerSecret:bytes(11),now:110});
+    const alternate=await genesis.next.reserve({peerIndex:1,role:0,nonce:bytes(53),group:bytes(51),contactPolicy:bytes(52),now:120});
+    const tuned=await genesis.next.withPolicy({...policy,abandonAfter:1500});
+    const tunedReserve=await tuned.reserve({peerIndex:1,role:0,nonce:bytes(50),group:bytes(51),contactPolicy:bytes(52),now:120});
+    ledgerCandidates=[otherGenesis,alternate,tunedReserve];
+  }
   artifacts={circuit:compiled.program,verificationKey,manifest,setup,limits:{memoryPages:32768,maxProofBytes:1024*1024}};
 } finally {await api.destroy();}
 const prover=await createProver({artifacts});
+const ledgerRecords=[];
 try {
   for(const candidate of candidates) {
     const result=await prover.prove(noirInput(candidate.input),publicInputValues(candidate.statement));
     records.push({statement:candidate.statement,proof:hex(result.proof),proofScope:scope});
   }
+  for(const candidate of ledgerCandidates) {
+    const result=await prover.prove(noirInput(candidate.input),publicInputValues(candidate.statement));
+    ledgerRecords.push({statement:candidate.statement,proof:hex(result.proof),proofScope:scope});
+  }
 } finally {await prover.destroy();}
 // Verify with the shipped server entry, independently of holder proof construction.
 const server=await createAccountVerifier(await nodeArtifactOptions(resolve(directory,'config.json')));
 try {
-  for(const record of records) {
+  for(const record of [...records,...ledgerRecords]) {
     assert.equal((await server.verify(record)).verified,true);
     const corrupt=structuredClone(record);corrupt.proof=(corrupt.proof.startsWith('00')?'01':'00')+corrupt.proof.slice(2);
     await assert.rejects(server.verify(corrupt));
@@ -86,4 +109,5 @@ try {
   }
 } finally {await server.destroy();}
 await writeFile(resolve(directory,'records.json'),JSON.stringify(records));
-console.log('Verified two real account proofs; rejected corrupted proofs and changed public inputs.');
+await writeFile(resolve(directory,'ledger-records.json'),JSON.stringify([...records,...ledgerRecords]));
+console.log(`Verified ${records.length+ledgerRecords.length} real account proofs; rejected corrupted proofs and changed public inputs.`);

@@ -14,7 +14,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         if request.community != self.community
             || decode::<32>(&grant.member_id)? != request.owner
             || request.chat_public_key != grant.chat_public_key
-            || request.request_id.is_some()
         {
             return Err(Error::Admission);
         }
