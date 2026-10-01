@@ -18,7 +18,6 @@ use std::{
     cell::Cell,
     path::Path,
     sync::{
-        Arc,
         atomic::{AtomicU64, Ordering},
         mpsc::{self, Receiver, Sender},
     },

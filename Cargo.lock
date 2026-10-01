@@ -288,7 +288,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 [[package]]
 name = "cpns"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cpns?branch=main#bc9a2d53797b864ee58ae36e331336193ce14aa8"
+source = "git+https://github.com/corbet-foss/cpns?branch=main#ae7a658295bdf3c2337972e2985d2daa4a5351ec"
 dependencies = [
  "getrandom 0.4.3",
  "sha2 0.11.0",

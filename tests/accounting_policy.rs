@@ -1,6 +1,7 @@
 //! Exercise the production policy helpers at their public bounds.
 
-use cblc::{Error, accounting::AccountPolicy, admission::MAX_INTEGER};
+use cblc::{Error, accounting::AccountPolicy};
+use czkp::MAX_INTEGER;
 
 fn policy() -> AccountPolicy {
     AccountPolicy {
@@ -54,7 +55,10 @@ fn every_invalid_policy_is_refused_before_time_or_binding_operations() {
         assert_eq!(invalid.proof_valid_until(100), Err(Error::InvalidInput));
         assert_eq!(invalid.reservation_deadline(100), Err(Error::InvalidInput));
         assert_eq!(invalid.capacity_at(100, 100), Err(Error::InvalidInput));
-        assert_eq!(invalid.admission_limit_at(100, 100), Err(Error::InvalidInput));
+        assert_eq!(
+            invalid.admission_limit_at(100, 100),
+            Err(Error::InvalidInput)
+        );
         assert_eq!(invalid.digest(&[1; 32]), Err(Error::InvalidInput));
         assert_eq!(invalid.state_digest(&[1; 32]), Err(Error::InvalidInput));
     }
