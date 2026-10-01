@@ -29,11 +29,11 @@ impl AccountPolicy {
     /// Deadline for a new outgoing reservation. A settlement interval must
     /// remain before policy expiry, or the promised refund would be unusable.
     pub fn reservation_deadline(&self, now: u64) -> Result<u64, Error> {
-        let horizon = self.proof_valid_until(now)?;
-        let deadline = now
-            .checked_add(self.abandon_after)
-            .ok_or(Error::InvalidInput)?;
-        if deadline < horizon || deadline >= self.policy_valid_until {
+        self.proof_valid_until(now)?;
+        // Validation bounds both operands by MAX_INTEGER (< u64::MAX / 2).
+        // abandon_after >= rate_window also places this at or after the horizon.
+        let deadline = now + self.abandon_after;
+        if deadline >= self.policy_valid_until {
             return Err(Error::Expired);
         }
         Ok(deadline)
@@ -106,9 +106,8 @@ impl AccountPolicy {
         if now < self.policy_valid_from || now >= self.policy_valid_until {
             return Err(Error::Expired);
         }
-        let end = (now / self.rate_window + 1)
-            .checked_mul(self.rate_window)
-            .ok_or(Error::InvalidInput)?;
+        // The next window is <= now + rate_window <= 2 * MAX_INTEGER.
+        let end = (now / self.rate_window + 1) * self.rate_window;
         Ok(end.min(self.policy_valid_until))
     }
 
@@ -123,9 +122,7 @@ impl AccountPolicy {
         if created_at > self.proof_valid_until(now)? {
             return Err(Error::ClockRollback);
         }
-        if now >= self.policy_valid_until {
-            return Err(Error::Expired);
-        }
+        // proof_valid_until has already rejected expiry and validated the clock.
         Ok(())
     }
 

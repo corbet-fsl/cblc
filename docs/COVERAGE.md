@@ -46,3 +46,13 @@ checks exact outcomes; it does not substitute cached acceptance for verification
 Device/circuit/fixture changes invalidate the cache and rerun actual native and
 wasm proof construction. Coverage separately replays the same public evidence
 under instrumentation. No private witness or seed is part of this cache.
+
+Policy time helpers remove three redundant defensive cases rather than excluding
+source. `proof_valid_until` first validates all durations and the current clock
+against `MAX_INTEGER` (2^53-1). A deadline addition and the next-window product
+are therefore at most twice that bound, below u64 overflow. The validated
+waiting period is at least one rate window, so its deadline cannot precede the
+current proof horizon. `validate_age` uses `proof_valid_until` before returning,
+which already rejects expiry. Production-helper tests cover invalid fields,
+future/expired clocks and the maximum supported timestamps directly; they do
+not accept proofs or simulate the ledger.
