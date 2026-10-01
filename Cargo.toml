@@ -18,13 +18,13 @@ unsafe_code = "forbid"
 missing_docs = "warn"
 
 [dependencies]
-cthl = { git = "https://github.com/corbet-foss/cthl", rev = "a41533a255cefc0757078205bff87c03e6c7bbbe" }
-cpns = { git = "https://github.com/corbet-foss/cpns", rev = "d68a3f3a2df322c513d0e754e452ee02aab7a5b9", default-features = false }
+cthl = { git = "https://github.com/corbet-foss/cthl", branch = "main" }
+cpns = { git = "https://github.com/corbet-foss/cpns", branch = "main", default-features = false }
 futures = "0.3"
-czkp = { git = "https://github.com/corbet-foss/czkp", rev = "e1782da1f7193a26ca0aea23137784896b780c03" }
-cvfy = { git = "https://github.com/corbet-foss/cvfy", rev = "5b31dde13fd9bafc115dbc8ff7f51cccc3debf29" }
-cssr = { git = "https://github.com/corbet-foss/cssr", rev = "6dbff220fc47dfb6e44403ecde9eb3af13cd75f5" }
-crlt = { git = "https://github.com/corbet-foss/crlt", rev = "80dc046d6ab53b3ea530c45bf3d7038c8b2c61b2" }
+czkp = { git = "https://github.com/corbet-foss/czkp", branch = "main" }
+cvfy = { git = "https://github.com/corbet-foss/cvfy", branch = "main" }
+cssr = { git = "https://github.com/corbet-foss/cssr", branch = "main" }
+crlt = { git = "https://github.com/corbet-foss/crlt", branch = "main" }
 data-encoding = "2.9"
 ed25519-dalek = "2.2"
 serde = { version = "1", features = ["derive"] }

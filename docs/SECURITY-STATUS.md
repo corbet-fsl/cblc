@@ -57,7 +57,7 @@ the verifier subprocess, and czkp wraps upstream proof/ABI operations.
   acceptance first. Key custody, clock, non-equivocating durable storage, atomic
   predecessor/marker checks and one lifetime genesis remain issuer duties.
   An issuer controlling its keys can lie about acceptance.
-- **Admission and executable policy:** cmnt must verify cpsd before signing the
+- **Admission and executable policy:** cmty must verify cpsd before signing the
   canonical community pseudonym. cblc checks that binding, not BBS proofs.
   Host configuration must authenticate the circuit/key/issuer-key manifest and
   run the shipped worker. The activation probe detects invalid proofs under that

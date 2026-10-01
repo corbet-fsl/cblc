@@ -45,7 +45,7 @@ Extension issuer APIs (`with_extensions`, `apply_extended`, `deposit_batch`,
 [EXTENSIONS.md](EXTENSIONS.md). They are not enabled by the legacy v2 verifier.
 
 Account database format v3 binds the owner to `SHA-256(cpsd::Pseudonym::to_bytes())`,
-encoded as unpadded base64url in the signed admission. cmnt must verify cpsd before
+encoded as unpadded base64url in the signed admission. cmty must verify cpsd before
 issuing that admission; cblc never infers identity from a root. `member_id` is only
 an encoding helper over those verified canonical bytes. There is one lifetime
 frontier per pseudonym and no deletion/reset API. `rotate_root` requires signatures

@@ -103,3 +103,9 @@ The cargo-deny gate uses narrowly scoped inherited libSQL transport exceptions
 with locked-version and upstream-source checks; see
 [dependency exposure](docs/DEPENDENCIES.md). Two TLS name-constraint risks and an
 unmaintained parser remain open. The optional Turso test requires both credentials.
+
+## Continuous verification
+
+Dependency updates follow main and are tested against one CI-resolved lockfile.
+Line and branch coverage target 100%; failures remain blocking. See
+[the coverage contract](docs/COVERAGE.md) for measurement and exclusions.
