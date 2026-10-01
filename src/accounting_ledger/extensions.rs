@@ -280,23 +280,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         owner: [u8; 32],
     ) -> Result<(Inbox, Vec<PendingObligation>), Error> {
         let mut tx = self.connection.transaction()?;
-        let frontier = extensions::inbox(&mut tx, &owner)?;
-        let applied = extensions::applied(&mut tx, &owner)?;
-        let mut cursor = frontier.clone();
-        let mut values = Vec::new();
-        while cursor != applied {
-            if values.len() >= 64 {
-                return Err(Error::Capacity);
-            }
-            let value: PendingObligation = tx
-                .get(&key(6, &[&owner, &cursor.root]))?
-                .ok_or(Error::Storage)?;
-            cursor = value.previous.clone();
-            values.push(value);
-        }
-        values.reverse();
+        let result = read_obligations(&mut tx, owner)?;
         tx.rollback()?;
-        Ok((frontier, values))
+        Ok(result)
     }
 }
 
@@ -359,4 +345,26 @@ pub(super) fn consume(
     }
     tx.delete(&key(10, &[owner]))?;
     tx.put(&key(7, &[owner]), &update.inbox)
+}
+
+pub(super) fn read_obligations(
+    tx: &mut Transaction<'_>,
+    owner: [u8; 32],
+) -> Result<(Inbox, Vec<PendingObligation>), Error> {
+    let frontier = extensions::inbox(tx, &owner)?;
+    let applied = extensions::applied(tx, &owner)?;
+    let mut cursor = frontier.clone();
+    let mut values = Vec::new();
+    while cursor != applied {
+        if values.len() >= 64 {
+            return Err(Error::Capacity);
+        }
+        let value: PendingObligation = tx
+            .get(&key(6, &[&owner, &cursor.root]))?
+            .ok_or(Error::Storage)?;
+        cursor = value.previous.clone();
+        values.push(value);
+    }
+    values.reverse();
+    Ok((frontier, values))
 }

@@ -101,3 +101,26 @@ lowercase hex and requires their SHA-256 digest to equal `memberId`. Legacy
 `cvld.admission.v1` grants are rejected. The issuer must still verify the cpsd
 presentation and community; the encoding consistency check is not BBS verification.
 No pseudonym opening, root-derived fallback, or raw gate evidence is accepted.
+
+
+Authenticated obligation ingestion and extended service operations:
+
+`AccountServiceRequest::ApplyExtended` invokes the real extension relation and
+atomic ledger, returning its acceptance and the existing hidden-input P-256
+certificate. The host configures the certificate issuer independently. It must
+match the authenticated proof manifest. Missing configuration refuses before
+any account effect. Ambiguous transport outcomes still reconcile by the original
+request ID through Status; they never regenerate a new request or opening.
+
+`AccountServiceRequest::Obligations` requires the existing admission and current
+root-signed device authorization plus a device signature over
+`obligations::request_bytes`. Status signatures have a different purpose and
+are refused. The issuer signs the exact request digest, observation time, full
+inbox root and complete bounded chain. This read writes no member access trace.
+The holder verifies `obligations::verify_response` before preparing ingestion;
+only the existing proof and atomic frontier checks authorize a later update.
+The response is not a current-record permission or proof of absent later changes.
+
+There is still no production settlement ingress: delayed batches do not satisfy
+the no-counterpart-disclosure transport requirement. Forum/Waves local current
+record verification and authenticated verifier publication remain unresolved.

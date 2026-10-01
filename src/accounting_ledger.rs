@@ -27,6 +27,7 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 
 mod extensions;
+mod obligations;
 mod rotation;
 use rotation::check_root;
 pub use rotation::{RootRotation, root_rotation_bytes};

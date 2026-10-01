@@ -2,8 +2,8 @@ name: ci
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci
+  cancel-in-progress: false
 jobs:
   resolve:
     runs-on: ubuntu-latest
@@ -14,19 +14,28 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
     - uses: dtolnay/rust-toolchain@stable
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
     - name: Resolve one fresh dependency snapshot
-      run: |-
-        cargo update
+      run: 'cargo update
+
         rustc --version > resolver.txt
+
         cargo --version >> resolver.txt
+
         date -u +%FT%TZ >> resolver.txt
-        sha256sum Cargo.lock >> resolver.txt
+
+        sha256sum Cargo.lock >> resolver.txt'
     - uses: actions/upload-artifact@v4
       with:
         name: resolved-lock
-        path: |-
-          Cargo.lock
+        path: 'Cargo.lock
+
           resolver.txt
+
+          package-lock.json'
         retention-days: 7
   audit:
     runs-on: ubuntu-latest
@@ -39,10 +48,10 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: resolved-lock
-    - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
+    - uses: taiki-e/install-action@v2
       with:
         tool: cargo-deny
-    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+    - uses: actions/setup-node@v4
       with:
         node-version: 24
     - run: cargo metadata --locked --format-version 1 > dependency-metadata.json
@@ -78,46 +87,54 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: resolved-lock
-    - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+    - uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         components: rustfmt, clippy
         targets: wasm32-unknown-unknown
-    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+    - uses: Swatinem/rust-cache@v2
       with:
         cache-on-failure: true
-    - run: rustc --version && cargo fmt --check
+    - run: 'rustc --version
+
+        cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }'
     - run: cargo clippy --locked --all-targets --all-features -- -D warnings
-    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+    - uses: actions/setup-node@v4
       with:
         node-version: 24
     - run: npm ci --ignore-scripts --no-audit --no-fund
     - run: npm test
     - run: node runtime/extensions/compile.mjs
-    - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
+    - uses: taiki-e/install-action@v2
       with:
         tool: wasm-pack
-    - run: wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
+    - run: wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir
+        "$PWD/.extension-wasm"
     - run: cargo build --locked --example extension_issuer
     - run: node tests/extensions-proof.mjs
-    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+    - uses: actions/cache@v4
       id: proof-cache
       with:
         path: .proof-test
-        key: proofs-v1-${{ runner.os }}-${{ hashFiles('experiments/private-accounting/account-state/**', 'runtime/accounting/**',
-          'tests/real-proof.mjs', 'tests/holder/**', 'package*.json') }}
+        key: proofs-v1-${{ runner.os }}-${{ hashFiles('experiments/private-accounting/account-state/**',
+          'runtime/accounting/**', 'tests/real-proof.mjs', 'tests/holder/**', 'package*.json')
+          }}
     - if: steps.proof-cache.outputs.cache-hit != 'true'
       run: node tests/real-proof.mjs
     - run: cargo test --locked
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - uses: actions/upload-artifact@v4
       if: always()
       with:
         name: dependency-lock
-        path: |
-          Cargo.lock
+        path: 'Cargo.lock
+
           package-lock.json
+
           .extension-test/results.json
+
           .extension-test/manifest.json
+
+          '
     - uses: actions/upload-artifact@v4
       with:
         name: proof-fixtures
@@ -125,6 +142,11 @@ jobs:
         include-hidden-files: true
         if-no-files-found: error
         retention-days: 7
+    - uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: formatting
+        path: formatting.patch
     needs:
     - resolve
   coverage:
@@ -158,32 +180,33 @@ jobs:
     - uses: taiki-e/install-action@v2
       with:
         tool: cargo-llvm-cov
-    - run: |-
-        rustc --version
-        cargo llvm-cov --version
+    - run: 'rustc --version
+
+        cargo llvm-cov --version'
     - name: Measure real native round trips and failure paths
-      run: cargo llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage --no-cfg-coverage-nightly
-        --ignore-filename-regex '/tests/' --json --output-path coverage.json
+      run: cargo llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage
+        --no-cfg-coverage-nightly --ignore-filename-regex '/tests/' --json --output-path
+        coverage.json
     - name: Require complete line and branch coverage
       run: python3 .github/check-coverage.py coverage.json
     - uses: actions/upload-artifact@v4
       if: always()
       with:
         name: coverage
-        path: |-
-          coverage.json
+        path: 'coverage.json
+
           Cargo.lock
-          resolver.txt
+
+          resolver.txt'
         retention-days: 7
     env:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
 'on':
   push:
-    paths-ignore:
-    - '**.md'
-  pull_request:
-    paths-ignore:
-    - '**.md'
+    branches:
+    - main
+    - ci/**
+  pull_request: null
   workflow_dispatch: null
 env:
   CARGO_BUILD_JOBS: 2

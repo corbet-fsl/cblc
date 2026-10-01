@@ -148,12 +148,12 @@ try{
   const omitted=await members[0].reblind(now++);
   await submit(7,[omitted],'stale-frontier',false,false);
   async function drain(index){
-    const queued=await call({op:'inbox',owner:toArray(members[index].owner.member)});assert(queued.entries.length>0);
+    const queued=await call({op:'inbox',member:7+index,now,owner:toArray(members[index].owner.member)});assert(queued.entries.length>0);
     let holder=members[index];const steps=[];
     for(const entry of queued.entries){const c=await holder.consume(entry,now);steps.push(c);holder=c.next;}
     const final=await holder.reblind(now++);steps.push(final);
     members[index]=(await submit(7+index,steps,'forced-ingestion')).next;
-    const empty=await call({op:'inbox',owner:toArray(members[index].owner.member)});assert.equal(empty.entries.length,0);
+    const empty=await call({op:'inbox',member:7+index,now,owner:toArray(members[index].owner.member)});assert.equal(empty.entries.length,0);
   }
   await drain(0);await drain(3);
   assert.equal(members[0].opening.available,2n);assert.equal(members[0].opening.punished,1n);

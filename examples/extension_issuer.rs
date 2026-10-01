@@ -5,6 +5,7 @@ use cblc::{
     Error,
     accounting::*,
     accounting_ledger::*,
+    accounting_service::{AccountService, AccountServiceRequest, AccountServiceResponse},
     extensions::*,
     pins::{PinSpendVerifier, SpentChange, change_binding},
     verification::{ExtensionLimits, ProcessExtensionVerifier},
@@ -16,6 +17,7 @@ use cpns::{
 use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
 use ed25519_dalek::{Signer, SigningKey};
 use serde_json::{Value, json};
+use sha2::Digest;
 use std::{
     io::{self, BufRead, Write},
     num::NonZeroUsize,
@@ -55,7 +57,6 @@ fn main() {
     let fixture = common::Fixture::new();
     let directory = tempfile::tempdir().unwrap();
     let mut ledger: Option<AccountLedger<RejectLegacy>> = None;
-    let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
     let mut tokens = std::collections::BTreeMap::new();
     let mut sequence = 0_u8;
     let mut policy = None;
@@ -135,16 +136,32 @@ fn main() {
                             .sign(&account_request_bytes(&request)?)
                             .to_bytes(),
                     );
-                    let ledger = ledger.as_mut().unwrap();
                     let now = request.issued_at;
-                    let accepted = ledger.apply_extended(
-                        &fixture.grant(member, &fixture.device),
-                        &fixture.authorize(member, &fixture.device),
-                        &request,
-                        &update,
-                        || now,
-                    )?;
-                    let certificate = ledger.certify_extended(&accepted, &issuer)?;
+                    let mut service =
+                        AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?
+                            .with_extension_issuer(
+                                cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                            );
+                    let operation = AccountServiceRequest::ApplyExtended {
+                        grant: fixture.grant(member, &fixture.device),
+                        authorization: fixture.authorize(member, &fixture.device),
+                        request: Box::new(request.clone()),
+                        update: update.clone(),
+                    };
+                    assert!(
+                        service
+                            .handle_for_member(&[member ^ 1; 48], operation.clone())
+                            .is_err()
+                    );
+                    let response = service.handle_for_member(&[member; 48], operation);
+                    ledger = Some(service.into_ledger());
+                    let AccountServiceResponse::ApplyExtended {
+                        acceptance: accepted,
+                        certificate,
+                    } = response?
+                    else {
+                        return Err(Error::InvalidInput);
+                    };
                     if matches!(update.effect, Effect::Change { .. }) {
                         tokens.insert(
                             member,
@@ -178,11 +195,96 @@ fn main() {
                     Ok(json!(true))
                 }
                 "inbox" => {
-                    let (root, entries) = ledger
-                        .as_mut()
-                        .unwrap()
-                        .obligations(serde_json::from_value(v["owner"].clone()).unwrap())?;
-                    Ok(json!({"root":root,"entries":entries}))
+                    let now = v["now"].as_u64().unwrap();
+                    let member = v["member"].as_u64().unwrap() as u8;
+                    let mut request = AccountStatusRequest {
+                        community: sha2::Sha256::digest(fixture.trust.community_id.as_bytes())
+                            .into(),
+                        owner: serde_json::from_value(v["owner"].clone()).unwrap(),
+                        request_id: None,
+                        challenge: [77; 32],
+                        chat_public_key: B64.encode(&fixture.device.verifying_key().to_bytes()),
+                        issued_at: now,
+                        expires_at: now + 1,
+                        signature: String::new(),
+                    };
+                    request.signature = B64.encode(
+                        &fixture
+                            .device
+                            .sign(&cblc::obligations::request_bytes(&request)?)
+                            .to_bytes(),
+                    );
+                    let grant = fixture.grant(member, &fixture.device);
+                    let authority = fixture.authorize(member, &fixture.device);
+                    let mut wrong_purpose = request.clone();
+                    wrong_purpose.signature = B64.encode(
+                        &fixture
+                            .device
+                            .sign(&account_status_bytes(&wrong_purpose)?)
+                            .to_bytes(),
+                    );
+                    assert!(
+                        ledger
+                            .as_mut()
+                            .unwrap()
+                            .authenticated_obligations(&grant, &authority, &wrong_purpose, || now)
+                            .is_err()
+                    );
+                    for field in 0..3 {
+                        let mut cross_scope = request.clone();
+                        match field {
+                            0 => cross_scope.community[0] ^= 1,
+                            1 => cross_scope.owner[0] ^= 1,
+                            _ => cross_scope.expires_at = authority.expires_at + 1,
+                        }
+                        cross_scope.signature = B64.encode(
+                            &fixture
+                                .device
+                                .sign(&cblc::obligations::request_bytes(&cross_scope)?)
+                                .to_bytes(),
+                        );
+                        assert!(
+                            ledger
+                                .as_mut()
+                                .unwrap()
+                                .authenticated_obligations(&grant, &authority, &cross_scope, || now)
+                                .is_err()
+                        );
+                    }
+                    let mut service =
+                        AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?;
+                    let operation = AccountServiceRequest::Obligations {
+                        grant,
+                        authorization: authority,
+                        request: request.clone(),
+                    };
+                    assert!(
+                        service
+                            .handle_for_member(&[member ^ 1; 48], operation.clone())
+                            .is_err()
+                    );
+                    let response = service.handle_for_member(&[member; 48], operation);
+                    ledger = Some(service.into_ledger());
+                    let AccountServiceResponse::Obligations(response) = response? else {
+                        return Err(Error::InvalidInput);
+                    };
+                    let key = SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes();
+                    cblc::obligations::verify_response(&request, &response, &key, now)?;
+                    assert!(
+                        cblc::obligations::verify_response(&request, &response, &key, now + 1)
+                            .is_err()
+                    );
+                    let mut replay = request.clone();
+                    replay.challenge[0] ^= 1;
+                    assert!(
+                        cblc::obligations::verify_response(&replay, &response, &key, now).is_err()
+                    );
+                    let mut tampered = response.clone();
+                    tampered.inbox.root[0] ^= 1;
+                    assert!(
+                        cblc::obligations::verify_response(&request, &tampered, &key, now).is_err()
+                    );
+                    Ok(json!({"root":response.inbox,"entries":response.entries}))
                 }
                 "record" => {
                     let record: PublicRecord = serde_json::from_value(v["record"].clone()).unwrap();
