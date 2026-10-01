@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
     - uses: dtolnay/rust-toolchain@stable
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: 24
     - run: npm update --package-lock-only --ignore-scripts --no-audit --no-fund
@@ -31,7 +31,7 @@ jobs:
         date -u +%FT%TZ >> resolver.txt
 
         sha256sum Cargo.lock >> resolver.txt'
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: resolved-lock
         path: 'Cargo.lock
@@ -44,17 +44,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: resolved-lock
     - uses: taiki-e/install-action@v2
       with:
         tool: cargo-deny
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: 24
     - run: cargo metadata --locked --format-version 1 > dependency-metadata.json
@@ -67,11 +67,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: resolved-lock
     - run: python3 .github/check-first-party.py
@@ -84,11 +84,11 @@ jobs:
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
       CBLC_LEDGER_FIXTURES: '1'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: resolved-lock
     - uses: dtolnay/rust-toolchain@stable
@@ -105,12 +105,12 @@ jobs:
     - run: cargo clippy --locked --all-targets --all-features -- -D warnings
     - name: Check schema projection before constructing expensive proofs
       run: cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: 24
     - run: npm ci --ignore-scripts --no-audit --no-fund
     - run: npm test
-    - uses: actions/cache/restore@v4
+    - uses: actions/cache/restore@v6
       id: proof-cache
       with:
         path: .proof-test
@@ -119,13 +119,13 @@ jobs:
           }}
     - if: steps.proof-cache.outputs.cache-hit != 'true'
       run: node tests/real-proof.mjs
-    - uses: actions/cache/save@v4
+    - uses: actions/cache/save@v6
       if: steps.proof-cache.outputs.cache-hit != 'true'
       with:
         path: .proof-test
         key: ${{ steps.proof-cache.outputs.cache-primary-key }}
     - run: cargo test --locked --all-features --no-fail-fast -- --test-threads=2
-    - uses: actions/cache/restore@v4
+    - uses: actions/cache/restore@v6
       id: extension-cache
       with:
         path: .extension-test
@@ -149,7 +149,7 @@ jobs:
         sha256sum package-lock.json >> .extension-test/source.txt'
     - run: node tests/extensions-proof.mjs
       if: steps.extension-cache.outputs.cache-hit != 'true'
-    - uses: actions/cache/save@v4
+    - uses: actions/cache/save@v6
       if: steps.extension-cache.outputs.cache-hit != 'true'
       with:
         path: .extension-test
@@ -160,7 +160,7 @@ jobs:
         tests/replay-extensions.mjs
     - name: Check active extension boundaries using the real public proofs
       run: cargo run --locked --all-features --example extension_adversaries
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: dependency-lock
@@ -173,19 +173,19 @@ jobs:
           .extension-test/manifest.json
 
           '
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: proof-fixtures
         path: .proof-test/
         include-hidden-files: true
         if-no-files-found: error
         retention-days: 7
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       if: failure()
       with:
         name: formatting
         path: formatting.patch
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: extension-public-proofs
         path: .extension-test/
@@ -201,22 +201,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: resolved-lock
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: proof-fixtures
         path: .proof-test
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: extension-public-proofs
         path: .extension-test
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: 24
     - run: npm ci --ignore-scripts --no-audit --no-fund
@@ -264,7 +264,7 @@ jobs:
       run: |
         python3 .github/test-source-coverage.py
         python3 .github/check-source-coverage.py coverage.lcov coverage.json coverage.txt
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: coverage
