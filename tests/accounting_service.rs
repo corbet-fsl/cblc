@@ -276,3 +276,20 @@ fn verifier_kills_and_reaps_timeout_then_releases_capacity_and_rejects_large_std
         Err(Error::InvalidInput)
     );
 }
+
+#[test]
+fn service_capacity_rejects_invalid_bounds_and_preserves_host_policy() {
+    let f = Fixture::new();
+    for limit in [0, 16 * 1024 * 1024 + 1, 1, 16 * 1024 * 1024] {
+        let dir = tempfile::tempdir().unwrap();
+        let ledger = open(&dir.path().join("accounts"), &f, RealVerifier::default());
+        let result = AccountService::new(ledger, || 120, limit);
+        if limit == 0 || limit > 16 * 1024 * 1024 {
+            assert!(matches!(result, Err(Error::InvalidInput)));
+        } else {
+            let service = result.unwrap();
+            assert_eq!(service.max_request_bytes(), limit);
+            assert_eq!(service.into_ledger().account_policy(), &policy().account);
+        }
+    }
+}

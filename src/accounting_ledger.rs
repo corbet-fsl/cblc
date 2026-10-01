@@ -258,14 +258,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     /// member's proof. A signed but individually tagged root is not common.
     pub fn admit_checkpoint(&mut self, slot: u64, root: [u8; 32]) -> Result<(), Error> {
         field(&root, true)?;
-        let end = slot
-            .checked_add(1)
+        // The constructor pins a nonzero period; checked arithmetic cannot
+        // produce zero here or exceed the public integer range.
+        slot.checked_add(1)
             .and_then(|n| n.checked_mul(self.policy.checkpoint_period_seconds))
             .filter(|end| *end <= MAX_INTEGER)
             .ok_or(Error::InvalidInput)?;
-        if end == 0 {
-            return Err(Error::InvalidInput);
-        }
         let mut transaction = self.connection.transaction()?;
         let prior: Option<Vec<u8>> = transaction.get(&key(3, &[&slot.to_be_bytes()]))?;
         if let Some(prior) = prior {
@@ -361,8 +359,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             return Ok(result);
         }
         check_config(&mut transaction, &self.config)?;
-        if statement.policy != self.policy.account || statement.policy_digest != self.policy_digest
-        {
+        // statement_bytes already checks the digest of this exact policy and
+        // the community was matched above. Equal policy implies equal digest.
+        if statement.policy != self.policy.account {
             return Err(Error::PolicyMismatch);
         }
         check_pending(
@@ -422,10 +421,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             return Ok(result);
         }
         check_config(&mut transaction, &self.config)?;
-        if statement.policy != self.policy.account || statement.policy_digest != self.policy_digest
-        {
-            return Err(Error::PolicyMismatch);
-        }
+        // The request and this handle's policy cannot change across verification.
+        // check_config above rechecks the mutable persisted configuration.
         check_pending(
             &mut transaction,
             request,

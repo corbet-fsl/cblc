@@ -367,7 +367,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crlt?branch=main#6ca3bd1035fcf17c2c88cdae3ed913da49740252"
+source = "git+https://github.com/corbet-foss/crlt?branch=main#faeb41d6982f540fec2c6166c6fca3e4dc271353"
 dependencies = [
  "deadpool",
  "libsql",
@@ -414,7 +414,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cssr?branch=main#5ca86e4624a56e43e9df7dbc169bcca967b8f817"
+source = "git+https://github.com/corbet-foss/cssr?branch=main#c489601d07d18d4b34e249f40137c01baf535bd8"
 dependencies = [
  "crlt",
  "p256",

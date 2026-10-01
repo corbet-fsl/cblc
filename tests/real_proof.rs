@@ -14,9 +14,8 @@ struct Record {
 }
 #[test]
 fn real_account_proofs_round_trip_through_libsql() {
-    let Ok(directory) = std::env::var("CBLC_PROOF_DIRECTORY") else {
-        return;
-    };
+    let directory =
+        std::env::var("CBLC_PROOF_DIRECTORY").expect("CI must generate real holder proofs");
     let directory = PathBuf::from(directory);
     let records: Vec<Record> =
         serde_json::from_slice(&std::fs::read(directory.join("records.json")).unwrap()).unwrap();

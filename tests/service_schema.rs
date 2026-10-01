@@ -46,6 +46,12 @@ fn valid<T: ToSchema + Serialize + schemars::JsonSchema>(value: &T) -> Value {
 }
 
 #[test]
+fn generated_projection_preserves_every_serde_constraint() {
+    validator::<AccountServiceRequest>();
+    validator::<AccountServiceResponse>();
+}
+
+#[test]
 fn requests_and_actual_issued_responses_share_the_owner_schema() {
     let f = Fixture::new();
     let request = proofs::request(0, 10, &f);

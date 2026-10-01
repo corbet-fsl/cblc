@@ -200,3 +200,36 @@ fn valid_signatures_cannot_cross_trust_or_device_scopes() {
     spelling.pseudonym.make_ascii_uppercase();
     assert_eq!(admission_bytes(&spelling), Err(Error::Admission));
 }
+
+#[test]
+fn statement_envelopes_refuse_inconsistent_versions_policy_and_genesis() {
+    let first = proofs::record(0).statement;
+    statement_bytes(&first).unwrap();
+    for variant in 0..10 {
+        let mut changed = first.clone();
+        match variant {
+            0 => changed.protocol_version = 1,
+            1 => changed.now = changed.policy.policy_valid_from - 1,
+            2 => changed.now = changed.policy.policy_valid_until,
+            3 => changed.valid_until += 1,
+            4 => changed.next_version = czkp::MAX_INTEGER + 1,
+            5 => changed.previous_version = 1,
+            6 => changed.next_version = 1,
+            7 => changed.previous_state = fr(1),
+            8 => changed.settlement_marker = fr(1),
+            _ => changed.policy_digest[0] ^= 1,
+        }
+        assert_eq!(statement_bytes(&changed), Err(Error::InvalidInput));
+    }
+    let next = proofs::record(1).statement;
+    statement_bytes(&next).unwrap();
+    for previous in [next.previous_version + 1, u64::MAX] {
+        let mut changed = next.clone();
+        changed.previous_version = previous;
+        assert_eq!(statement_bytes(&changed), Err(Error::InvalidInput));
+    }
+    let f = Fixture::new();
+    let mut request = genesis(&f);
+    request.expires_at = request.statement.valid_until + 1;
+    assert_eq!(account_request_bytes(&request), Err(Error::InvalidInput));
+}

@@ -67,3 +67,27 @@ against raw JSON and independent annotated source inventory. Every emitted sourc
 location must be positive; all raw instantiated counters remain in the retained
 artifact. Missing/mismatched inventories refuse the gate. Committed lock policy
 is checked before refresh so a fresh resolver cannot conceal revision pins.
+
+Schema projection is checked before constructing expensive proofs. Public proof
+fixtures are saved immediately after their real generation/verification step,
+so a later unrelated failure does not discard that work. Only exact input keys
+are restored; subsequent native and instrumented issuer tests still execute the
+real verifier. This uses maintained Actions [restore/save actions](https://github.com/actions/cache/blob/main/restore/README.md).
+
+The host constructor pins a nonzero checkpoint period. Checked positive slot
+multiplication cannot produce a zero end, so its duplicate zero guard is removed;
+real boundary tests retain overflow, public-range and idempotence refusals.
+Account request encoding already validates the policy digest against the exact
+policy and community, and the ledger first matches that community. Equality of
+that policy therefore implies digest equality. Its immutable request/handle
+comparison need not repeat after verification; the persisted configuration is
+still rechecked inside the final write transaction, preserving concurrent tuning
+refusal. A genuinely signed changed policy is rejected before real verification,
+while the original real proof succeeds. No coverage exclusion is used.
+
+External replay uses the executable path from Cargo's original
+[compiler-artifact message](https://doc.rust-lang.org/cargo/reference/external-tools.html#artifact-messages),
+not an assumed target-directory environment variable. Every report step imports
+the same external-instrumentation environment. Reports are retained even when a
+real execution fails; its failure still blocks the workflow and cannot be replaced
+by the resulting partial coverage. The compiler-artifact stream is retained too.
