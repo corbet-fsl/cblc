@@ -182,14 +182,14 @@ fn dual_signed_root_rotation_checks_exact_frontier_and_rejects_weak_keys() {
         .unwrap();
     let mut weak = [0; 32];
     weak[0] = 1;
-    for bad in [
-        B64.encode(&invalid_point),
-        B64.encode(&weak),
-        "malformed".into(),
+    for (bad, expected) in [
+        (B64.encode(&invalid_point), Error::Admission),
+        (B64.encode(&weak), Error::Admission),
+        ("malformed".into(), Error::InvalidInput),
     ] {
         let mut changed = rotation.clone();
         changed.new_root = bad;
-        assert_eq!(root_rotation_bytes(&changed), Err(Error::Admission));
+        assert_eq!(root_rotation_bytes(&changed), Err(expected));
     }
     let mut changed = rotation.clone();
     changed.new_root = changed.old_root.clone();

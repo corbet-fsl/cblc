@@ -116,6 +116,33 @@ fn real_signed_acceptance_moved_to_another_owner_is_refused() {
             )
             .unwrap();
     }
+    let mut read = AccountStatusRequest {
+        community: first.statement.community,
+        owner: first.statement.owner,
+        request_id: Some(first.request_id),
+        challenge: [92; 32],
+        chat_public_key: first.chat_public_key.clone(),
+        issued_at: 120,
+        expires_at: 170,
+        signature: String::new(),
+    };
+    read.signature = B64.encode(
+        &f.device
+            .sign(&account_status_bytes(&read).unwrap())
+            .to_bytes(),
+    );
+    assert!(
+        ledger
+            .status(
+                &f.grant(7, &f.device),
+                &f.authorize(7, &f.device),
+                &read,
+                || 120
+            )
+            .unwrap()
+            .acceptance
+            .is_some()
+    );
     let database = inspect(&path);
     let rows = database.snapshot();
     let owner = first.statement.owner;
@@ -139,6 +166,15 @@ fn real_signed_acceptance_moved_to_another_owner_is_refused() {
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
             &first,
+            || 120
+        ),
+        Err(Error::Storage)
+    );
+    assert_eq!(
+        ledger.status(
+            &f.grant(7, &f.device),
+            &f.authorize(7, &f.device),
+            &read,
             || 120
         ),
         Err(Error::Storage)

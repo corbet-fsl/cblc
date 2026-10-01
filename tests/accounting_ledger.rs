@@ -805,6 +805,29 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
         Err(Error::Admission)
     );
     assert_eq!(ledger.apply(&g, &auth, &first, || 120).unwrap(), accepted);
+    let mut read = AccountStatusRequest {
+        community: first.statement.community,
+        owner: first.statement.owner,
+        request_id: Some(first.request_id),
+        challenge: [91; 32],
+        chat_public_key: first.chat_public_key.clone(),
+        issued_at: 120,
+        expires_at: 170,
+        signature: String::new(),
+    };
+    read.signature = B64.encode(
+        &f.device
+            .sign(&account_status_bytes(&read).unwrap())
+            .to_bytes(),
+    );
+    assert_eq!(
+        ledger.status(&g, &old, &read, || 120),
+        Err(Error::Admission)
+    );
+    assert_eq!(
+        ledger.status(&g, &auth, &read, || 120).unwrap().acceptance,
+        Some(accepted)
+    );
     let mut reopen = first.clone();
     reopen.request_id = [99; 32];
     sign(&mut reopen, &f.device);

@@ -415,6 +415,67 @@ fn main() {
         ledger.deposit_batch(&batch, || value["now"].as_u64().unwrap()),
         Err(Error::Capacity)
     );
+    // Actual root continuity must revoke even otherwise valid inbox observations.
+    let old_root = SigningKey::from_bytes(&[7; 32]);
+    let new_root = SigningKey::from_bytes(&[17; 32]);
+    let mut observed = read_request.clone();
+    observed.signature = B64.encode(
+        &fixture
+            .device
+            .sign(&cblc::obligations::request_bytes(&observed).unwrap())
+            .to_bytes(),
+    );
+    assert!(
+        ledger
+            .authenticated_obligations(
+                &fixture.grant(7, &fixture.device),
+                &fixture.authorize(7, &fixture.device),
+                &observed,
+                || now
+            )
+            .is_ok()
+    );
+    let mut rotation = RootRotation {
+        community: accepted[0].statement.community,
+        owner: accepted[0].statement.owner,
+        expected_revision: 0,
+        expected_version: accepted[0].statement.next_version,
+        expected_state: accepted[0].statement.next_state,
+        old_root: B64.encode(&old_root.verifying_key().to_bytes()),
+        new_root: B64.encode(&new_root.verifying_key().to_bytes()),
+        old_signature: String::new(),
+        new_signature: String::new(),
+    };
+    let bytes = root_rotation_bytes(&rotation).unwrap();
+    rotation.old_signature = B64.encode(&old_root.sign(&bytes).to_bytes());
+    rotation.new_signature = B64.encode(&new_root.sign(&bytes).to_bytes());
+    ledger.rotate_root(&rotation).unwrap();
+    assert!(matches!(
+        ledger.authenticated_obligations(
+            &fixture.grant(7, &fixture.device),
+            &fixture.authorize(7, &fixture.device),
+            &observed,
+            || now
+        ),
+        Err(Error::Admission)
+    ));
+    // Rotate back through another genuine dual-signed update; never edit authority rows.
+    std::mem::swap(&mut rotation.old_root, &mut rotation.new_root);
+    rotation.expected_revision = 1;
+    let bytes = root_rotation_bytes(&rotation).unwrap();
+    rotation.old_signature = B64.encode(&new_root.sign(&bytes).to_bytes());
+    rotation.new_signature = B64.encode(&old_root.sign(&bytes).to_bytes());
+    ledger.rotate_root(&rotation).unwrap();
+    assert!(
+        ledger
+            .authenticated_obligations(
+                &fixture.grant(7, &fixture.device),
+                &fixture.authorize(7, &fixture.device),
+                &observed,
+                || now
+            )
+            .is_ok()
+    );
     replace(&database, b"extensions", b"[]");
     #[cfg(feature = "publication")]
     assert_eq!(
