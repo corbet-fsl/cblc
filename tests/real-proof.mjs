@@ -81,7 +81,8 @@ try {
     const alternate=await genesis.next.reserve({peerIndex:1,role:0,nonce:bytes(53),group:bytes(51),contactPolicy:bytes(52),now:120});
     const tuned=await genesis.next.withPolicy({...policy,abandonAfter:1500});
     const tunedReserve=await tuned.reserve({peerIndex:1,role:0,nonce:bytes(50),group:bytes(51),contactPolicy:bytes(52),now:120});
-    ledgerCandidates=[otherGenesis,alternate,tunedReserve];
+    const cancelled=await reserve.next.cancel(reserve.event,130);
+    ledgerCandidates=[otherGenesis,alternate,tunedReserve,cancelled];
   }
   artifacts={circuit:compiled.program,verificationKey,manifest,setup,limits:{memoryPages:32768,maxProofBytes:1024*1024}};
 } finally {await api.destroy();}

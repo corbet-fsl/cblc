@@ -124,3 +124,19 @@ The response is not a current-record permission or proof of absent later changes
 There is still no production settlement ingress: delayed batches do not satisfy
 the no-counterpart-disclosure transport requirement. Forum/Waves local current
 record verification and authenticated verifier publication remain unresolved.
+
+The optional `schema` feature derives Utoipa6 schemas from the exact serde
+request/response and nested owner types. Door may compose `AccountServiceRequest`
+and `AccountServiceResponse` directly through its existing ToSchema registry,
+without Object placeholders or copied accounting DTOs. Shape validation is not
+admission, proof verification or current-frontier authority. The actual holder
+and issuer tests independently exercise those predicates.
+Schema generation uses Schemars on canonical Serde types, then its maintained
+constant/unevaluated-property transforms and Utoipa's OpenAPI model. The root
+request/response `ToSchema` API is preserved; nested fields are generated inline,
+not copied into another DTO. CI compares the complete generated JSON before and
+after OpenAPI projection and validates real requests and issued responses,
+including unknown tagged-enum fields. This addresses the Utoipa 6 tagged-enum
+derive's missing propagation of container `deny_unknown_fields`.
+See [Schemars settings](https://docs.rs/schemars/latest/schemars/generate/struct.SchemaSettings.html)
+and [Serde compatibility](https://docs.rs/schemars/latest/schemars/).

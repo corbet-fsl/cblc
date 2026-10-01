@@ -18,7 +18,7 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: 24
-    - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+    - run: npm update --package-lock-only --ignore-scripts --no-audit --no-fund
     - name: Resolve one fresh dependency snapshot
       run: 'python3 .github/check-first-party.py
 
@@ -117,7 +117,7 @@ jobs:
           }}
     - if: steps.proof-cache.outputs.cache-hit != 'true'
       run: node tests/real-proof.mjs
-    - run: cargo test --locked -- --test-threads=2
+    - run: cargo test --locked --all-features --no-fail-fast -- --test-threads=2
     - uses: actions/cache@v4
       id: extension-cache
       with:

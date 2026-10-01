@@ -13,3 +13,6 @@ pub mod pins;
 pub mod verification;
 
 pub mod obligations;
+
+#[cfg(feature = "schema")]
+mod schema;

@@ -158,3 +158,45 @@ fn signed_admission_and_device_authority_reject_bad_encoding_and_expired_scope()
         assert!(verify_device_authorization(&authority, &grant, now).is_err());
     }
 }
+
+#[test]
+fn valid_signatures_cannot_cross_trust_or_device_scopes() {
+    use cblc::admission::*;
+    let f = Fixture::new();
+    let grant = f.grant(7, &f.device);
+    let authority = f.authorize(7, &f.device);
+    // These original signatures are valid. Changing the relying scope must
+    // refuse them even though their signed bytes remain completely intact.
+    for field in 0..3 {
+        let mut trust = f.trust.clone();
+        match field {
+            0 => trust.community_id = "another.community".into(),
+            1 => trust.policy_digest = common::encoded(90),
+            _ => trust.issuer_public_key = f.device.verifying_key().to_bytes(),
+        }
+        assert_eq!(verify_admission(&grant, &trust, 120), Err(Error::Admission));
+    }
+    for field in 0..3 {
+        let mut other = grant.clone();
+        match field {
+            0 => other.community_id = "another.community".into(),
+            1 => other.member_id = common::member_id(8),
+            _ => other.chat_public_key = B64.encode(&f.issuer.verifying_key().to_bytes()),
+        }
+        assert_eq!(
+            verify_device_authorization(&authority, &other, 120),
+            Err(Error::Admission)
+        );
+    }
+    let mut other_member = grant.clone();
+    other_member.member_id = common::member_id(8);
+    assert_eq!(admission_bytes(&other_member), Err(Error::Admission));
+    // The maintained lowercase decoder enforces the public wire spelling;
+    // canonical bytes and their derived member identifier must agree too.
+    let mut spelling = grant;
+    spelling.pseudonym = "ab".repeat(48);
+    spelling.member_id = member_id(&[0xab; 48]);
+    assert!(admission_bytes(&spelling).is_ok());
+    spelling.pseudonym.make_ascii_uppercase();
+    assert_eq!(admission_bytes(&spelling), Err(Error::Admission));
+}

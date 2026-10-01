@@ -30,8 +30,9 @@ The fixture under examples/ is a test harness and is excluded alongside tests/;
 all production src/ remains measured. This uses cargo-llvm-cov's documented
 [external-test instrumentation](https://github.com/taiki-e/cargo-llvm-cov#get-coverage-of-external-tests).
 
-Legacy ledger/service tests now consume five real maintained account proofs
-(genesis, reservation, second owner, competing reservation, tuned reservation).
+Legacy ledger/service tests now consume six real maintained account proofs
+(genesis, reservation, second owner, competing reservation, tuned reservation,
+and actual reservation cancellation).
 Every unique exact statement/proof pair passes the shipped worker before a
 test-process cache may reuse that result; mutations are independently checked.
 The counters measure verifier-boundary invocations, including cached real

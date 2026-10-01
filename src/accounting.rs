@@ -18,6 +18,7 @@ pub use crate::accounting_policy::AccountPolicy;
 /// Complete public input. The role, peer, nonce, group, balances and map paths
 /// belong exclusively to the private witness and cannot be added to this wire.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountStatement {
     pub protocol_version: u32,
@@ -95,6 +96,7 @@ pub trait AccountProofVerifier {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountRequest {
     pub statement: AccountStatement,
@@ -138,6 +140,7 @@ pub fn account_request_digest(value: &AccountRequest) -> Result<[u8; 32], Error>
 /// The operator certifies acceptance of an opaque state. Peers additionally
 /// need the private reservation proof and current cmsg consent before release.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountAcceptance {
     pub statement: AccountStatement,
@@ -180,6 +183,7 @@ pub fn verify_account_acceptance(
 /// A fresh, authenticated request can recover an old accepted response after
 /// its original device/request expires. A new device needs root authorization.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountStatusRequest {
     pub community: [u8; 32],
@@ -214,6 +218,7 @@ pub fn account_status_bytes(value: &AccountStatusRequest) -> Result<Vec<u8>, Err
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountStatusResponse {
     /// Binds the fresh challenge, owner, requested lookup and caller authority.

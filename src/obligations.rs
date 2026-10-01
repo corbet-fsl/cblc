@@ -25,6 +25,7 @@ pub fn request_digest(request: &AccountStatusRequest) -> Result<[u8; 32], Error>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ObligationsResponse {
     pub request_digest: [u8; 32],

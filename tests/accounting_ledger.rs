@@ -108,15 +108,9 @@ fn genesis(fixture: &Fixture) -> AccountRequest {
 }
 
 fn successor(prior: &AccountRequest, fixture: &Fixture, id: u8) -> AccountRequest {
-    let mut request = proofs::request(1, id, fixture);
-    if prior.statement.next_version != 0 {
-        // Deliberately replay the already spent marker at a newer version;
-        // this invalid public statement must fail before proof verification.
-        request.statement.previous_version = prior.statement.next_version;
-        request.statement.next_version = prior.statement.next_version + 1;
-        request.statement.previous_state = prior.statement.next_state;
-        sign(&mut request, &fixture.device);
-    }
+    let request = proofs::request(1, id, fixture);
+    assert_eq!(prior.statement.next_version, 0);
+
     request
 }
 
@@ -300,7 +294,7 @@ fn blocked_proof_allows_another_owner_to_commit_and_rechecks_shared_clock_floor(
 }
 
 #[test]
-fn successor_losing_during_verification_cannot_commit_its_marker_or_response() {
+fn successor_losing_during_verification_cannot_commit_its_state_or_response() {
     for same_request_id in [false, true] {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("ledger.sqlite");
@@ -333,11 +327,13 @@ fn successor_losing_during_verification_cannot_commit_its_marker_or_response() {
             .unwrap();
         assert_eq!(state, winning.statement.next_state);
         assert_eq!(request, winning.request_id);
+        // Both real competing operations reserve; neither settles an event.
+        assert_eq!(winning.statement.settlement_marker, [0; 32]);
         assert_eq!(
-            db.query_row("SELECT marker FROM markers", [], |row| row
-                .get::<_, Vec<u8>>(0))
+            db.query_row("SELECT count(*) FROM markers", [], |row| row
+                .get::<_, i64>(0))
                 .unwrap(),
-            winning.statement.settlement_marker
+            0
         );
         assert_eq!(
             db.query_row("SELECT count(*) FROM latest_acceptances", [], |row| row
@@ -361,7 +357,10 @@ fn concurrently_cached_request_bypasses_original_expiry_but_requires_live_author
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
         fast.apply(&g, &a, &first, || 120).unwrap();
-        let request = successor(&first, &f, 11);
+        let reservation = successor(&first, &f, 11);
+        fast.apply(&g, &a, &reservation, || 121).unwrap();
+        let request = proofs::request(5, 12, &f);
+        assert_ne!(request.statement.settlement_marker, [0; 32]);
         let (verifier, entered, release) = blocked_verifier();
         let mut slow = open(&path, &f, verifier);
         let now = AtomicU64::new(130);
@@ -448,7 +447,9 @@ fn root_authorized_devices_share_one_compare_and_swap_frontier() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
-    let mut ledger = open(&path, &f, RealVerifier::default());
+    let verifier = RealVerifier::default();
+    let calls = verifier.calls.clone();
+    let mut ledger = open(&path, &f, verifier);
     ledger
         .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
@@ -471,12 +472,21 @@ fn root_authorized_devices_share_one_compare_and_swap_frontier() {
         ),
         Err(Error::Replay)
     );
-    let mut duplicate_event = successor(&second, &f, 13);
+    let cancellation = proofs::request(5, 13, &f);
+    ledger.apply(&g, &a, &cancellation, || 133).unwrap();
+    assert_ne!(cancellation.statement.settlement_marker, [0; 32]);
+    let mut duplicate_event = cancellation.clone();
+    duplicate_event.request_id = [14; 32];
+    duplicate_event.statement.previous_version = cancellation.statement.next_version;
+    duplicate_event.statement.next_version += 1;
+    duplicate_event.statement.previous_state = cancellation.statement.next_state;
     sign(&mut duplicate_event, &f.device);
+    let verified = calls.load(Ordering::SeqCst);
     assert_eq!(
-        ledger.apply(&g, &a, &duplicate_event, || 123),
+        ledger.apply(&g, &a, &duplicate_event, || 134),
         Err(Error::Replay)
     );
+    assert_eq!(calls.load(Ordering::SeqCst), verified);
     let db = inspect(&path);
     assert_eq!(
         db.query_row("SELECT count(*) FROM markers", [], |r| r.get::<_, i64>(0))
@@ -498,13 +508,16 @@ fn failure_after_marker_insertion_rolls_back_marker_state_response_and_clock() {
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
     ledger.apply(&g, &a, &first, || 120).unwrap();
+    let reservation = successor(&first, &f, 11);
+    ledger.apply(&g, &a, &reservation, || 121).unwrap();
     let db = inspect(&path);
     db.execute_batch(
         "CREATE TRIGGER injected_failure BEFORE UPDATE ON cssr_records WHEN substr(NEW.key,1,1)=x'01'
         BEGIN SELECT RAISE(ABORT,'storage-test failure'); END;",
     )
     .unwrap();
-    let second = successor(&first, &f, 11);
+    let second = proofs::request(5, 12, &f);
+    assert_ne!(second.statement.settlement_marker, [0; 32]);
     assert_eq!(ledger.apply(&g, &a, &second, || 130), Err(Error::Storage));
     assert_eq!(
         db.query_row("SELECT count(*) FROM markers", [], |r| r.get::<_, i64>(0))
@@ -514,7 +527,7 @@ fn failure_after_marker_insertion_rolls_back_marker_state_response_and_clock() {
     assert_eq!(
         db.query_row("SELECT version FROM frontiers", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        0
+        1
     );
     assert_eq!(
         db.query_row("SELECT count(*) FROM latest_acceptances", [], |r| r
@@ -526,7 +539,7 @@ fn failure_after_marker_insertion_rolls_back_marker_state_response_and_clock() {
         db.query_row("SELECT clock_floor FROM configuration", [], |r| r
             .get::<_, i64>(0))
             .unwrap(),
-        120
+        121
     );
     db.execute_batch("DROP TRIGGER injected_failure").unwrap();
     ledger.apply(&g, &a, &second, || 130).unwrap();

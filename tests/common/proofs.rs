@@ -38,7 +38,7 @@ pub fn record(index: usize) -> Record {
     RECORDS.get_or_init(|| {
         let bytes = std::fs::read(directory().join("ledger-records.json")).unwrap();
         let records: Vec<Record> = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(records.len(), 5);
+        assert_eq!(records.len(), 6);
         records
     })[index]
         .clone()

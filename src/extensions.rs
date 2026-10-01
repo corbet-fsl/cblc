@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 
 /// Mandatory platform policy; no implicit quorum or economic defaults.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtensionPolicy {
     pub revision: u64,
@@ -34,12 +35,14 @@ impl ExtensionPolicy {
 }
 /// Settlement frontier, not a balance or an outcome counter.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Inbox {
     pub root: [u8; 32],
 }
 /// Pending opaque entry, removed atomically when its recipient consumes it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PendingObligation {
     pub previous: Inbox,
@@ -47,6 +50,7 @@ pub struct PendingObligation {
 }
 /// Private input to a delayed deposit proof, returned only to the accepting holder.
 #[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StateCertificate {
     pub accepted_at: u64,
@@ -54,6 +58,7 @@ pub struct StateCertificate {
 }
 /// The public effect to prove in addition to all ordinary account constraints.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Effect {
     /// Apply every queued obligation before any other state change.
@@ -62,6 +67,7 @@ pub enum Effect {
     Change { binding: [u8; 32] },
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtendedUpdate {
     pub previous_inbox: Inbox,
@@ -71,6 +77,7 @@ pub struct ExtendedUpdate {
 /// A recipient-addressed opaque obligation, delivered without the punished holder.
 /// The proof hides the reporter, receipt, conversation and kind of outcome.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Deposit {
     /// Coarse release horizon. The circuit proves acceptance preceded it by the configured delay.
@@ -83,6 +90,7 @@ pub struct Deposit {
 }
 /// Every visibility/contact decision carries an action-specific, fresh record proof.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum RecordUse {
     FirstContact,
@@ -90,6 +98,7 @@ pub enum RecordUse {
 }
 /// A challenge supplied by the relying service for exactly one decision context.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RecordContext {
     pub purpose: RecordUse,
@@ -99,6 +108,7 @@ pub struct RecordContext {
 /// Relative public values only: 10,000 basis points in accepted/declined/punished order.
 /// The proof establishes the hidden total reaches the configured quorum.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PublicRecord {
     pub context: RecordContext,
@@ -111,6 +121,7 @@ pub struct PublicRecord {
 }
 /// Complete, domain-separated verifier input. The backend must bind every field.
 #[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ExtensionStatement {
     Update {

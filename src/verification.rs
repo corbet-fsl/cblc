@@ -85,3 +85,7 @@ impl ExtensionVerifier for ProcessExtensionVerifier {
         self.anonymous.verify(statement, proof)
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/internal/verification_budget.rs"]
+mod tests;
