@@ -31,6 +31,13 @@ schemars = { version = "1", optional = true }
 cthl = { git = "https://github.com/corbet-foss/cthl", branch = "main" }
 cpns = { git = "https://github.com/corbet-foss/cpns", branch = "main", default-features = false }
 futures = "0.3"
+getrandom = { version = "0.4", features = ["wasm_js"] }
+hpke = { version = "0.14", default-features = false, features = ["alloc", "x25519", "chacha", "getrandom"] }
+rand = "0.10"
+rand_chacha = "0.10"
+rand_core = "0.10"
+rs_merkle = "1.5"
+zeroize = "1"
 czkp = { git = "https://github.com/corbet-foss/czkp", branch = "main" }
 cvfy = { git = "https://github.com/corbet-foss/cvfy", branch = "main" }
 cssr = { git = "https://github.com/corbet-foss/cssr", branch = "main" }

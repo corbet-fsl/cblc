@@ -1,6 +1,7 @@
 // Versioned private lifecycle. No Answer reward, private protected-release
 // integration, v1 migration or production enablement is implied.
 pub mod indexed;
+pub mod epoch;
 use sha2lib::digest;
 use p2hash::poseidon2::Poseidon2;
 
