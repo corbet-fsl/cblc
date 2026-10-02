@@ -38,14 +38,16 @@ fn policy() -> AccountLedgerPolicy {
     }
 }
 fn open<V: AccountProofVerifier>(path: &Path, fixture: &Fixture, verifier: V) -> AccountLedger<V> {
-    AccountLedger::open(
+    let ledger = AccountLedger::open(
         path,
         fixture.trust.clone(),
         policy(),
         verifier,
         SigningKey::from_bytes(&[9; 32]),
     )
-    .unwrap()
+    .unwrap();
+    assert_eq!(ledger.community(), fixture.trust.community_id);
+    ledger
 }
 fn genesis(fixture: &Fixture) -> AccountRequest {
     proofs::request(0, 10, fixture)
@@ -61,6 +63,7 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
         100_000,
     )
     .unwrap();
+    assert_eq!(service.community(), f.trust.community_id);
     service
         .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();

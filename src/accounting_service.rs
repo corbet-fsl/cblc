@@ -106,6 +106,11 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
         self
     }
 
+    /// Immutable ledger scope for binding this service in the community host.
+    pub fn community(&self) -> &str {
+        self.ledger.community()
+    }
+
     /// Project the actual ledger and certificate issuer for Policy/Beacon.
     /// This is a host publication port, absent from member request variants.
     #[cfg(feature = "publication")]
