@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {createHash,createECDH,createPrivateKey,generateKeyPairSync,sign} from 'node:crypto';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {cpus,totalmem} from 'node:os';
@@ -37,7 +38,7 @@ for(const f of lock.files){
 const keyApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const keys={};
 try{await keyApi.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2Point:setup['g2.dat']});
-  for(const kind of ['update','deposit','record'])keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
+  for(const kind of ['update','deposit','record','wave','outcome'])keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
 }finally{await keyApi.destroy();}
 const keyBytes=Buffer.from(JSON.stringify(keys));await writeFile(resolve(directory,'keys.json'),keyBytes);
 const issuer=createECDH('prime256v1');issuer.setPrivateKey(Buffer.alloc(32,3));
@@ -195,6 +196,69 @@ try{
   // A genuine counterpart Answer supplies the second counted first contact.
   const acceptedContact=await contact(0,2);
   members[2]=(await submit(9,[await members[2].activate(acceptedContact.incoming,now++,acceptedContact.senderSignature)],'activate')).next;
+  members[0]=(await submit(7,[await members[0].activate(acceptedContact.outgoing,now++,acceptedContact.recipientSignature)],'activate-outgoing')).next;
+  const policyPath=resolve(directory,'wave-policy.json');
+  await writeFile(policyPath,JSON.stringify(await call({op:'publication'})));
+  const peerVerifier=spawn(resolve('target/debug/examples/wave_verifier'),[configPath,policyPath,fileURLToPath(import.meta.resolve('@corbet-labs/czkp/node-verifier'))],{stdio:['pipe','pipe','inherit']});
+  let peerWait;const peerLines=createInterface({input:peerVerifier.stdout});
+  peerLines.on('line',line=>{const w=peerWait;peerWait=undefined;w.resolve(JSON.parse(line));});
+  peerVerifier.on('exit',code=>{if(peerWait)peerWait.reject(new Error(`Peer verifier exited ${code}`));});
+  const publicWaveTrace=[];
+  async function checkWave(statement,expected,proof,at,ok){
+    const reply=await new Promise((resolve,reject)=>{peerWait={resolve,reject};peerVerifier.stdin.write(JSON.stringify({statement,expected,proof,now:at})+'\n');});
+    assert.equal(reply.verified,ok);
+    publicWaveTrace.push({request:{statement,expected,proof,now:at},verified:ok});
+  }
+  try {
+    for(const [index,event] of [[0,acceptedContact.outgoing],[2,acceptedContact.incoming]]) {
+      const candidate=await members[index].wave(event,{history:bytes(201),challenge:bytes(202)},artifacts.scope.circuitDigest,manifest.issuerKey);
+      const encoded=await proof('wave',candidate.input,'accepted-active-wave',index===0);
+      const statement=candidate.statement.wave,expected=statement.context;
+      await checkWave(statement,expected,encoded,now,true);
+      for(const key of ['peer','owner','community','group','nonce','contactPolicy','history','challenge','ownerAuthority','peerAuthority']) {
+        const wrong=structuredClone(expected);wrong[key][0]^=1;await checkWave(statement,wrong,encoded,now,false);
+      }
+      for(const key of ['role','openedAt','expiresAt']) {
+        const wrong=structuredClone(expected);wrong[key]++;await checkWave(statement,wrong,encoded,now,false);
+      }
+      await checkWave(statement,expected,encoded,expected.expiresAt,false);
+      const wrong=structuredClone(statement);wrong.state[31]^=1;await checkWave(wrong,expected,encoded,now,false);
+      for(const mutate of [i=>i.slot.phase=1,i=>i.slot.outcome=1,i=>i.slot.answered=true,i=>i.slot.self_punished=true,
+        i=>i.opening.debt+=1n,i=>i.opening.inbox[0]^=1,i=>i.certificate[0]^=1,i=>i.issuer_key[0]^=1,
+        i=>i.selected.leaf[1]+=1n,i=>i.state_policy[0]^=1,i=>i.scope[0]^=1]) {
+        const wrong=structuredClone(candidate.input);mutate(wrong);
+        await assert.rejects(new Noir(programs.wave).execute(witnessInputs(programs.wave,wrong)));
+      }
+    }
+  } finally {peerVerifier.stdin.end();peerLines.close();}
+  async function settledEvidence(index,event,outcome,resolution,acknowledgment){
+    const candidate=await members[index].waveOutcome(event,{history:resolution?.historyDigest??bytes(213),challenge:bytes(214)},
+      artifacts.scope.circuitDigest,manifest.issuerKey,outcome,resolution,acknowledgment);
+    const encoded=await proof('outcome',candidate.input,`settled-${outcome}`,outcome==='answer'&&index===2);
+    const statement=candidate.statement.outcome,expected=statement.evidence.context;
+    const request={statement,expected,proof:encoded,now,expectedOutcome:outcome,expectedReceiptDigest:statement.receiptDigest};
+    const peer=spawn(resolve('target/debug/examples/wave_verifier'),[configPath,policyPath,fileURLToPath(import.meta.resolve('@corbet-labs/czkp/node-verifier'))],{stdio:['pipe','pipe','inherit']});
+    const replies=createInterface({input:peer.stdout})[Symbol.asyncIterator]();
+    async function check(request,verified){
+      peer.stdin.write(JSON.stringify(request)+'\n');const reply=await replies.next();assert(!reply.done);
+      assert.deepEqual(JSON.parse(reply.value),{verified});publicWaveTrace.push({request:structuredClone(request),verified});
+    }
+    try{
+      await check(request,true);
+      for(const mutate of [r=>r.statement.evidence.state[31]^=1,r=>r.statement.receiptDigest[0]^=1,
+        r=>r.expectedOutcome=outcome==='answer'?'close':'answer',r=>r.expected.history[0]^=1,
+        r=>r.expected.peer[0]^=1,r=>r.statement.evidence.context.challenge[0]^=1,
+        r=>r.proof=(r.proof.startsWith('00')?'01':'00')+r.proof.slice(2)]){
+        const bad=structuredClone(request);mutate(bad);await check(bad,false);
+      }
+    }finally{peer.stdin.end();}
+    for(const mutate of [i=>i.slot.phase=2,i=>i.certificate[0]^=1,i=>i.opening.debt+=1n,
+      ...(outcome==='silence'?[i=>i.receipt_digest[0]^=1,i=>i.outcome=2]:[i=>i.resolution.signature[0]^=1,i=>i.resolution.history_digest[0]^=1,i=>i.peer_enrollment.key[0]^=1]),
+      ...(outcome==='answer'?[i=>i.acknowledgment.signature[0]^=1]:[])]){
+      const bad=structuredClone(candidate.input);mutate(bad);
+      await assert.rejects(new Noir(programs.outcome).execute(witnessInputs(programs.outcome,bad)));
+    }
+  }
   const replySlot=members[2].slots.get(acceptedContact.incoming.toString());
   const resolution={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
   const replyBytes=receiptBytes(community,members[2].owner.member,members[0].owner.member,replySlot,members[2].owner.delegationDigest,resolution);
@@ -202,6 +266,7 @@ try{
   const answerDigest=await receiptDigest(replyBytes,resolution.signature);
   const acknowledgment={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[0].owner.member,members[2].owner.member,replySlot,answerDigest,members[0].owner.delegationDigest,now),{key:signing[0],dsaEncoding:'ieee-p1363'}))};
   members[2]=(await submit(9,[await members[2].settle(acceptedContact.incoming,resolution,acknowledgment,now++)],'answer')).next;
+  await settledEvidence(2,acceptedContact.incoming,'answer',resolution,acknowledgment);
   now=Math.ceil((now+10)/10)*10;
   const answerCandidate=await members[2].deposit({slot:replySlot,kind:1},members[2].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10);
   const forged=structuredClone(answerCandidate.input);forged.certificate=Array(64).fill(0);
@@ -212,6 +277,7 @@ try{
   const answer=await anonymous(answerCandidate,'answer-deposit');
   await call({op:'deposit',batch:[{deposit:answer.statement.deposit,proof:answer.proof},batch[1]],now});
   await drain(0);
+  await settledEvidence(0,acceptedContact.outgoing,'answer',resolution,acknowledgment);
   assert.equal(members[0].opening.accepted,1n);assert.equal(members[0].opening.punished,1n);
   const visible=await record(0,'record-quorum',true);
   assert.deepEqual(await call({op:'record',record:visible.statement.record,proof:visible.proof,now}),[5000,0,5000]);
@@ -240,6 +306,7 @@ try{
   const decline={kind:2,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
   decline.signature=canonicalSignature(sign('sha256',receiptBytes(community,members[3].owner.member,members[0].owner.member,declinedSlot,members[3].owner.delegationDigest,decline),{key:signing[3],dsaEncoding:'ieee-p1363'}));
   members[3]=(await submit(10,[await members[3].settle(declinedContact.incoming,decline,undefined,now++)],'decline')).next;
+  await settledEvidence(3,declinedContact.incoming,'close',decline);
   now=Math.ceil((now+10)/10)*10;
   const declineProof=await anonymous(await members[3].deposit({slot:declinedSlot,kind:2},members[3].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'decline-deposit');
   await call({op:'deposit',batch:[{deposit:declineProof.statement.deposit,proof:declineProof.proof},batch[1]],now});
@@ -268,6 +335,13 @@ try{
   assert.equal(members[2].opening.available,1n);assert.equal(members[2].opening.reserved,0n);
   assert.equal(members[2].opening.accepted,0n);assert.equal(members[2].opening.punished,2n);
   await assert.rejects(members[2].expire(reordered.outgoing,now));
+  const silent=await contact(3,2);
+  members[2]=(await submit(9,[await members[2].activate(silent.incoming,now++,silent.senderSignature)],'silent-recipient-activate')).next;
+  members[3]=(await submit(10,[await members[3].activate(silent.outgoing,now++,silent.recipientSignature)],'silent-sender-activate')).next;
+  now=Number(members[3].slots.get(silent.outgoing.toString()).expiresAt);
+  members[3]=(await submit(10,[await members[3].expire(silent.outgoing,now++)],'fixed-refund')).next;
+  await settledEvidence(3,silent.outgoing,'silence');
+  await writeFile(resolve(directory,'public-wave-trace.json'),JSON.stringify(publicWaveTrace));
   console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
   await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
   // Only fictional public requests/proofs cross this fixture pipe. Replaying

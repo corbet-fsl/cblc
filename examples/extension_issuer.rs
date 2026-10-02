@@ -336,6 +336,30 @@ fn main() {
                     );
                     Ok(json!({"root":response.inbox,"entries":response.entries}))
                 }
+                #[cfg(feature = "publication")]
+                "publication" => {
+                    let material = ledger.as_mut().unwrap().public_verifier_material(
+                        1,
+                        1,
+                        &cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                    )?;
+                    let mut signer = csgn::Signer::new(
+                        "community.example",
+                        csgn::SecretKey::from_seed(&mut [1; 32]),
+                        0,
+                        100_000,
+                    )
+                    .unwrap();
+                    let signed = signer
+                        .sign(
+                            csgn::Kind::SettingsSnapshot,
+                            &serde_json::to_vec(&material).unwrap(),
+                            100,
+                            900,
+                        )
+                        .unwrap();
+                    Ok(json!({"signed":signed,"configuredFixtureRing":signer.key_ring().to_cbor()}))
+                }
                 "record" => {
                     let record: PublicRecord = serde_json::from_value(v["record"].clone()).unwrap();
                     let proof = HEXLOWER

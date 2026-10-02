@@ -7,32 +7,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Mandatory platform policy; no implicit quorum or economic defaults.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExtensionPolicy {
-    pub revision: u64,
-    pub public_record_quorum: u32,
-    pub change_token_cost: u32,
-    pub deposit_delay_seconds: u64,
-    pub minimum_deposit_batch: u8,
-}
-impl ExtensionPolicy {
-    pub fn validate(&self) -> Result<(), Error> {
-        if self.revision == 0
-            || self.revision > czkp::MAX_INTEGER
-            || self.public_record_quorum == 0
-            || self.change_token_cost == 0
-            || self.deposit_delay_seconds == 0
-            || self.deposit_delay_seconds > czkp::MAX_INTEGER
-            || !(2..=64).contains(&self.minimum_deposit_batch)
-        {
-            return Err(Error::InvalidInput);
-        }
-        Ok(())
-    }
-}
+/// Canonical policy parameters shared with the member Wallet.
+pub use cwlt::wave::ExtensionPolicy;
 /// Settlement frontier, not a balance or an outcome counter.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]

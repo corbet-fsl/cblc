@@ -109,3 +109,11 @@ unmaintained parser remain open. The optional Turso test requires both credentia
 Dependency updates follow main and are tested against one CI-resolved lockfile.
 Line and branch coverage target 100%; failures remain blocking. See
 [the coverage contract](docs/COVERAGE.md) for measurement and exclusions.
+
+The counterpart `wave` and `outcome` relations reuse the full extension-state opening,
+indexed obligation membership and original issuer certificate. Their public proof
+fixtures are replayed against the current native Wallet verifier, independently of
+the issuer trace. The outcome relation binds the exact original signed receipt and,
+for Answer, the sender acknowledgment; cancellation and a fixed-date sender refund
+cannot impersonate a recipient Close. MVP public record and punishment enablement
+are separate decisions; these member proofs do not establish latest-record currentness.

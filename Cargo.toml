@@ -19,12 +19,13 @@ missing_docs = "warn"
 
 [features]
 default = []
-schema = ["dep:utoipa", "dep:schemars", "czkp/schema"]
-publication = ["dep:cbcn", "dep:csgn"]
+schema = ["dep:utoipa", "dep:schemars", "czkp/schema", "cwlt/schema"]
+publication = ["dep:cbcn"]
 
 [dependencies]
+cwlt = { git = "https://github.com/corbet-foss/cwlt", branch = "main", default-features = false }
 cbcn = { git = "https://github.com/corbet-foss/cbcn", branch = "main", optional = true }
-csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", default-features = false, optional = true }
+csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", default-features = false }
 utoipa = { version = "6", optional = true }
 schemars = { version = "1", optional = true }
 cthl = { git = "https://github.com/corbet-foss/cthl", branch = "main" }
@@ -41,6 +42,11 @@ serde_json = "1"
 sha2 = "0.10"
 
 [dev-dependencies]
+cwlt = { git = "https://github.com/corbet-foss/cwlt", branch = "main", default-features = false, features = ["native-verifier"] }
 csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
 jsonschema = { version = "0.58", default-features = false }
 tempfile = "3"
+
+[[example]]
+name = "wave_verifier"
+required-features = ["publication"]

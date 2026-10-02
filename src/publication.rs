@@ -34,9 +34,27 @@ pub struct PublicVerifierMaterial {
     pub account_response_key: [u8; 32],
     /// Uncompressed affine coordinates, matching the existing manifest encoding.
     pub certificate_key: Vec<u8>,
+    /// Portable member verifier parameters, projected by the accounting owner.
+    /// Legacy documents remain readable but cannot authorize extension Waves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wave_verifier: Option<cwlt::wave::WavePolicy>,
 }
 
 impl PublicVerifierMaterial {
+    /// One canonical projection used in the signed owner document.
+    pub fn wave_policy(&self) -> Result<cwlt::wave::WavePolicy, Error> {
+        let community = Sha256::digest(self.community.as_bytes()).into();
+        Ok(cwlt::wave::WavePolicy {
+            community,
+            extension: self.extension_policy.clone(),
+            proof_scope: self.proof_scope.clone(),
+            certificate_key: self.certificate_key.clone(),
+            manifest_sha256: self.manifest_sha256,
+            state_policy: self.policy.account.state_digest(&community)?,
+            valid_from: self.policy.account.policy_valid_from,
+            valid_until: self.policy.account.policy_valid_until,
+        })
+    }
     /// Check public policy validity after authenticating the document through
     /// the independently configured publication ring. No member fact is returned.
     pub fn validate_at(&self, issuer: &str, now: u64) -> Result<(), Error> {
@@ -67,7 +85,14 @@ impl PublicVerifierMaterial {
         if self.policy.account.digest(&community)? != self.policy_digest {
             return Err(Error::PolicyMismatch);
         }
-        self.extension_policy.validate()
+        self.extension_policy.validate()?;
+        if let Some(wave) = &self.wave_verifier {
+            if *wave != self.wave_policy()? {
+                return Err(Error::PolicyMismatch);
+            }
+            wave.validate()?;
+        }
+        Ok(())
     }
 }
 

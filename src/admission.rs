@@ -17,8 +17,13 @@ pub struct AdmissionGrant {
     pub pseudonym: String,
     pub chat_public_key: String,
     pub policy_digest: String,
+    /// Community admission epoch from the same validated credential decision.
+    pub policy_epoch: u64,
+    /// Opaque digest of the exact authenticated global passport cohort.
+    pub passport_policy_digest: String,
     pub issued_at: u64,
     pub expires_at: u64,
+    /// Base64url canonical csgn COSE Sign1, never a detached signature.
     pub signature: String,
 }
 
@@ -26,14 +31,21 @@ pub struct AdmissionGrant {
 pub struct AdmissionTrust {
     pub community_id: String,
     pub policy_digest: String,
-    pub issuer_public_key: [u8; 32],
+    /// Independently configured Policy publication ring.
+    pub policy_keys: csgn::KeyRing,
 }
 
-/// Existing external eligibility wire format; cfrm holds only issuer public keys.
+/// Canonical v3 eligibility payload carried by Policy's existing COSE signer.
+pub fn policy_key_id(public_key: &[u8; 32]) -> String {
+    digest(public_key)
+}
+
+/// Encode the exact purpose-separated claims covered by the Policy COSE envelope.
 pub fn admission_bytes(grant: &AdmissionGrant) -> Result<Vec<u8>, Error> {
-    if grant.version != 2
+    if grant.version != 3
+        || grant.policy_epoch == 0
+        || grant.policy_epoch > MAX_INTEGER
         || !scope(&grant.community_id)
-        || grant.issued_at == 0
         || grant.issued_at >= grant.expires_at
         || grant.expires_at > MAX_INTEGER
     {
@@ -53,23 +65,29 @@ pub fn admission_bytes(grant: &AdmissionGrant) -> Result<Vec<u8>, Error> {
         &grant.member_id,
         &grant.chat_public_key,
         &grant.policy_digest,
+        &grant.passport_policy_digest,
     ] {
         decode::<32>(value).map_err(|_| Error::Admission)?;
     }
     serde_json::to_vec(&serde_json::json!([
-        "cvld.admission.v2",
+        "cvld.admission.v3",
         grant.issuer_key_id,
         grant.community_id,
         grant.member_id,
         grant.pseudonym,
         grant.chat_public_key,
         grant.policy_digest,
+        grant.policy_epoch,
+        grant.passport_policy_digest,
         grant.issued_at,
         grant.expires_at
     ]))
     .map_err(|_| Error::Admission)
 }
 
+/// Authenticate the signed eligibility envelope. The admitting facade must also
+/// compare policy_epoch and passport_policy_digest with its current authenticated
+/// policy while retaining the same policy/member leases through forwarding.
 pub fn verify_admission(
     grant: &AdmissionGrant,
     trust: &AdmissionTrust,
@@ -77,19 +95,33 @@ pub fn verify_admission(
 ) -> Result<(), Error> {
     let bytes = admission_bytes(grant)?;
     if grant.community_id != trust.community_id
+        || trust.policy_keys.issuer() != trust.community_id
         || grant.policy_digest != trust.policy_digest
-        || grant.issuer_key_id != digest(&trust.issuer_public_key)
         || now < grant.issued_at
         || now >= grant.expires_at
+        || grant.signature.len() > 8192
     {
         return Err(Error::Admission);
     }
-    signature(
-        &BASE64URL_NOPAD.encode(&trust.issuer_public_key),
-        &bytes,
-        &grant.signature,
-    )
-    .map_err(|_| Error::Admission)
+    let cose = BASE64URL_NOPAD
+        .decode(grant.signature.as_bytes())
+        .map_err(|_| Error::Admission)?;
+    let signed = trust
+        .policy_keys
+        .verify(&cose, csgn::Kind::Credential, now)
+        .map_err(|_| Error::Admission)?;
+    let key = trust
+        .policy_keys
+        .get(&signed.key_id())
+        .ok_or(Error::Admission)?;
+    if signed.payload() != bytes
+        || signed.issued_at() != grant.issued_at
+        || signed.valid_until() != grant.expires_at
+        || grant.issuer_key_id != policy_key_id(&key.public_key())
+    {
+        return Err(Error::Admission);
+    }
+    Ok(())
 }
 
 /// Member-owned root authorization. Eligibility issuers cannot create this proof.

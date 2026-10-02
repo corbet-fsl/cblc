@@ -131,7 +131,7 @@ jobs:
         path: .extension-test
         key: extension-public-v1-${{ runner.os }}-${{ hashFiles('circuits/extensions/**',
           'runtime/extensions/**', 'tests/extensions-proof.mjs', 'tests/holder/extension-checkpoint.mjs', 'tests/common/mod.rs',
-          'examples/extension_issuer.rs', 'package*.json') }}
+          'examples/extension_issuer.rs', 'examples/wave_verifier.rs', 'package*.json') }}
     - run: node runtime/extensions/compile.mjs
       if: steps.extension-cache.outputs.cache-hit != 'true'
     - uses: taiki-e/install-action@v2
@@ -141,7 +141,7 @@ jobs:
     - run: wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir
         "$PWD/.extension-wasm"
       if: steps.extension-cache.outputs.cache-hit != 'true'
-    - run: cargo build --locked --example extension_issuer
+    - run: cargo build --locked --all-features --example extension_issuer --example wave_verifier
     - name: Record proof construction provenance
       if: steps.extension-cache.outputs.cache-hit != 'true'
       run: 'git rev-parse HEAD > .extension-test/source.txt
@@ -238,9 +238,11 @@ jobs:
         source <(cargo llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
         cargo llvm-cov clean --workspace
         cargo test --locked --workspace --all-features -- --test-threads=2
-        cargo build --locked --all-features --example extension_issuer --example extension_adversaries --message-format=json > instrumented-build.json
+        cargo build --locked --all-features --example extension_issuer --example extension_adversaries --example wave_verifier --message-format=json > instrumented-build.json
         CBLC_EXTENSION_ISSUER="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "extension_issuer" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one issuer executable") end' instrumented-build.json)"
-        export CBLC_EXTENSION_ISSUER
+        CBLC_WAVE_VERIFIER="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "wave_verifier" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one Wave executable") end' instrumented-build.json)"
+        export CBLC_EXTENSION_ISSUER CBLC_WAVE_VERIFIER
+        test -x "$CBLC_WAVE_VERIFIER"
         test -x "$CBLC_EXTENSION_ISSUER"
         node tests/replay-extensions.mjs
         adversaries="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "extension_adversaries" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one adversary executable") end' instrumented-build.json)"

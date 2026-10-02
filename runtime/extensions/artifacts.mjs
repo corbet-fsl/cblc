@@ -23,6 +23,6 @@ export async function loadArtifacts(configPath) {
   if(!setup['g1.dat']||!setup['g2.dat']||manifest.numPoints*32!==setup['g1.dat'].length||setup['g2.dat'].length!==128)throw new Error('Setup completeness');
   const circuits=JSON.parse(circuitBytes),keys=JSON.parse(vkBytes);
   return {manifest,scope:{circuitDigest:Array.from(unhex(manifest.circuitSha256)),verifyingKeyDigest:Array.from(unhex(manifest.vkSha256))},
-    artifacts(kind){if(!['update','deposit','record'].includes(kind))throw new Error('Circuit domain');
+    artifacts(kind){if(!['update','deposit','record','wave','outcome'].includes(kind))throw new Error('Circuit domain');
       return {manifest,circuit:circuits[kind],verificationKey:unhex(keys[kind]),setup,limits:{memoryPages:65536,maxProofBytes:1024*1024}};}};
 }

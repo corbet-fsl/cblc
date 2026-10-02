@@ -29,7 +29,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         check_config(&mut transaction, &self.config)?;
         check_extension_config(&mut transaction, Some(extensions))?;
         transaction.rollback()?;
-        let material = PublicVerifierMaterial {
+        let mut material = PublicVerifierMaterial {
             purpose: Purpose::PublicVerifierV1,
             community: self.trust.community_id.clone(),
             revision,
@@ -41,7 +41,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             manifest_sha256: binding.manifest_sha256,
             account_response_key: self.operator.verifying_key().to_bytes(),
             certificate_key: binding.certificate_key,
+            wave_verifier: None,
         };
+        material.wave_verifier = Some(material.wave_policy()?);
         material.validate(&self.trust.community_id)?;
         Ok(material)
     }

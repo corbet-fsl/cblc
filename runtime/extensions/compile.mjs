@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const directory=resolve(process.env.CBLC_EXTENSION_DIRECTORY??'.extension-test');
 await mkdir(directory,{recursive:true});
 const programs={};
-for(const kind of ['update','deposit','record']) {
+for(const kind of ['update','deposit','record','wave','outcome']) {
   const result=await compile(createFileManager(resolve('circuits/extensions',kind)));
   if(!result.program?.bytecode) throw new Error('Missing compiled extension program');
   programs[kind]=result.program;

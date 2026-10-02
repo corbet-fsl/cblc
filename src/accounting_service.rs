@@ -169,6 +169,23 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
         &mut self,
         request: AccountServiceRequest,
     ) -> Result<AccountServiceResponse, Error> {
+        // Typed callers obey the same bound as HTTP callers. Count directly into
+        // a bounded sink: do not allocate a second proof-sized request buffer.
+        struct Bounded(usize);
+        impl std::io::Write for Bounded {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0 = self
+                    .0
+                    .checked_sub(bytes.len())
+                    .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::FileTooLarge))?;
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        serde_json::to_writer(Bounded(self.max_request_bytes), &request)
+            .map_err(|_| Error::Capacity)?;
         // Observe another administrator's durable tuning before new requests.
         // The ledger still rechecks configuration at commit; racing changes fail closed.
         self.ledger.reload_policy()?;

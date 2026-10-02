@@ -81,3 +81,29 @@ try {
 } catch(error) {child.kill();await exited;throw error;}
 assert(checked.has('record')&&checked.has('deposit'));
 console.log(`Replayed ${trace.length} real-proof issuer calls and ${adversaries} adversaries with exact outcomes`);
+
+// Recheck the counterpart evidence independently, using this build's actual
+// Wallet verifier and original signed public material. Never replay it at issuer.
+const waveTracePath=resolve(directory,'public-wave-trace.json');
+assert((await stat(waveTracePath)).size<=64*1024*1024);
+const waveTrace=JSON.parse(await readFile(waveTracePath,'utf8'));
+assert(Array.isArray(waveTrace)&&waveTrace.length>0&&waveTrace.length<=128);
+const {fileURLToPath}=await import('node:url');
+const peer=spawn(resolve(process.env.CBLC_WAVE_VERIFIER??'target/debug/examples/wave_verifier'),
+  [configPath,resolve(directory,'wave-policy.json'),fileURLToPath(import.meta.resolve('@corbet-labs/czkp/node-verifier'))],
+  {stdio:['pipe','pipe','inherit']});
+const peerExited=once(peer,'exit'),peerLines=createInterface({input:peer.stdout})[Symbol.asyncIterator]();
+let accepted=0,refused=0;
+try {
+  for(const item of waveTrace){
+    const bytes=JSON.stringify(item.request);assert(bytes.length<=3*1024*1024);
+    peer.stdin.write(bytes+'\n');
+    const response=await peerLines.next();assert(!response.done);
+    assert.deepEqual(JSON.parse(response.value),{verified:item.verified});
+    if(item.verified)accepted++;else refused++;
+  }
+  peer.stdin.end();const [code]=await peerExited;assert.equal(code,0);
+}catch(error){peer.kill();await peerExited;throw error;}
+assert.equal(accepted,6);assert(refused>=58);
+assert.deepEqual(new Set(waveTrace.filter(x=>x.verified).map(x=>x.request.expectedOutcome??"active")),new Set(["active","answer","close","silence"]));
+console.log(`Replayed ${accepted} actual member Wave proofs and ${refused} refusals`);

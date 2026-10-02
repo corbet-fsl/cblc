@@ -78,6 +78,22 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
         );
     }
     assert_eq!(service.handle_json(&vec![0; 100_001]), Err(Error::Capacity));
+    let mut oversized = genesis(&f);
+    oversized.proof = vec![0; 100_001];
+    let typed = AccountServiceRequest::Apply {
+        grant: f.grant(7, &f.device),
+        authorization: f.authorize(7, &f.device),
+        request: Box::new(oversized),
+    };
+    assert!(matches!(
+        service.handle(typed.clone()),
+        Err(Error::Capacity)
+    ));
+    assert!(matches!(
+        service.handle_for_member(&[7; 48], typed),
+        Err(Error::Capacity)
+    ));
+
     let good = serde_json::json!({"action":"apply","grant":f.grant(7,&f.device),"authorization":f.authorize(7,&f.device),"request":genesis(&f)});
     assert!(good["grant"].get("issuerKeyId").is_some());
     let response = service
