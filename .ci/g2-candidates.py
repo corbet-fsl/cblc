@@ -13,17 +13,18 @@ NPM_CANDIDATES = ROOT / 'experiments/private-accounting/node_modules/@corbet-lab
 REPORT = Path(os.environ['CBLC_DIAGNOSTIC_OUTPUT'])
 SOURCES = {
     'cssr': ('1091bafed66d9127a5f4ea4513cdf224470c4eea', 'CSSR', ROOT / '.g2-candidates/cssr'),
-    'czkp': ('b1093a02efbf5597638206397f97976ecd993a39', 'CODEC', NPM_CANDIDATES / 'czkp'),
+    'czkp': ('93d157e3961170153e92fb7dd9b4038edba2d498', 'CODEC', NPM_CANDIDATES / 'czkp'),
     'cvfy': ('30a78099a27581ee16ed17a589e64d089a839182', 'CVFY', ROOT / '.g2-candidates/cvfy'),
-    'cwlt': ('ed86f90c41f31dc23a7e439ab88d64b246676a08', 'CWLT', NPM_CANDIDATES / 'cwlt'),
+    'cwlt': ('167abb7613a3edf0497213e4edc29e185716df7f', 'CWLT', NPM_CANDIDATES / 'cwlt'),
     'cbcn': ('22f3179cd661f46e6d77fda197b171f6c83c637c', 'CBCN', ROOT / '.g2-candidates/cbcn'),
     'ckmg': ('6910adaa591c1f2e9f2b51da8e2ac2a5716cbaca', 'CKMG', ROOT / '.g2-candidates/ckmg'),
     'cpsd': ('24a61c9500b4141b10abc1650c55767b4be9a9ef', 'CPSD', ROOT / '.g2-candidates/cpsd'),
+    'cwst': ('de04691c4c654ddbc5f0cd985e342606059b98ba', 'CWST', ROOT / '.g2-candidates/cwst'),
 }
-RESOLUTION_ONLY = {'ckmg', 'cpsd'}
+RESOLUTION_ONLY = {'cpsd'}
 EXCLUDED_BUILDS = RESOLUTION_ONLY | {'cwlt-engine'}
 PATCH_SETS = {'cblc': {'cssr', 'czkp', 'cvfy', 'cwlt', 'cbcn'},
-              'cwlt': {'czkp', 'cwlt', 'ckmg', 'cpsd', 'cbcn'},
+              'cwlt': {'czkp', 'cwlt', 'ckmg', 'cpsd', 'cbcn', 'cwst'},
               'czkp': set()}
 
 
@@ -398,7 +399,7 @@ def check():
     check_lock_patches()
     check_frozen_locks()
     graphs = {}
-    for label, required in [('cblc', set(SOURCES) - RESOLUTION_ONLY), ('cwlt', {'cwlt', 'czkp'}),
+    for label, required in [('cblc', PATCH_SETS['cblc']), ('cwlt', {'cwlt', 'czkp', 'ckmg', 'cwst'}),
                             ('czkp', {'czkp'})]:
         metadata = graphs[label] = json.loads((REPORT / f'{label}-metadata.json').read_text())
         receipt = json.loads((REPORT / f'{label}-metadata-patches.json').read_text())

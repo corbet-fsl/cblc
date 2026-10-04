@@ -14,6 +14,7 @@ export default defineConfig({
       return [specifier, fileURLToPath(import.meta.resolve(specifier))];
     })),
   },
-  build: { target: 'esnext', sourcemap: true },
+  build: { target: 'esnext', sourcemap: true,
+    ...(process.env.RECORD_PROOF_BROWSER?{rollupOptions:{input:'record-browser.html'}}:{}) },
   optimizeDeps: { exclude: ['@aztec/bb.js'] },
 });

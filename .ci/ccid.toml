@@ -12,3 +12,7 @@ commands = [["timeout", "--kill-after=15s", "1800", "bash", ".ci/g2-proof.sh"]]
 [checks.g2-full-extension]
 kind = "commands"
 commands = [["timeout", "--kill-after=15s", "3300", "bash", ".ci/g2-proof.sh", "--full-extension"]]
+
+[checks.g2-proof-time]
+kind = "commands"
+commands = [["timeout", "--kill-after=15s", "3000", "bash", ".ci/g2-proof.sh", "--proof-time"]]

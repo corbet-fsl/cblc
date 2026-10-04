@@ -116,22 +116,28 @@ pub struct Deposit {
     pub authorization_nullifier: [u8; 32],
     pub obligation: [u8; 32],
 }
-/// Every visibility/contact decision carries an action-specific, fresh record proof.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-pub enum RecordUse {
-    FirstContact,
-    ForumListing,
+pub use czkp::record::{Context as RecordContext, Use as RecordUse};
+
+/// One relying-party decision. Keep this value with the outstanding request;
+/// do not reconstruct it from member input. Successful verification consumes it.
+/// No persistent request or member-activity log is created.
+pub struct RecordChallenge {
+    pub(crate) owner: [u8; 32],
+    pub(crate) context: RecordContext,
+    pub(crate) consumed: bool,
 }
-/// A challenge supplied by the relying service for exactly one decision context.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RecordContext {
-    pub purpose: RecordUse,
-    pub challenge: [u8; 32],
-    pub expires_at: u64,
+impl RecordChallenge {
+    /// Bind a freshly issued random challenge to its expected owner and action.
+    pub fn new(owner: [u8; 32], context: RecordContext) -> Result<Self, Error> {
+        if owner == [0; 32] || context.challenge == [0; 32] || context.expires_at == 0 {
+            return Err(Error::InvalidInput);
+        }
+        Ok(Self {
+            owner,
+            context,
+            consumed: false,
+        })
+    }
 }
 /// Relative public values only: 10,000 basis points in accepted/declined/punished order.
 /// The proof establishes the hidden total reaches the configured quorum.
@@ -164,6 +170,10 @@ pub enum ExtensionStatement {
     Record {
         policy: ExtensionPolicy,
         record: PublicRecord,
+    },
+    RecordEpoch {
+        policy: ExtensionPolicy,
+        record: czkp::record::Record,
     },
 }
 pub(crate) mod sealed {

@@ -71,6 +71,7 @@ fn main() {
     let control = ancestry::Control::default();
     let mut record_publication = None;
     let mut latest = std::collections::BTreeMap::new();
+    let mut record_challenges = std::collections::BTreeMap::new();
     let companion = std::sync::Arc::new(std::sync::Mutex::new(None::<AccountLedger<RejectLegacy>>));
     for line in io::stdin().lock().lines() {
         let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
@@ -664,6 +665,31 @@ fn main() {
                         )
                         .unwrap();
                     Ok(json!({"signed":signed,"configuredFixtureRing":signer.key_ring().to_cbor()}))
+                }
+                "issueRecordChallenge" => {
+                    let owner = serde_json::from_value(v["owner"].clone()).unwrap();
+                    let context: cblc::extensions::RecordContext =
+                        serde_json::from_value(v["context"].clone()).unwrap();
+                    let id = context.challenge;
+                    if record_challenges.contains_key(&id) {
+                        return Err(cblc::Error::Replay);
+                    }
+                    record_challenges
+                        .insert(id, cblc::extensions::RecordChallenge::new(owner, context)?);
+                    Ok(json!(true))
+                }
+                "checkEpochRecord" => {
+                    let presentation: czkp::record::Presentation =
+                        serde_json::from_value(v["presentation"].clone()).unwrap();
+                    let id: [u8; 32] = serde_json::from_value(v["challenge"].clone()).unwrap();
+                    let challenge = record_challenges
+                        .get_mut(&id)
+                        .ok_or(cblc::Error::Admission)?;
+                    Ok(json!(ledger.as_mut().unwrap().check_epoch_record(
+                        challenge,
+                        &presentation,
+                        || v["now"].as_u64().unwrap()
+                    )?))
                 }
                 "record" => {
                     let record: PublicRecord = serde_json::from_value(v["record"].clone()).unwrap();

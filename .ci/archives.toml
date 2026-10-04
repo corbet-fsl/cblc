@@ -3,7 +3,7 @@ schema = 1
 # Exact diagnostic codec candidate, imported locally from the original czkp
 # repository. This is extra test source, never a claim about dependency main.
 [archives.g2_codec]
-revision = "b1093a02efbf5597638206397f97976ecd993a39"
+revision = "93d157e3961170153e92fb7dd9b4038edba2d498"
 archive_variable = "G2_CODEC_SOURCE_ARCHIVE"
 digest_variable = "G2_CODEC_SOURCE_SHA256"
 
@@ -18,7 +18,7 @@ archive_variable = "G2_CVFY_SOURCE_ARCHIVE"
 digest_variable = "G2_CVFY_SOURCE_SHA256"
 
 [archives.g2_cwlt]
-revision = "ed86f90c41f31dc23a7e439ab88d64b246676a08"
+revision = "167abb7613a3edf0497213e4edc29e185716df7f"
 archive_variable = "G2_CWLT_SOURCE_ARCHIVE"
 digest_variable = "G2_CWLT_SOURCE_SHA256"
 
@@ -39,3 +39,13 @@ digest_variable = "G2_CKMG_SOURCE_SHA256"
 revision = "24a61c9500b4141b10abc1650c55767b4be9a9ef"
 archive_variable = "G2_CPSD_SOURCE_ARCHIVE"
 digest_variable = "G2_CPSD_SOURCE_SHA256"
+
+[archives.g2_cvlt]
+revision = "75480d872dc2a595b4a160aa7375107fb400d470"
+archive_variable = "G2_CVLT_SOURCE_ARCHIVE"
+digest_variable = "G2_CVLT_SOURCE_SHA256"
+
+[archives.g2_cwst]
+revision = "de04691c4c654ddbc5f0cd985e342606059b98ba"
+archive_variable = "G2_CWST_SOURCE_ARCHIVE"
+digest_variable = "G2_CWST_SOURCE_SHA256"

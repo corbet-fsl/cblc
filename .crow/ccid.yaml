@@ -19,6 +19,10 @@ variables:
   G2_CKMG_SOURCE_SHA256: {default: ""}
   G2_CPSD_SOURCE_ARCHIVE: {default: ""}
   G2_CPSD_SOURCE_SHA256: {default: ""}
+  G2_CVLT_SOURCE_ARCHIVE: {default: ""}
+  G2_CVLT_SOURCE_SHA256: {default: ""}
+  G2_CWST_SOURCE_ARCHIVE: {default: ""}
+  G2_CWST_SOURCE_SHA256: {default: ""}
   DEPENDENCY_SOURCE_ARCHIVE: {default: ""}
   DEPENDENCY_SOURCE_SHA256: {default: ""}
   G2_WASM_PACK_BINARY: {default: ""}
@@ -70,7 +74,7 @@ steps:
             --commit "$$CI_COMMIT_SHA" --check "$$CHECKS"
         fi
         case "$$CHECKS" in
-          g2-proof-diagnostic|g2-full-extension) ;;
+          g2-proof-diagnostic|g2-full-extension|g2-proof-time) ;;
           *) exit 2 ;;
         esac
         : "$${DEPENDENCY_SOURCE_ARCHIVE:?}" "$${DEPENDENCY_SOURCE_SHA256:?}"

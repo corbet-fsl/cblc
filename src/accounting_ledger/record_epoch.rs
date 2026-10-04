@@ -49,7 +49,6 @@ struct PublishedAnchor {
 /// Project only the actual atomic publication under the caller's already
 /// checked configuration transaction. Missing halves or corrupt bytes refuse;
 /// no supplied descriptor can replace the durable owner publication.
-#[cfg(feature = "publication")]
 pub(super) fn public_descriptor(
     tx: &mut Transaction<'_>,
     community: &[u8; 32],
@@ -87,6 +86,25 @@ pub(super) fn public_descriptor(
         .check_object(&publication.object)
         .map_err(|_| Error::Storage)?;
     Ok(Some(publication.descriptor))
+}
+
+pub(super) fn current_descriptor(
+    tx: &mut Transaction<'_>,
+    community: &[u8; 32],
+    proof_scope: &AccountProofScope,
+    configuration: &[u8],
+    extension_configuration: &[u8],
+) -> Result<czkp::record::Epoch, Error> {
+    let anchor: PublishedAnchor = tx.get(ANCHOR)?.ok_or(Error::Admission)?;
+    public_descriptor(
+        tx,
+        community,
+        anchor.descriptor.policy_epoch,
+        proof_scope,
+        configuration,
+        extension_configuration,
+    )?
+    .ok_or(Error::Admission)
 }
 
 fn ancestry_key(owner: &[u8; 32]) -> Vec<u8> {

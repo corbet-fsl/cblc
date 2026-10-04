@@ -4,6 +4,9 @@ set -euo pipefail
 fixture=record-diagnostic
 if [[ $# == 1 && $1 == --full-extension ]]; then
     fixture=full-extension
+elif [[ $# == 1 && $1 == --proof-time ]]; then
+    fixture=proof-time
+    export RECORD_PROOF_BROWSER=1
 elif [[ $# != 0 ]]; then
     printf '%s\n' 'Unknown proof fixture selector' >&2
     exit 2
@@ -38,7 +41,7 @@ for path in root.rglob('*'):
     if path.is_file():
         with path.open('rb') as stream:
             files[str(path.relative_to(root))] = hashlib.file_digest(stream, 'sha256').hexdigest()
-scope = 'g2-full-extension-proof-diagnostic' if fixture == 'full-extension' else 'g2-record-proof-diagnostic'
+scope = 'g2-' + fixture
 receipt = {'schema': 1, 'scope': scope,
            'extension_fixture': fixture,
            'status': 'passed' if code == 0 else 'failed', 'exit_code': code,
@@ -48,10 +51,10 @@ receipt = {'schema': 1, 'scope': scope,
            'candidate_sources': 'candidate-sources.json',
            'candidate_patches': {name: f'candidate-patches-{name}.toml' for name in ['cblc', 'cwlt', 'czkp']},
            'artifacts': files, 'product_acceptance': False, 'full_suite': False,
-           'browser_evidence': False, 'wasm_opt_postprocessing': False,
+           'browser_evidence': fixture == 'proof-time' and code == 0, 'wasm_opt_postprocessing': False,
            'resolution_only_candidates': {
                name: {'compiled': False if code == 0 else None, 'qualified': False}
-               for name in ['ckmg', 'cpsd']},
+               for name in ['cpsd']},
            'proof_round_trip_passed': code == 0}
 (root / 'diagnostic.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
 print(json.dumps({'diagnostic_receipt': str(root / 'diagnostic.json'), 'status': receipt['status']}))
@@ -100,6 +103,13 @@ assert.equal(findBbBinary(),process.env.BB_BINARY_PATH);
 assert((await readFile(process.env.CBLC_DIAGNOSTIC_OUTPUT+'/bb-version.txt','utf8')).includes(pkg.version));
 JS
 run python3 .ci/g2-candidates.py unpack
+if [[ $fixture == proof-time ]]; then
+    printf '%s  %s\n' "$G2_CVLT_SOURCE_SHA256" "$G2_CVLT_SOURCE_ARCHIVE" | sha256sum --check --strict
+    mkdir .g2-vault
+    tar --no-same-owner -xf "$G2_CVLT_SOURCE_ARCHIVE" -C .g2-vault
+    chromium --version > "$report_dir/chromium.txt"
+    sha256sum .g2-vault/hosting/isolation.mjs > "$report_dir/vault-hosting.sha256"
+fi
 cp "$wallet_dir/Cargo.lock" "$report_dir/baseline-cwlt-Cargo.lock"
 cp "$codec_dir/Cargo.lock" "$report_dir/baseline-czkp-Cargo.lock"
 # Each original workspace resolves once and freezes immediately before any test.
@@ -211,10 +221,10 @@ import json, pathlib, re, sys
 report = pathlib.Path(sys.argv[1])
 for target in ['native', 'wasm']:
     text = (report / f'codec-{target}-test.log').read_text()
-    if not re.search(r'test result: ok\. 4 passed; 0 failed; 0 ignored;', text) or '0 filtered out' not in text:
-        raise SystemExit('Expected all four original record integration tests: ' + target)
+    if not re.search(r'test result: ok\. 5 passed; 0 failed; 0 ignored;', text) or '0 filtered out' not in text:
+        raise SystemExit('Expected all five record integration tests: ' + target)
 (report / 'codec-test-results.json').write_text(json.dumps({
-    'native_tests_passed': 4, 'node_wasm_tests_passed': 4,
+    'native_tests_passed': 5, 'node_wasm_tests_passed': 5,
     'test_target': 'record', 'product_acceptance': False,
 }, indent=2, sort_keys=True) + '\n')
 PYCODEC
@@ -280,6 +290,13 @@ check_executables() {
 }
 # No optional optimizer/tool installation; this is not browser/performance acceptance.
 run python3 .ci/g2-candidates.py select-patches cwlt wasm
+if [[ $fixture == proof-time ]]; then
+    run cargo fmt --manifest-path "$wallet_dir/Cargo.toml" --all -- --check
+    run cargo test --locked --manifest-path "$wallet_dir/Cargo.toml" -p cwlt-engine --tests
+    run cargo test --locked --manifest-path "$wallet_dir/Cargo.toml" --features record --test record
+    run cargo clippy --locked --manifest-path "$wallet_dir/Cargo.toml" --features record --lib -- -D warnings
+    run node --test "$codec_dir/tests/record.test.mjs"
+fi
 run "$G2_WASM_PACK_BINARY" build "$wallet_dir" --target web --release --mode no-install --no-opt --out-dir "$PWD/.extension-wasm" -- --locked
 run python3 .ci/g2-candidates.py verify-patches cwlt
 sha256sum --check --strict "$report_dir/cargo-locks.sha256"

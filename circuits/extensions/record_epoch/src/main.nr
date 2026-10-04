@@ -2,7 +2,7 @@
 // This source is not an activated verifier until its exact manifest and real
 // proof vectors pass the same publication/consumer gates as the original relation.
 use core::{Opening, ExtensionPolicy, extension_hash, state_hash, field, verify_p256};
-use core::epoch::{leaf, node, ancestry_digest};
+use core::epoch::{leaf, node, ancestry_digest, presentation_key};
 
 fn main(
     extension: pub ExtensionPolicy,
@@ -10,16 +10,20 @@ fn main(
     community: pub [u8;32], owner: pub [u8;32],
     epoch: pub u64, epoch_start: pub u64, epoch_end: pub u64,
     epoch_root: pub [u8;32], leaf_count: pub u32,
-    purpose: pub u8, challenge: pub [u8;32], expires_at: pub u64,
+    presentation_key_commitment: pub [u8;32],
     present: pub bool, shares: pub [u16;3],
     version: u64, state: [u8;32], frozen_version: u64, frozen_state: [u8;32],
     required_inbox: [u8;32], descended: bool, issued_at: u64, certificate: [u8;64],
     blinding: [u8;32], path: [[u8;32];32], index: u32,
     state_policy: [u8;32], registered_secret: Field, opening: Opening,
+    presentation_public_key: [u8;32],
 ) {
     let safe: u64=9007199254740991;
     let ext=extension_hash(extension);
-    assert((purpose<2)&(challenge!=[0;32])&(expires_at>epoch_start)&(expires_at<=epoch_end));
+    // Fresh Ed25519 possession is checked against this committed key by the
+    // relying party. The expensive relation is independent of its challenge.
+    assert(presentation_public_key!=[0;32]);
+    assert(presentation_key(presentation_public_key)==presentation_key_commitment);
     assert((epoch>0)&(epoch<=safe)&(epoch_start>0)&(epoch_start<epoch_end)&(epoch_end<=safe));
     assert((version<=safe)&(frozen_version<=safe)&(blinding!=[0;32])&(leaf_count>0)&(index<leaf_count));
     assert((community!=[0;32])&(owner!=[0;32])&(epoch_root!=[0;32])&(scope!=[0;32])&(verification_scope!=[0;32]));
@@ -30,7 +34,7 @@ fn main(
     if descended {
         // The original issuer attests the complete linear ancestry/inbox CAS.
         // Neither a numeric version nor an arbitrary newer opening suffices.
-        assert((version>frozen_version)&(issued_at>=epoch_start)&(issued_at<expires_at));
+        assert((version>frozen_version)&(issued_at>=epoch_start)&(issued_at<epoch_end));
         verify_p256(issuer_key,certificate,ancestry_digest(community,owner,epoch,
             epoch_root,frozen_leaf,state,version,scope,verification_scope,issued_at));
     } else {

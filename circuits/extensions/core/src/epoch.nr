@@ -2,6 +2,10 @@
 // Reuses the original core dependency; no second hash implementation or library.
 use sha2lib::digest;
 
+pub fn presentation_key(public_key: [u8;32]) -> [u8;32] {
+    digest(public_key)
+}
+
 pub fn leaf(community: [u8;32], epoch: u64, owner: [u8;32], version: u64,
             state: [u8;32], required_inbox: [u8;32], blinding: [u8;32]) -> [u8;32] {
     let prefix: [u8;24]=[99,98,108,99,46,114,101,99,111,114,100,45,102,114,111,110,116,105,101,114,46,118,49,0];

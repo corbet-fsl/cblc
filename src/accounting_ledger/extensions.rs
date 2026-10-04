@@ -248,6 +248,66 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         Ok(result)
     }
 
+    /// Verify the cached epoch proof with a fresh Ed25519 challenge binding.
+    /// Recheck actual publication and time after expensive verification, then
+    /// consume the relying party's live challenge. No per-member lookup or log.
+    pub fn check_epoch_record(
+        &mut self,
+        challenge: &mut crate::extensions::RecordChallenge,
+        presentation: &czkp::record::Presentation,
+        clock: impl Fn() -> u64,
+    ) -> Result<Option<[u16; 3]>, Error> {
+        if challenge.consumed {
+            return Err(Error::Replay);
+        }
+        let now = clock();
+        check_time(now, 0)?;
+        if challenge.context.expires_at > now.saturating_add(self.policy.max_authorization_seconds)
+        {
+            return Err(Error::Expired);
+        }
+        let extensions = self
+            .extensions
+            .as_ref()
+            .ok_or(Error::UnsupportedCapability)?;
+        let check = |tx: &mut Transaction<'_>, now| -> Result<(), Error> {
+            check_config(tx, &self.config)?;
+            check_extension_config(tx, Some(extensions))?;
+            let epoch = super::record_epoch::current_descriptor(
+                tx,
+                &self.community,
+                &extensions.verifier.scope(),
+                &self.config,
+                &extensions.config,
+            )?;
+            presentation.check_binding(&challenge.context, &epoch, &challenge.owner, now)
+        };
+        let mut tx = self.connection.transaction()?;
+        check(&mut tx, now)?;
+        tx.rollback()?;
+        let proof = data_encoding::HEXLOWER
+            .decode(presentation.proof.as_bytes())
+            .map_err(|_| Error::InvalidInput)?;
+        if proof.len() > self.policy.max_proof_bytes {
+            return Err(Error::InvalidInput);
+        }
+        extensions.budget.check(&challenge.owner)?;
+        extensions.verifier.verify_anonymous(
+            &ExtensionStatement::RecordEpoch {
+                policy: extensions.policy.clone(),
+                record: presentation.record.clone(),
+            },
+            &proof,
+        )?;
+        let completed = clock();
+        check_time(completed, now)?;
+        let mut tx = self.connection.transaction()?;
+        check(&mut tx, completed)?;
+        tx.rollback()?;
+        challenge.consumed = true;
+        Ok(presentation.record.shares)
+    }
+
     /// A pure proof check against current state. It records no display/request history.
     /// Stale records and unconsumed obligations are rejected before and after verification.
     pub(crate) fn public_record(

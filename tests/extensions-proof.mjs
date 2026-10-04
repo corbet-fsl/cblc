@@ -12,7 +12,7 @@ import {Barretenberg,BackendType,UltraHonkBackend} from '@aztec/bb.js';
 import {Noir} from '@noir-lang/noir_js';
 import {OPTIONS,hex,be,canonicalSignature,zeros} from '@corbet-labs/czkp/encoding';
 import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
-import {recordEpochPublicInputs} from '@corbet-labs/czkp/record';
+import {recordEpochPublicInputs,recordPresentationBytes,verifyRecordPresentation} from '@corbet-labs/czkp/record';
 import {createProver} from '@corbet-labs/czkp/prove';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
@@ -199,14 +199,41 @@ try{
     // result reports or proof artifacts; only the resulting ZK proof is public.
     const witness=await call({op:'recordWitness',member:7+index},true,false);
     const context={purpose:'forumListing',challenge:toArray(bytes(193+index)),expiresAt:Math.min(now+50,witness.epoch.expiresAt)};
-    const candidate=await members[index].recordEpoch(context,witness,artifacts.scope,manifest.issuerKey);
+    const presentationKeys=generateKeyPairSync('ed25519');
+    const publicKey=Array.from(presentationKeys.publicKey.export({type:'spki',format:'der'}).subarray(-32));
+    const candidate=await members[index].recordEpoch(publicKey,witness,artifacts.scope,manifest.issuerKey);
     const encoded=await proof('record_epoch',candidate.input,label,measure);
     const record={statement:candidate.statement,proof:encodeBundle([{proof:encoded}]),proofScope:artifacts.scope};
     await verifyExtension(record,artifacts);recordEpochProofs.push(record);
-    for(const field of ['challenge','purpose','community','owner','root','epoch','scope','shares']){
+    if(measure&&process.env.RECORD_PROOF_BROWSER==='1'){
+      const {measureRecordBrowser}=await import('./record-browser.mjs');
+      if(activeProver){await activeProver.prover.destroy();activeProver=undefined;}
+      const results=await measureRecordBrowser(artifacts.artifacts('record_epoch'),witnessInputs(programs.record_epoch,candidate.input));
+      benchmarks.push(...results.map(result=>({label,kind:'record_epoch',backend:'BrowserWasm',...result})));
+      console.log(`Measured ${label} browser: ${JSON.stringify(results)}`);
+    }
+    const bind=context=>({record:candidate.statement.record,context,publicKey,
+      signature:Array.from(sign(null,recordPresentationBytes(candidate.statement.record,context),presentationKeys.privateKey)),proof:record.proof});
+    const presentation=bind(context);
+    await verifyRecordPresentation(presentation,context,witness.epoch,candidate.statement.record.owner,now);
+    await call({op:'issueRecordChallenge',owner:presentation.record.owner,context});
+    const check=(p,t=now,expected=false)=>call({op:'checkEpochRecord',challenge:context.challenge,presentation:p,now:t},expected);
+    for(const mutate of [p=>{p.context.challenge[0]^=1;},p=>{p.context.purpose='firstContact';},p=>{p.signature[0]^=1;},
+      p=>{p.publicKey[0]^=1;},p=>{p.proof='';},p=>{p.record.epoch.epoch+=1;},p=>{p.record.epoch.root[0]^=1;}]){
+      const bad=structuredClone(presentation);mutate(bad);await check(bad);
+    }
+    await check(presentation,witness.epoch.expiresAt);
+    await check(presentation,now,true);
+    await check(presentation); // The SAME issued challenge cannot authorize twice.
+    const contact={...context,purpose:'firstContact',challenge:toArray(bytes(211+index))};
+    await call({op:'issueRecordChallenge',owner:presentation.record.owner,context:contact});
+    const signedAt=performance.now(),second=bind(contact);
+    benchmarks.push({label:label+'-presentation',kind:'record-presentation',backend:'Ed25519',signMs:performance.now()-signedAt});
+    assert.equal(second.proof,presentation.proof); // No per-contact proving.
+    await call({op:'checkEpochRecord',challenge:contact.challenge,presentation:second,now},true);
+    for(const field of ['presentationKeyCommitment','community','owner','root','epoch','scope','shares']){
       const changed=structuredClone(record),r=changed.statement.record;
-      if(field==='challenge')r.context.challenge[0]^=1;
-      else if(field==='purpose')r.context.purpose='firstContact';
+      if(field==='presentationKeyCommitment')r.presentationKeyCommitment[0]^=1;
       else if(field==='community')r.epoch.community[0]^=1;
       else if(field==='owner')r.owner[0]^=1;
       else if(field==='root')r.epoch.root[0]^=1;
@@ -235,17 +262,17 @@ try{
     // must not authorize an exact-branch proof before the required inbox drains.
     const witness=await call({op:'recordWitness',member:7},true,false);
     const context={purpose:'forumListing',challenge:toArray(bytes(197)),expiresAt:Math.min(now+50,witness.epoch.expiresAt)};
-    await assert.rejects(members[0].recordEpoch(context,witness,artifacts.scope,manifest.issuerKey));
+    await assert.rejects(members[0].recordEpoch(bytes(197),witness,artifacts.scope,manifest.issuerKey));
     const local=members[0].record(context),leaf=witness.leaf;
     const {extension,version,state,state_policy,registered_secret,opening}=local.input;
     assert.equal(Number(version),leaf.version);assert.deepEqual(toArray(state),leaf.state);
     assert.notDeepEqual(toArray(opening.inbox),leaf.requiredInbox);
     const path=structuredClone(witness.path);while(path.length<32)path.push(Array(32).fill(0));
-    const record={epoch:witness.epoch,owner:local.statement.record.owner,context,shares:local.statement.record.shares};
+    const record={epoch:witness.epoch,owner:local.statement.record.owner,presentationKeyCommitment:toArray(sha(bytes(197))),shares:local.statement.record.shares};
     const exact={...recordEpochPublicInputs(record,artifacts.scope,manifest.issuerKey),extension,
       version,state,state_policy,registered_secret,opening,frozen_version:leaf.version,frozen_state:leaf.state,
       required_inbox:leaf.requiredInbox,blinding:leaf.blinding,index:witness.index,path,
-      descended:false,issued_at:0,certificate:Array(64).fill(0)};
+      presentation_public_key:bytes(197),descended:false,issued_at:0,certificate:Array(64).fill(0)};
     await assert.rejects(new Noir(programs.record_epoch).execute(witnessInputs(programs.record_epoch,exact)));
   }
   await call({op:'record',record:stale.statement.record,proof:stale.proof,now},false);
