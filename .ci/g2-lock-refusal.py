@@ -1,4 +1,4 @@
-"""Retain a failed metadata probe's lock delta, then restore both frozen locks."""
+"""Retain a failed metadata probe's lock delta, then restore all three frozen locks."""
 import difflib
 import hashlib
 import json
@@ -36,10 +36,11 @@ def delta(before, after):
 
 
 label, locked_code, probe_code = sys.argv[1:]
-assert label in {'cblc', 'cwlt'} and int(locked_code) != 0
+assert label in {'cblc', 'cwlt', 'czkp'} and int(locked_code) != 0
 report = Path(os.environ['CBLC_DIAGNOSTIC_OUTPUT'])
 locks = {'Cargo.lock': Path('Cargo.lock'),
-         'cwlt-Cargo.lock': Path('experiments/private-accounting/node_modules/@corbet-labs/cwlt/Cargo.lock')}
+         'cwlt-Cargo.lock': Path('experiments/private-accounting/node_modules/@corbet-labs/cwlt/Cargo.lock'),
+         'czkp-Cargo.lock': Path('experiments/private-accounting/node_modules/@corbet-labs/czkp/Cargo.lock')}
 original = {name: (report / name).read_bytes() for name in locks}
 receipt = {'schema': 1, 'scope': 'failed-locked-metadata-diagnostic',
            'workspace': label, 'locked_exit_code': int(locked_code),

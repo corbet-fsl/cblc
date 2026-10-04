@@ -8,7 +8,7 @@ set -euo pipefail
 [[ "${CI_TEST_THREADS:?}" =~ ^[12]$ ]]
 [[ "${CI_MEMORY_MB:?}" =~ ^[0-9]+$ ]] && ((CI_MEMORY_MB > 0 && CI_MEMORY_MB <= 16384))
 export UV_THREADPOOL_SIZE=2 RAYON_NUM_THREADS=2 OMP_NUM_THREADS=2
-codec_commit=6e8755f2858dac3f72d61d8450158c2cd20d7d7c
+codec_commit=b1093a02efbf5597638206397f97976ecd993a39
 export G2_CODEC_COMMIT="$codec_commit"
 mkdir -p "$CARGO_HOME/ccid-artifacts/cblc-g2-diagnostic"
 report_dir=$(mktemp -d "$CARGO_HOME/ccid-artifacts/cblc-g2-diagnostic/$CI_COMMIT_SHA.XXXXXXXX")

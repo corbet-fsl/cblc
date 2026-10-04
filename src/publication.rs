@@ -38,6 +38,11 @@ pub struct PublicVerifierMaterial {
     /// Legacy documents remain readable but cannot authorize extension Waves.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wave_verifier: Option<cwlt::wave::WavePolicy>,
+    /// Public descriptor of the owner's durable common ciphertext publication.
+    /// Absence grants no record authority. Consumers independently require the
+    /// current Charter, configured period and record-specific time/context checks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub record_epoch: Option<czkp::record::Epoch>,
 }
 
 impl PublicVerifierMaterial {
@@ -91,6 +96,18 @@ impl PublicVerifierMaterial {
                 return Err(Error::PolicyMismatch);
             }
             wave.validate()?;
+        }
+        if let Some(record) = &self.record_epoch {
+            // Structural encoding only: the duration encoded in a descriptor
+            // cannot replace the relying owner's authenticated Rulebook period.
+            let period = record
+                .expires_at
+                .checked_sub(record.starts_at)
+                .ok_or(Error::InvalidInput)?;
+            record.validate(&community, period)?;
+            if record.policy_epoch != self.policy_epoch || record.proof_scope != self.proof_scope {
+                return Err(Error::PolicyMismatch);
+            }
         }
         Ok(())
     }

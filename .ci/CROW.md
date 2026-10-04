@@ -8,7 +8,7 @@ private witness, proof generation, service activation or qualification occurs.
 The normal full compiler and all original qualification gates remain required.
 
 The optional `.ci/archives.toml` source is the exact candidate commit
-`6e8755f2858dac3f72d61d8450158c2cd20d7d7c` from canonical
+`b1093a02efbf5597638206397f97976ecd993a39` from canonical
 `https://github.com/corbet-foss/czkp.git`. Before staging, that exact Git object
 and its tree must exist in this repository's local object database, imported
 from a verified local czkp clone. The dispatcher never fetches it implicitly.
@@ -53,15 +53,19 @@ Each root/Wallet workspace resolves once, with metadata enforcing one candidate
 per named owner and the same wasm-bindgen ABI. Every shared first-party package
 must have identical version/source identity (and resolved manifest path for a
 local package), with duplicate first-party names refused in each graph. The
-normalized graphs, compared owners and metadata hashes are retained. Both lock snapshots must remain
-unchanged during all subsequent builds/proofs; product manifests are hashed
+normalized graphs, compared owners and metadata hashes are retained. A separate
+original CZKP workspace resolves its dev-dependencies with an immutable empty
+patch snapshot; only its own package and registry dependencies are permitted. All
+three locks freeze immediately after their one resolution and must remain unchanged during all subsequent builds/proofs; product manifests are hashed
 before and checked afterwards, including the standalone experiment manifest.
 The current issuer executable comes from the
 actual Cargo compiler-artifact message and is passed explicitly to both fixture
 and replay, independent of the persistent target directory.
 
-The unchanged original closure producer must receive all seven exact archives as
-consumers: this root plus the six diagnostic candidates. Candidate Wallet has
+The unchanged original closure producer must receive all eight exact archives as
+consumers: this root plus the seven diagnostic candidates. The existing Beacon
+Balance API candidate is active for compilation only; it does not qualify current
+Policy publication or consumer authority. Candidate Wallet has
 optional main dependencies absent from ordinary Wallet main; a root-only closure
 is insufficient. Every first-party Git package in both metadata graphs and both
 resolved locks must match its canonical URL and observed main OID in the retained
@@ -73,7 +77,7 @@ checkpoint `6910adaa591c1f2e9f2b51da8e2ac2a5716cbaca` supplies Wallet's optional
 feature declaration, and cpsd `24a61c9500b4141b10abc1650c55767b4be9a9ef`
 supplies its compatible browser bridge dependency ranges. They are not compiled
 or qualified by a successful diagnostic. They add no engine/profile patches or feature
-activation. Metadata must identify only cblc/Wallet respectively as each
+activation. Metadata must identify only cblc/Wallet/CZKP respectively as each
 workspace's default build member. The complete dependency graph reachable from
 each selected root must exclude ckmg, cpsd and cwlt-engine, and Wallet passport must
 remain disabled. Wallet's separate engine workspace member may occur in metadata
@@ -81,6 +85,20 @@ without being selected. Both locks still bind every candidate and main source.
 Before proving, actual issuer compiler-artifact package IDs are checked against
 metadata to reject custody/engine compilation. Receipts retain both selected
 graph and compiled-package exclusions; no G3 or custody acceptance follows.
+
+Before proof generation, all four original Rust record integration tests run on
+native and Node-Wasm under the CZKP lock. Cargo's actual compiler JSON binds the
+sole record test artifact, original source path, features, package and dependency
+IDs; executable/metadata/lock hashes are checked before and after execution.
+Original CZKP archive-file hashes are bound at unpack (excluding only Cargo.lock),
+re-derived from the verified source archive and checked before both builds, at
+artifact binding/recheck and in the final composition guard.
+The Wasm runner follows the codec lock's wasm-bindgen version, reusing the already
+verified job-local runner when identical or acquiring the matching maintained
+upstream archive through the same existing helper. No shared tool changes occur.
+Both test logs must report four passes and no failures, ignores or filtered tests.
+Baseline/frozen/final locks, all three immutable patch snapshots, metadata,
+compiler streams, runner and test bindings remain in the diagnostic receipt.
 
 Before builds, the check executes/hashes the native bb binary from the original
 integrity-checked npm package. The matched bindgen CLI follows the existing

@@ -46,6 +46,49 @@ struct PublishedAnchor {
     extension_configuration: Vec<u8>,
 }
 
+/// Project only the actual atomic publication under the caller's already
+/// checked configuration transaction. Missing halves or corrupt bytes refuse;
+/// no supplied descriptor can replace the durable owner publication.
+#[cfg(feature = "publication")]
+pub(super) fn public_descriptor(
+    tx: &mut Transaction<'_>,
+    community: &[u8; 32],
+    policy_epoch: u64,
+    proof_scope: &AccountProofScope,
+    configuration: &[u8],
+    extension_configuration: &[u8],
+) -> Result<Option<czkp::record::Epoch>, Error> {
+    let publication: Option<RecordEpochPublication> = tx.get(PUBLISHED)?;
+    let anchor: Option<PublishedAnchor> = tx.get(ANCHOR)?;
+    let (publication, anchor) = match (publication, anchor) {
+        (None, None) => return Ok(None),
+        (Some(publication), Some(anchor)) => (publication, anchor),
+        _ => return Err(Error::Storage),
+    };
+    if publication.descriptor != anchor.descriptor
+        || anchor.frozen_at < anchor.descriptor.starts_at
+        || anchor.frozen_at >= anchor.descriptor.expires_at
+        || anchor.descriptor.leaf_count > MAX_FRONTIERS
+    {
+        return Err(Error::Storage);
+    }
+    tuning::check_epoch_config(&anchor.configuration, configuration)?;
+    if anchor.extension_configuration != extension_configuration
+        || anchor.descriptor.policy_epoch != policy_epoch
+        || &anchor.descriptor.proof_scope != proof_scope
+    {
+        return Err(Error::PolicyMismatch);
+    }
+    anchor
+        .descriptor
+        .validate(community, anchor.period_seconds)?;
+    publication
+        .descriptor
+        .check_object(&publication.object)
+        .map_err(|_| Error::Storage)?;
+    Ok(Some(publication.descriptor))
+}
+
 fn ancestry_key(owner: &[u8; 32]) -> Vec<u8> {
     [ANCESTRY_PREFIX, owner.as_slice()].concat()
 }

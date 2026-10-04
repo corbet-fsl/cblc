@@ -28,6 +28,14 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         let mut transaction = self.connection.transaction()?;
         check_config(&mut transaction, &self.config)?;
         check_extension_config(&mut transaction, Some(extensions))?;
+        let record_epoch = record_epoch::public_descriptor(
+            &mut transaction,
+            &self.community,
+            policy_epoch,
+            &extensions.verifier.scope(),
+            &self.config,
+            &extensions.config,
+        )?;
         transaction.rollback()?;
         let mut material = PublicVerifierMaterial {
             purpose: Purpose::PublicVerifierV1,
@@ -42,6 +50,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             account_response_key: self.operator.verifying_key().to_bytes(),
             certificate_key: binding.certificate_key,
             wave_verifier: None,
+            record_epoch,
         };
         material.wave_verifier = Some(material.wave_policy()?);
         material.validate(&self.trust.community_id)?;

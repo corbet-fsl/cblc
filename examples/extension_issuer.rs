@@ -5,6 +5,9 @@
 mod ancestry;
 #[path = "../tests/common/mod.rs"]
 mod common;
+#[cfg(feature = "publication")]
+#[path = "../tests/holder/epoch_publication.rs"]
+mod epoch_publication;
 use cblc::{
     Error,
     accounting::*,
@@ -121,6 +124,8 @@ fn main() {
                     )?;
                     opened
                         .admit_checkpoint(0, serde_json::from_value(v["root"].clone()).unwrap())?;
+                    #[cfg(feature = "publication")]
+                    epoch_publication::legacy(&mut opened);
                     *companion.lock().unwrap() = Some(
                         AccountLedger::open(
                             directory.path().join("issuer.db"),
@@ -430,6 +435,16 @@ fn main() {
                             assert_eq!(old.common_object(), published.common_object());
                         }
                     }
+                    #[cfg(feature = "publication")]
+                    epoch_publication::published(
+                        ledger.as_mut().unwrap(),
+                        &mut cssr::LibsqlStore::local(
+                            directory.path().join("issuer.db"),
+                            "community.example",
+                        )
+                        .unwrap(),
+                        &published,
+                    );
                     record_publication = Some(published);
                     Ok(json!(true))
                 }

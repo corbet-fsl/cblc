@@ -3,7 +3,7 @@ schema = 1
 # Exact diagnostic codec candidate, imported locally from the original czkp
 # repository. This is extra test source, never a claim about dependency main.
 [archives.g2_codec]
-revision = "6e8755f2858dac3f72d61d8450158c2cd20d7d7c"
+revision = "b1093a02efbf5597638206397f97976ecd993a39"
 archive_variable = "G2_CODEC_SOURCE_ARCHIVE"
 digest_variable = "G2_CODEC_SOURCE_SHA256"
 

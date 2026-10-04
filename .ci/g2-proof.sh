@@ -17,12 +17,17 @@ export UV_THREADPOOL_SIZE=2 RAYON_NUM_THREADS=2 OMP_NUM_THREADS=2
 mkdir -p "$CARGO_HOME/ccid-artifacts/cblc-g2-proof-diagnostic"
 report_dir=$(mktemp -d "$CARGO_HOME/ccid-artifacts/cblc-g2-proof-diagnostic/$CI_COMMIT_SHA.XXXXXXXX")
 export CBLC_DIAGNOSTIC_OUTPUT="$report_dir" CI_ACCEPTANCE_ARTIFACTS="$report_dir"
-wallet_dir="$(pwd -P)/experiments/private-accounting/node_modules/@corbet-labs/cwlt"
+source_root="$(pwd -P)"
+wallet_dir="$source_root/experiments/private-accounting/node_modules/@corbet-labs/cwlt"
+codec_dir="$source_root/experiments/private-accounting/node_modules/@corbet-labs/czkp"
 finish() {
     code=$?
     if [[ -f Cargo.lock ]]; then cp Cargo.lock "$report_dir/final-Cargo.lock"; fi
     if [[ -f "$wallet_dir/Cargo.lock" ]]; then
         cp "$wallet_dir/Cargo.lock" "$report_dir/final-cwlt-Cargo.lock"
+    fi
+    if [[ -f "$codec_dir/Cargo.lock" ]]; then
+        cp "$codec_dir/Cargo.lock" "$report_dir/final-czkp-Cargo.lock"
     fi
     python3 - "$report_dir" "$code" "$fixture" <<'PY'
 import hashlib, json, os, pathlib, sys
@@ -41,7 +46,7 @@ receipt = {'schema': 1, 'scope': scope,
            'repository': os.environ['CI_REPOSITORY_URL'],
            'observed_main_closure_sha256': os.environ['DEPENDENCY_CLOSURE_SHA256'],
            'candidate_sources': 'candidate-sources.json',
-           'candidate_patches': {name: f'candidate-patches-{name}.toml' for name in ['cblc', 'cwlt']},
+           'candidate_patches': {name: f'candidate-patches-{name}.toml' for name in ['cblc', 'cwlt', 'czkp']},
            'artifacts': files, 'product_acceptance': False, 'full_suite': False,
            'browser_evidence': False, 'wasm_opt_postprocessing': False,
            'resolution_only_candidates': {
@@ -96,7 +101,8 @@ assert((await readFile(process.env.CBLC_DIAGNOSTIC_OUTPUT+'/bb-version.txt','utf
 JS
 run python3 .ci/g2-candidates.py unpack
 cp "$wallet_dir/Cargo.lock" "$report_dir/baseline-cwlt-Cargo.lock"
-# Each actual workspace resolves once. Both exact resulting graphs are retained.
+cp "$codec_dir/Cargo.lock" "$report_dir/baseline-czkp-Cargo.lock"
+# Each original workspace resolves once and freezes immediately before any test.
 run python3 .ci/g2-candidates.py select-patches cblc resolve
 run cargo update
 cp Cargo.lock "$report_dir/Cargo.lock"
@@ -107,7 +113,14 @@ run cargo update --manifest-path "$wallet_dir/Cargo.toml"
 sha256sum --check --strict "$report_dir/cblc-resolved-lock.sha256"
 date -u +%FT%TZ > "$report_dir/resolved-at.txt"
 cp "$wallet_dir/Cargo.lock" "$report_dir/cwlt-Cargo.lock"
-sha256sum Cargo.lock "$wallet_dir/Cargo.lock" > "$report_dir/cargo-locks.sha256"
+sha256sum "$wallet_dir/Cargo.lock" > "$report_dir/cwlt-resolved-lock.sha256"
+run python3 .ci/g2-candidates.py select-patches czkp resolve
+run cargo update --manifest-path "$codec_dir/Cargo.toml"
+sha256sum --check --strict "$report_dir/cblc-resolved-lock.sha256" "$report_dir/cwlt-resolved-lock.sha256"
+cp "$codec_dir/Cargo.lock" "$report_dir/czkp-Cargo.lock"
+sha256sum "$codec_dir/Cargo.lock" > "$report_dir/czkp-resolved-lock.sha256"
+date -u +%FT%TZ > "$report_dir/czkp-resolved-at.txt"
+sha256sum Cargo.lock "$wallet_dir/Cargo.lock" "$codec_dir/Cargo.lock" > "$report_dir/cargo-locks.sha256"
 run python3 .ci/g2-candidates.py check-lock-patches
 metadata() {
     local label=$1 locked_code probe_code
@@ -122,7 +135,7 @@ metadata() {
     fi
     cat "$report_dir/$label-metadata.stderr" >&2
     # Refusal evidence only: a successful offline probe never permits a build.
-    # Preserve both resolved locks and restore their exact bytes after inspection.
+    # Preserve all three resolved locks and restore their exact bytes after inspection.
     if CARGO_LOG=cargo::ops::resolve=trace,cargo::ops::lockfile=trace,cargo::core::resolver=trace \
         timeout --kill-after=5s 30s cargo metadata --offline "$@" \
         > "$report_dir/$label-refusal-probe-metadata.json" \
@@ -137,6 +150,7 @@ metadata() {
 }
 metadata cblc --all-features --format-version 1
 metadata cwlt --manifest-path "$wallet_dir/Cargo.toml" --format-version 1
+metadata czkp --manifest-path "$codec_dir/Cargo.toml" --all-features --format-version 1
 run python3 .ci/g2-candidates.py select-patches cblc check
 run python3 .ci/g2-candidates.py check
 # Original matched upstream CLI acquisition, scoped to this job's artifact path.
@@ -144,6 +158,67 @@ run bash .ci/g2-wasm-runner.sh
 export PATH="$report_dir/runner:$PATH"
 export WASM_PACK_CACHE="$PWD/.g2-wasm-pack-cache"
 mkdir "$WASM_PACK_CACHE"
+# Codec integration tests need their original workspace and its own frozen lock.
+run python3 .ci/g2-candidates.py select-patches czkp codec-native
+run python3 .ci/g2-candidates.py check-codec-source
+cargo test --locked --all-features --manifest-path "$codec_dir/Cargo.toml" --test record \
+    --no-run --message-format=json > "$report_dir/codec-native-build.json"
+codec_native=$(python3 .ci/g2-candidates.py codec-artifact native)
+codec_native_test() { (cd "$codec_dir"; "$codec_native" --test-threads="$CI_TEST_THREADS"); }
+run codec_native_test | tee "$report_dir/codec-native-test.log"
+run python3 .ci/g2-candidates.py verify-codec-artifact native
+run python3 .ci/g2-candidates.py select-patches czkp codec-wasm
+run python3 .ci/g2-candidates.py check-codec-source
+cargo test --locked --all-features --manifest-path "$codec_dir/Cargo.toml" --test record \
+    --target wasm32-unknown-unknown --no-run --message-format=json > "$report_dir/codec-wasm-build.json"
+codec_wasm=$(python3 .ci/g2-candidates.py codec-artifact wasm)
+codec_abi=$(python3 - "$codec_dir/Cargo.lock" <<'PYCODEC'
+import sys, tomllib
+versions = {p['version'] for p in tomllib.load(open(sys.argv[1], 'rb'))['package'] if p['name'] == 'wasm-bindgen'}
+assert len(versions) == 1
+print(versions.pop())
+PYCODEC
+)
+codec_runner_dir="$report_dir/runner"
+if [[ "$("$codec_runner_dir/wasm-bindgen" --version)" != "wasm-bindgen $codec_abi" ]]; then
+    mkdir "$report_dir/codec"
+    (cd "$codec_dir"; CI_ACCEPTANCE_ARTIFACTS="$report_dir/codec" bash "$source_root/.ci/g2-wasm-runner.sh")
+    codec_runner_dir="$report_dir/codec/runner"
+fi
+test "$("$codec_runner_dir/wasm-bindgen" --version)" = "wasm-bindgen $codec_abi"
+sha256sum "$codec_runner_dir/wasm-bindgen" "$codec_runner_dir/wasm-bindgen-test-runner" > "$report_dir/codec-runner.sha256"
+python3 - "$report_dir" "$codec_runner_dir" "$codec_abi" <<'PYCODEC'
+import hashlib, json, pathlib, sys
+report, runner, version = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
+def digest(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+(report / 'codec-runner-binding.json').write_text(json.dumps({
+    'wasm_bindgen_version': version, 'codec_lock_sha256': digest(report / 'czkp-Cargo.lock'),
+    'runner_directory': str(runner), 'upstream_artifacts_sha256': digest(runner / 'runner-artifact.sha256'),
+    'test_runner_sha256': digest(runner / 'wasm-bindgen-test-runner'),
+    'wasm_bindgen_sha256': digest(runner / 'wasm-bindgen'),
+}, indent=2, sort_keys=True) + '\n')
+PYCODEC
+sha256sum --check --strict "$report_dir/codec-runner.sha256"
+run python3 .ci/g2-candidates.py verify-codec-artifact wasm
+codec_wasm_test() { (cd "$codec_dir"; "$codec_runner_dir/wasm-bindgen-test-runner" "$codec_wasm"); }
+run codec_wasm_test | tee "$report_dir/codec-wasm-test.log"
+sha256sum --check --strict "$report_dir/codec-runner.sha256"
+run python3 .ci/g2-candidates.py verify-codec-artifact wasm
+python3 - "$report_dir" <<'PYCODEC'
+import json, pathlib, re, sys
+report = pathlib.Path(sys.argv[1])
+for target in ['native', 'wasm']:
+    text = (report / f'codec-{target}-test.log').read_text()
+    if not re.search(r'test result: ok\. 4 passed; 0 failed; 0 ignored;', text) or '0 filtered out' not in text:
+        raise SystemExit('Expected all four original record integration tests: ' + target)
+(report / 'codec-test-results.json').write_text(json.dumps({
+    'native_tests_passed': 4, 'node_wasm_tests_passed': 4,
+    'test_target': 'record', 'product_acceptance': False,
+}, indent=2, sort_keys=True) + '\n')
+PYCODEC
+sha256sum --check --strict "$report_dir/cargo-locks.sha256"
 run python3 .ci/g2-candidates.py select-patches cblc fmt
 run cargo fmt --all -- --check
 run python3 .ci/g2-candidates.py select-patches cblc issuer

@@ -13,7 +13,7 @@ NPM_CANDIDATES = ROOT / 'experiments/private-accounting/node_modules/@corbet-lab
 REPORT = Path(os.environ['CBLC_DIAGNOSTIC_OUTPUT'])
 SOURCES = {
     'cssr': ('1091bafed66d9127a5f4ea4513cdf224470c4eea', 'CSSR', ROOT / '.g2-candidates/cssr'),
-    'czkp': ('6e8755f2858dac3f72d61d8450158c2cd20d7d7c', 'CODEC', NPM_CANDIDATES / 'czkp'),
+    'czkp': ('b1093a02efbf5597638206397f97976ecd993a39', 'CODEC', NPM_CANDIDATES / 'czkp'),
     'cvfy': ('30a78099a27581ee16ed17a589e64d089a839182', 'CVFY', ROOT / '.g2-candidates/cvfy'),
     'cwlt': ('ed86f90c41f31dc23a7e439ab88d64b246676a08', 'CWLT', NPM_CANDIDATES / 'cwlt'),
     'cbcn': ('22f3179cd661f46e6d77fda197b171f6c83c637c', 'CBCN', ROOT / '.g2-candidates/cbcn'),
@@ -23,7 +23,8 @@ SOURCES = {
 RESOLUTION_ONLY = {'ckmg', 'cpsd'}
 EXCLUDED_BUILDS = RESOLUTION_ONLY | {'cwlt-engine'}
 PATCH_SETS = {'cblc': {'cssr', 'czkp', 'cvfy', 'cwlt', 'cbcn'},
-              'cwlt': {'czkp', 'cwlt', 'ckmg', 'cpsd', 'cbcn'}}
+              'cwlt': {'czkp', 'cwlt', 'ckmg', 'cpsd', 'cbcn'},
+              'czkp': set()}
 
 
 def digest(path):
@@ -61,9 +62,25 @@ def check_patches(label=None):
     return matched[0]
 
 
+def check_frozen_locks(required=None):
+    required = set(PATCH_SETS) if required is None else required
+    for label, name, path in [('cblc', 'Cargo.lock', ROOT / 'Cargo.lock'),
+                              ('cwlt', 'cwlt-Cargo.lock', SOURCES['cwlt'][2] / 'Cargo.lock'),
+                              ('czkp', 'czkp-Cargo.lock', SOURCES['czkp'][2] / 'Cargo.lock')]:
+        binding = REPORT / f'{label}-resolved-lock.sha256'
+        if label in required and not binding.exists():
+            raise ValueError(f'{label}: frozen workspace lock binding is missing')
+        if binding.exists():
+            expected = binding.read_text().split()[0]
+            if not re.fullmatch('[0-9a-f]{64}', expected) or digest(path) != expected or digest(REPORT / name) != expected:
+                raise ValueError(f'{label}: frozen workspace lock changed')
+
+
 def select_patches(label, phase):
     previous = check_patches()
-    if label not in PATCH_SETS or phase not in {'resolve', 'metadata', 'check', 'fmt', 'issuer', 'wasm', 'proof'}:
+    required = {'cblc': set(), 'cwlt': {'cblc'}, 'czkp': {'cblc', 'cwlt'}}.get(label, set()) if phase == 'resolve' else set(PATCH_SETS)
+    check_frozen_locks(required)
+    if label not in PATCH_SETS or phase not in {'resolve', 'metadata', 'check', 'fmt', 'issuer', 'wasm', 'proof', 'codec-native', 'codec-wasm'}:
         raise ValueError('Unknown workspace patch phase')
     config = ROOT / '.cargo/config.toml'
     pending = config.with_name('g2-next.toml')
@@ -86,7 +103,9 @@ def metadata_patch_receipt(label):
 
 def check_lock_patches():
     receipts = {}
-    for label, path in [('cblc', ROOT / 'Cargo.lock'), ('cwlt', SOURCES['cwlt'][2] / 'Cargo.lock')]:
+    for label, path in [('cblc', ROOT / 'Cargo.lock'),
+                        ('cwlt', SOURCES['cwlt'][2] / 'Cargo.lock'),
+                        ('czkp', SOURCES['czkp'][2] / 'Cargo.lock')]:
         lock = tomllib.loads(path.read_text())
         if lock.get('patch', {}).get('unused'):
             raise ValueError(f'{label}: unexpected unused patch; refuse unstable lock serialization')
@@ -163,7 +182,10 @@ def graph_comparison(metadata, observed):
     for name in shared:
         if graphs['cblc'][name] != graphs['cwlt'][name]:
             raise ValueError(f'Root and Wallet resolved different first-party identity: {name}')
+    if set(graphs['czkp']) != {'czkp'} or graphs['czkp']['czkp'] != graphs['cblc']['czkp']:
+        raise ValueError('Codec workspace must select the same sole exact CZKP owner')
     receipt = {'schema': 1, 'graphs': graphs, 'compared_shared_owners': shared,
+               'codec_shared_owners': ['czkp'],
                'observed_main_sources': observed,
                'workspace_patches': {label: json.loads((REPORT / f'{label}-metadata-patches.json').read_text())
                                      for label in metadata},
@@ -176,7 +198,7 @@ def graph_comparison(metadata, observed):
 def selected_scope(metadata):
     receipts = {}
     for label, graph in metadata.items():
-        target = ROOT if label == 'cblc' else SOURCES['cwlt'][2]
+        target = ROOT if label == 'cblc' else SOURCES[label][2]
         selected = [p for p in graph['packages']
                     if Path(p['manifest_path']).resolve() == (target / 'Cargo.toml').resolve()]
         if len(selected) != 1 or selected[0]['name'] != label:
@@ -228,6 +250,101 @@ def check_issuer_build():
         'resolution_only_qualified': False}, indent=2, sort_keys=True) + '\n')
 
 
+def codec_source_snapshot():
+    archive = Path(os.environ['G2_CODEC_SOURCE_ARCHIVE'])
+    expected = os.environ['G2_CODEC_SOURCE_SHA256']
+    if digest(archive) != expected:
+        raise ValueError('Codec archive changed')
+    with tarfile.open(archive, mode='r:') as source:
+        files = {item.name: hashlib.sha256(source.extractfile(item).read()).hexdigest()
+                 for item in source.getmembers() if item.isfile() and item.name != 'Cargo.lock'}
+    return {'candidate_commit': SOURCES['czkp'][0], 'archive_sha256': expected,
+            'excluded': ['Cargo.lock'], 'files': files}
+
+
+def check_codec_source():
+    snapshot = codec_source_snapshot()
+    if json.loads((REPORT / 'codec-source-files.json').read_text()) != snapshot:
+        raise ValueError('Original codec source snapshot changed')
+    root = SOURCES['czkp'][2]
+    files = {}
+    for path in root.rglob('*'):
+        if path.is_symlink():
+            raise ValueError('Codec source cannot acquire symlinks')
+        if path.is_file() and path != root / 'Cargo.lock':
+            files[str(path.relative_to(root))] = digest(path)
+    if files != snapshot['files']:
+        raise ValueError('Original codec archive files changed')
+
+
+def codec_artifact(variant, verify=False):
+    if variant not in {'native', 'wasm'}:
+        raise ValueError('Unknown codec target')
+    check_patches('czkp')
+    check_frozen_locks()
+    check_codec_source()
+    codec = SOURCES['czkp'][2]
+    metadata_path = REPORT / 'czkp-metadata.json'
+    stream_path = REPORT / f'codec-{variant}-build.json'
+    metadata = json.loads(metadata_path.read_text())
+    if json.loads((REPORT / 'czkp-metadata-patches.json').read_text()) != metadata_patch_receipt('czkp'):
+        raise ValueError('Codec metadata patch binding changed')
+    root = metadata['resolve']['root']
+    packages = {p['id']: p for p in metadata['packages']}
+    if len(packages) != len(metadata['packages']) or metadata['workspace_members'] != [root] or metadata['workspace_default_members'] != [root]:
+        raise ValueError('Codec tests require the original sole-package workspace')
+    package = packages[root]
+    if package['name'] != 'czkp' or package['source'] is not None or Path(package['manifest_path']).resolve() != codec / 'Cargo.toml':
+        raise ValueError('Codec test root differs from candidate')
+    target_source = codec / 'tests/record.rs'
+    targets = [t for t in package['targets'] if t['name'] == 'record' and t['kind'] == ['test']]
+    if len(targets) != 1 or Path(targets[0]['src_path']).resolve() != target_source:
+        raise ValueError('Expected original record integration test source')
+    features = next(n['features'] for n in metadata['resolve']['nodes'] if n['id'] == root)
+    artifacts, compiled = [], set()
+    messages = [json.loads(line) for line in stream_path.read_text().splitlines()]
+    if len([m for m in messages if m.get('reason') == 'build-finished' and m.get('success') is True]) != 1:
+        raise ValueError('Codec compiler stream did not finish successfully')
+    for message in messages:
+        if message.get('reason') not in {'compiler-artifact', 'build-script-executed'}:
+            continue
+        identity = message['package_id']
+        current = packages[identity]
+        if identity != root and not (current['source'] or '').startswith('registry+'):
+            raise ValueError('Unexpected first-party or path code in codec compilation')
+        compiled.add(identity)
+        target = message.get('target', {})
+        if identity == root and target.get('name') == 'record' and target.get('kind') == ['test']:
+            if message.get('profile', {}).get('test') is not True or sorted(message.get('features', [])) != sorted(features) or Path(target['src_path']).resolve() != target_source:
+                raise ValueError('Codec test target or features differ from metadata')
+            artifacts.append(message)
+    if len(artifacts) != 1 or not artifacts[0].get('executable'):
+        raise ValueError('Expected one actual compiled codec test executable')
+    executable = Path(artifacts[0]['executable'])
+    target_dir = Path(os.environ['CARGO_TARGET_DIR']).resolve(strict=True)
+    if not executable.is_absolute() or not executable.is_file() or not executable.resolve(strict=True).is_relative_to(target_dir) or str(executable) not in artifacts[0]['filenames']:
+        raise ValueError('Codec artifact must identify the actual target output')
+    if (executable.suffix == '.wasm') != (variant == 'wasm'):
+        raise ValueError('Codec artifact target mismatch')
+    receipt = {'variant': variant, 'executable': str(executable),
+               'artifact_sha256': digest(executable), 'package_id': root,
+               'candidate_commit': SOURCES['czkp'][0],
+               'source_snapshot_sha256': digest(REPORT / 'codec-source-files.json'),
+               'target_source_sha256': digest(target_source),
+               'metadata_sha256': digest(metadata_path), 'compiler_stream_sha256': digest(stream_path),
+               'lock_sha256': digest(codec / 'Cargo.lock'),
+               'patch_sha256': hashlib.sha256(patch_bytes('czkp')).hexdigest(),
+               'compiled_packages': sorted(compiled), 'product_acceptance': False}
+    receipt_path = REPORT / f'codec-{variant}-test-binding.json'
+    if verify:
+        if json.loads(receipt_path.read_text()) != receipt:
+            raise ValueError('Codec test artifact identity changed')
+    else:
+        with receipt_path.open('x') as stream:
+            stream.write(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+    return str(executable)
+
+
 def unpack():
     records = []
     for name, (oid, prefix, target) in SOURCES.items():
@@ -256,6 +373,9 @@ def unpack():
                         'commit': oid, 'sha256': expected, 'path': str(target),
                         'identity': 'explicit diagnostic candidate, not observed main',
                         'resolution_only': name in RESOLUTION_ONLY, 'qualified_by_diagnostic': False})
+    (REPORT / 'codec-source-files.json').write_text(
+        json.dumps(codec_source_snapshot(), indent=2, sort_keys=True) + '\n')
+    check_codec_source()
     (REPORT / 'candidate-npm-paths.json').write_text(
         json.dumps(check_candidate_paths(), indent=2, sort_keys=True) + '\n')
     config = ROOT / '.cargo/config.toml'
@@ -274,9 +394,12 @@ def check():
     if json.loads((REPORT / 'source-manifests.json').read_text()) != manifests():
         raise ValueError('Product manifest changed during diagnostic')
     check_patches('cblc')
+    check_codec_source()
     check_lock_patches()
+    check_frozen_locks()
     graphs = {}
-    for label, required in [('cblc', set(SOURCES) - RESOLUTION_ONLY), ('cwlt', {'cwlt', 'czkp'})]:
+    for label, required in [('cblc', set(SOURCES) - RESOLUTION_ONLY), ('cwlt', {'cwlt', 'czkp'}),
+                            ('czkp', {'czkp'})]:
         metadata = graphs[label] = json.loads((REPORT / f'{label}-metadata.json').read_text())
         receipt = json.loads((REPORT / f'{label}-metadata-patches.json').read_text())
         expected = {'workspace': label, 'phase': 'metadata',
@@ -291,6 +414,13 @@ def check():
                 continue
             if len(packages) != 1 or packages[0]['source'] is not None or Path(packages[0]['manifest_path']).resolve() != (path / 'Cargo.toml').resolve():
                 raise ValueError(f'{label}: {name} did not resolve to one exact candidate')
+    codec = graphs['czkp']
+    root_id = codec['resolve']['root']
+    if codec['workspace_members'] != [root_id]:
+        raise ValueError('Codec tests require the original sole-package workspace')
+    for package in codec['packages']:
+        if package['id'] != root_id and not (package['source'] or '').startswith('registry+'):
+            raise ValueError('Codec graph must contain only its original package and registry dependencies')
     selected_scope(graphs)
     observed = observed_sources()
     graph_comparison(graphs, observed)
@@ -327,8 +457,14 @@ if __name__ == '__main__':
         check()
     elif sys.argv[1:] == ['check-issuer-build']:
         check_issuer_build()
+    elif sys.argv[1:] == ['check-codec-source']:
+        check_patches('czkp')
+        check_frozen_locks()
+        check_codec_source()
     elif sys.argv[1:] == ['check-lock-patches']:
         check_lock_patches()
+    elif len(sys.argv) == 3 and sys.argv[1] in {'codec-artifact', 'verify-codec-artifact'}:
+        print(codec_artifact(sys.argv[2], verify=sys.argv[1] == 'verify-codec-artifact'))
     elif len(sys.argv) == 4 and sys.argv[1] == 'select-patches':
         select_patches(sys.argv[2], sys.argv[3])
     elif len(sys.argv) == 3 and sys.argv[1] == 'verify-patches':
