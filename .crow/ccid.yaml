@@ -7,6 +7,10 @@ variables:
   SOURCE_SHA256: {default: ""}
   G2_CODEC_SOURCE_ARCHIVE: {default: ""}
   G2_CODEC_SOURCE_SHA256: {default: ""}
+  G2_WAVE_EVIDENCE_ARCHIVE: {default: ""}
+  G2_WAVE_EVIDENCE_SHA256: {default: ""}
+  G2_WAVE_PEER_ARCHIVE: {default: ""}
+  G2_WAVE_PEER_SHA256: {default: ""}
   G2_CSSR_SOURCE_ARCHIVE: {default: ""}
   G2_CSSR_SOURCE_SHA256: {default: ""}
   G2_CVFY_SOURCE_ARCHIVE: {default: ""}
@@ -70,7 +74,7 @@ steps:
             --commit "$$CI_COMMIT_SHA" --check "$$CHECKS"
         fi
         case "$$CHECKS" in
-          g2-proof-diagnostic|g2-full-extension) ;;
+          g2-proof-diagnostic|g2-full-extension|g2-wave-worker-replay|g2-wave-peer-replay) ;;
           *) exit 2 ;;
         esac
         : "$${DEPENDENCY_SOURCE_ARCHIVE:?}" "$${DEPENDENCY_SOURCE_SHA256:?}"
