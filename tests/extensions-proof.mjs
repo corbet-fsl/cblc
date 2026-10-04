@@ -2,7 +2,7 @@
 // No member opening is written to disk or passed to the issuer process.
 import assert from 'node:assert/strict';
 import {createHash,createECDH,createPrivateKey,generateKeyPairSync,sign} from 'node:crypto';
-import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
@@ -10,16 +10,21 @@ import {createInterface} from 'node:readline';
 import {cpus,totalmem} from 'node:os';
 import {Barretenberg,BackendType,UltraHonkBackend} from '@aztec/bb.js';
 import {Noir} from '@noir-lang/noir_js';
-import {OPTIONS,hex,canonicalSignature,zeros} from '@corbet-labs/czkp/encoding';
+import {OPTIONS,hex,be,canonicalSignature,zeros} from '@corbet-labs/czkp/encoding';
 import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
+import {recordEpochPublicInputs} from '@corbet-labs/czkp/record';
 import {createProver} from '@corbet-labs/czkp/prove';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mjs';
+import {verify as verifyExtension} from '../runtime/extensions/node-verifier.mjs';
 import init,{prepare} from '../.extension-wasm/cwlt.js';
 await init({module_or_path:await readFile('.extension-wasm/cwlt_bg.wasm')});
 const transition=input=>JSON.parse(prepare(JSON.stringify(input)));
+const recordDiagnostic=process.argv.length===3&&process.argv[2]==='--record-diagnostic';
+if(process.argv.length!==2&&!recordDiagnostic)throw new Error('Unknown extension fixture selector');
+if(recordDiagnostic&&!process.env.CBLC_EXTENSION_DIRECTORY)throw new Error('Separate diagnostic artifact directory required');
 const directory=resolve(process.env.CBLC_EXTENSION_DIRECTORY??'.extension-test');
 const sha=b=>createHash('sha256').update(b).digest();
 const bytes=n=>new Uint8Array(32).fill(n);
@@ -38,7 +43,7 @@ for(const f of lock.files){
 const keyApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const keys={};
 try{await keyApi.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2Point:setup['g2.dat']});
-  for(const kind of ['update','deposit','record','wave','outcome'])keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
+  for(const kind of ['update','deposit','record','record_epoch','wave','outcome'])keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
 }finally{await keyApi.destroy();}
 const keyBytes=Buffer.from(JSON.stringify(keys));await writeFile(resolve(directory,'keys.json'),keyBytes);
 const issuer=createECDH('prime256v1');issuer.setPrivateKey(Buffer.alloc(32,3));
@@ -49,15 +54,16 @@ const configPath=resolve(directory,'config.json');await writeFile(configPath,JSO
 const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
 const hashApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const hashes=extensionHashes(hashApi);
-const child=spawn(resolve('target/debug/examples/extension_issuer'),[configPath],{stdio:['pipe','pipe','inherit']});
+const child=spawn(resolve(process.env.CBLC_EXTENSION_ISSUER??'target/debug/examples/extension_issuer'),[configPath],{stdio:['pipe','pipe','inherit']});
 let pending;const lines=createInterface({input:child.stdout});
 lines.on('line',line=>{const waiter=pending;pending=undefined;if(!waiter)throw new Error('Unexpected issuer reply');waiter.resolve(JSON.parse(line));});
 child.on('exit',code=>{if(pending)pending.reject(new Error(`Issuer exited ${code}`));});
-async function call(request,expected=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
+async function call(request,expected=true,retain=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
   assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);publicCases.push({operation:request.op,ok:result.ok,error:result.error});
-  publicTrace.push({request:structuredClone(request),response:result});return result.value;}
+  if(retain)publicTrace.push({request:structuredClone(request),response:result});return result.value;}
 let activeProver;
 async function proof(kind,input,label,measure=false){
+  if(recordDiagnostic&&kind!=='record_epoch')measure=false;
   const selected=artifacts.artifacts(kind),witness=witnessInputs(selected.circuit,input),expected=publicInputs(selected.circuit,input);
   let chosen;
   for(const backendType of measure?['NativeUnixSocket','Wasm']:['NativeUnixSocket']){
@@ -72,15 +78,16 @@ async function proof(kind,input,label,measure=false){
   return chosen;
 }
 const encodeBundle=proofs=>Buffer.from(JSON.stringify({version:1,proofs})).toString('hex');
-let now=110;
-async function submit(member,candidates,label,measure=false,expected=true){
+let now=110,publishedEpoch;
+async function submit(member,candidates,label,measure=false,expected=true,options={}){
   const proofs=[];
   for(let i=0;i<candidates.length;i++){
     const c=candidates[i];proofs.push({state:c.statement.nextState,inbox:toArray(c.input.inbox),proof:c.preparedProof??await proof('update',c.input,label,measure&&i===candidates.length-1)});
   }
   const first=candidates[0],last=candidates.at(-1),statement={...last.statement,previousState:first.statement.previousState};
   const update={previousInbox:{root:toArray(first.input.previous_inbox)},inbox:{root:toArray(last.input.inbox)},effect:last.update?.effect??{kind:'update'}};
-  const request={op:'apply',member,statement,update,proof:encodeBundle(proofs)};
+  const request={op:'apply',member,statement,update,proof:encodeBundle(proofs),
+    expectAncestry:publishedEpoch!==undefined&&statement.now<(publishedEpoch+1)*100,...options};
   const certificate=await call(request,expected);
   if(expected) {
     const original=last.next,limits={maxBytes:1024*1024,maxMapEntries:256,maxSlots:64};
@@ -136,6 +143,11 @@ try{
   await call(badActivation,false);
   await call(initialize);
   for(let i=0;i<4;i++)members[i]=(await submit(7+i,[genesis[i]],'genesis')).next;
+  await call({op:'retry',member:7,now}); // No epoch: retry must retain the original absence.
+  for(let i=0;i<4;i++)await call({op:'recordRecipient',member:7+i,now});
+  await call({op:'recordEpochRollback',now});
+  await call({op:'recordEpoch',now,failCommit:true},false);
+  await call({op:'retry',member:7,now}); // Failed publication installs no marker or clock.
   const record=async(index,label,measure=false)=>anonymous(members[index].record({purpose:'forumListing',challenge:toArray(bytes(now%255)),expiresAt:now+90}),label,measure);
   const stale=await record(0,'record-below-quorum');
   assert.equal(await call({op:'record',record:stale.statement.record,proof:stale.proof,now}),null);
@@ -170,19 +182,100 @@ try{
   const batch=deposits.map(d=>({deposit:d.statement.deposit,proof:d.proof}));
   await call({op:'deposit',batch,now});
   await call({op:'deposit',batch,now}); // Exact retry cannot append twice.
+  // A real verified update during preparation must remain available and make
+  // the stale candidate publication fail; no unpublished lineage can escape.
+  members[2]=(await submit(9,[await members[2].reblind(now++)],'publication-racing-update',false,true,{racePublication:true})).next;
+  await call({op:'recordEpoch',now});publishedEpoch=Math.floor(now/100);
+  await call({op:'recordEpoch',now}); // Actual publication returns the original object.
+  const tuning=await call({op:'tuneWaiting',seconds:120,now});
+  assert.equal(tuning.revision,1);
+  for(let i=0;i<members.length;i++)members[i]=await members[i].withPolicy({...policy,abandonAfter:tuning.seconds});
+  await call({op:'recordEpoch',now}); // Same root/object survives authorized waiting-only tuning.
+  await call({op:'retry',member:7,now}); // Publishing cannot recertify a prior acceptance.
+  const recordEpochProofs=[];
+  let priorAncestrySignature;
+  async function epochRecord(index,label,measure=false){
+    // Fictional member-only decryption output. Never retained in publicTrace,
+    // result reports or proof artifacts; only the resulting ZK proof is public.
+    const witness=await call({op:'recordWitness',member:7+index},true,false);
+    const context={purpose:'forumListing',challenge:toArray(bytes(193+index)),expiresAt:Math.min(now+50,witness.epoch.expiresAt)};
+    const candidate=await members[index].recordEpoch(context,witness,artifacts.scope,manifest.issuerKey);
+    const encoded=await proof('record_epoch',candidate.input,label,measure);
+    const record={statement:candidate.statement,proof:encodeBundle([{proof:encoded}]),proofScope:artifacts.scope};
+    await verifyExtension(record,artifacts);recordEpochProofs.push(record);
+    for(const field of ['challenge','purpose','community','owner','root','epoch','scope','shares']){
+      const changed=structuredClone(record),r=changed.statement.record;
+      if(field==='challenge')r.context.challenge[0]^=1;
+      else if(field==='purpose')r.context.purpose='firstContact';
+      else if(field==='community')r.epoch.community[0]^=1;
+      else if(field==='owner')r.owner[0]^=1;
+      else if(field==='root')r.epoch.root[0]^=1;
+      else if(field==='epoch')r.epoch.epoch+=1;
+      else if(field==='shares')r.shares=r.shares===null?[0,0,10000]:null;
+      else r.epoch.proofScope.verifyingKeyDigest[0]^=1;
+      await assert.rejects(verifyExtension(changed,artifacts));
+    }
+    if(candidate.input.descended){
+      const highS=Array.from(candidate.input.certificate),order=0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+      highS.splice(32,32,...be(order-BigInt('0x'+hex(highS.slice(32))),32));
+      for(const change of [v=>{v.certificate[0]^=1;},v=>{v.frozen_state[31]^=1;},
+        v=>{v.required_inbox[0]^=1;},v=>{v.issued_at=v.epoch_start-1;},v=>{v.path[0][0]^=1;},
+        v=>{v.version+=1n;},v=>{v.descended=false;},v=>{v.certificate=highS;},
+        ...(priorAncestrySignature?[v=>{v.certificate=priorAncestrySignature;}]:[])]){
+        const changed=structuredClone(candidate.input);change(changed);
+        await assert.rejects(new Noir(programs.record_epoch).execute(witnessInputs(programs.record_epoch,changed)));
+      }
+      priorAncestrySignature=Array.from(candidate.input.certificate);
+    }
+    return candidate.statement.record.shares;
+  }
+  assert.equal(await epochRecord(1,'record-epoch-exact',true),null);
+  {
+    // Genuine frozen state with a pending punishment: exact state/version alone
+    // must not authorize an exact-branch proof before the required inbox drains.
+    const witness=await call({op:'recordWitness',member:7},true,false);
+    const context={purpose:'forumListing',challenge:toArray(bytes(197)),expiresAt:Math.min(now+50,witness.epoch.expiresAt)};
+    await assert.rejects(members[0].recordEpoch(context,witness,artifacts.scope,manifest.issuerKey));
+    const local=members[0].record(context),leaf=witness.leaf;
+    const {extension,version,state,state_policy,registered_secret,opening}=local.input;
+    assert.equal(Number(version),leaf.version);assert.deepEqual(toArray(state),leaf.state);
+    assert.notDeepEqual(toArray(opening.inbox),leaf.requiredInbox);
+    const path=structuredClone(witness.path);while(path.length<32)path.push(Array(32).fill(0));
+    const record={epoch:witness.epoch,owner:local.statement.record.owner,context,shares:local.statement.record.shares};
+    const exact={...recordEpochPublicInputs(record,artifacts.scope,manifest.issuerKey),extension,
+      version,state,state_policy,registered_secret,opening,frozen_version:leaf.version,frozen_state:leaf.state,
+      required_inbox:leaf.requiredInbox,blinding:leaf.blinding,index:witness.index,path,
+      descended:false,issued_at:0,certificate:Array(64).fill(0)};
+    await assert.rejects(new Noir(programs.record_epoch).execute(witnessInputs(programs.record_epoch,exact)));
+  }
   await call({op:'record',record:stale.statement.record,proof:stale.proof,now},false);
   await call({op:'record',record:beforeQueueRecord.statement.record,proof:beforeQueueRecord.proof,now},false);
   const omitted=await members[0].reblind(now++);
   await submit(7,[omitted],'stale-frontier',false,false);
-  async function drain(index){
+  async function drain(index,refuseCommit=false){
     const queued=await call({op:'inbox',member:7+index,now,owner:toArray(members[index].owner.member)});assert(queued.entries.length>0);
     let holder=members[index];const steps=[];
     for(const entry of queued.entries){const c=await holder.consume(entry,now);steps.push(c);holder=c.next;}
     const final=await holder.reblind(now++);steps.push(final);
-    members[index]=(await submit(7+index,steps,'forced-ingestion')).next;
+    // Reuse the genuine proof bytes to check a failed atomic commit and then
+    // accept the SAME predecessor/obligation chain without generating them twice.
+    if(refuseCommit){
+      const failed=await submit(7+index,steps,'failed-ingestion-commit',false,false,{failCommit:true});
+      const bundle=JSON.parse(Buffer.from(failed.request.proof,'hex'));
+      steps.forEach((step,i)=>step.preparedProof=bundle.proofs[i].proof);
+      const stillQueued=await call({op:'inbox',member:7+index,now:final.statement.now,owner:toArray(members[index].owner.member)});
+      assert.deepEqual(stillQueued.entries,queued.entries);
+    }
+    members[index]=(await submit(7+index,steps,'forced-ingestion',false,true,
+      {refuseUncertified:publishedEpoch!==undefined&&final.statement.now<(publishedEpoch+1)*100,
+        probeAncestry:refuseCommit})).next;
+    await call({op:'retry',member:7+index,now});
     const empty=await call({op:'inbox',member:7+index,now,owner:toArray(members[index].owner.member)});assert.equal(empty.entries.length,0);
   }
-  await drain(0);await drain(3);
+  await drain(0,true);
+  assert.equal(await epochRecord(0,'record-epoch-late-ingestion',true),null);
+  if(!recordDiagnostic){
+  await drain(3);
   assert.equal(members[0].opening.available,2n);assert.equal(members[0].opening.punished,1n);
   await assert.rejects(members[0].expire(first.outgoing,now));
   const below=await record(0,'record-below');assert.equal(await call({op:'record',record:below.statement.record,proof:below.proof,now}),null);
@@ -204,8 +297,20 @@ try{
   peerLines.on('line',line=>{const w=peerWait;peerWait=undefined;w.resolve(JSON.parse(line));});
   peerVerifier.on('exit',code=>{if(peerWait)peerWait.reject(new Error(`Peer verifier exited ${code}`));});
   const publicWaveTrace=[];
+  // Retain only this fictional fixture's public boundary, including a refusal.
+  // The pending request survives a process exit; private inputs stay in memory.
+  async function retainWaveAttempt(request,expectedVerified,reply=null){
+    assert(publicWaveTrace.length<128);
+    const attempt={sequence:publicWaveTrace.length,expectedVerified,request,reply};
+    const encoded=JSON.stringify(attempt);assert(Buffer.byteLength(encoded)<=3*1024*1024);
+    const path=resolve(directory,'public-wave-attempt.json');
+    await writeFile(path+'.tmp',encoded);await rename(path+'.tmp',path);
+  }
   async function checkWave(statement,expected,proof,at,ok){
-    const reply=await new Promise((resolve,reject)=>{peerWait={resolve,reject};peerVerifier.stdin.write(JSON.stringify({statement,expected,proof,now:at})+'\n');});
+    const request={statement,expected,proof,now:at};
+    await retainWaveAttempt(request,ok);
+    const reply=await new Promise((resolve,reject)=>{peerWait={resolve,reject};peerVerifier.stdin.write(JSON.stringify(request)+'\n');});
+    await retainWaveAttempt(request,ok,reply);
     assert.equal(reply.verified,ok);
     publicWaveTrace.push({request:{statement,expected,proof,now:at},verified:ok});
   }
@@ -240,8 +345,10 @@ try{
     const peer=spawn(resolve('target/debug/examples/wave_verifier'),[configPath,policyPath,fileURLToPath(import.meta.resolve('@corbet-labs/czkp/node-verifier'))],{stdio:['pipe','pipe','inherit']});
     const replies=createInterface({input:peer.stdout})[Symbol.asyncIterator]();
     async function check(request,verified){
+      await retainWaveAttempt(request,verified);
       peer.stdin.write(JSON.stringify(request)+'\n');const reply=await replies.next();assert(!reply.done);
-      assert.deepEqual(JSON.parse(reply.value),{verified});publicWaveTrace.push({request:structuredClone(request),verified});
+      const response=JSON.parse(reply.value);await retainWaveAttempt(request,verified,response);
+      assert.deepEqual(response,{verified});publicWaveTrace.push({request:structuredClone(request),verified});
     }
     try{
       await check(request,true);
@@ -330,8 +437,14 @@ try{
   now=Math.ceil((now+10)/10)*10;
   const earlyProof=await anonymous(await members[1].deposit(early.delivery,members[1].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'early-punishment-deposit');
   const lateProof=await anonymous(await answered.deposit({slot:delayedSlot,kind:1},answered.certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'late-answer-deposit');
-  await call({op:'deposit',batch:[earlyProof,lateProof].map(d=>({deposit:d.statement.deposit,proof:d.proof})),now});
+  await call({op:'deposit',batch:[{deposit:earlyProof.statement.deposit,proof:earlyProof.proof},batch[1]],now});
+  assert(Math.floor(now/100)>publishedEpoch);
+  await call({op:'recordEpoch',now});publishedEpoch=Math.floor(now/100);
+  await call({op:'deposit',batch:[{deposit:lateProof.statement.deposit,proof:lateProof.proof},batch[1]],now});
+  // The frozen required root is now IN THE MIDDLE of the genuine consumed
+  // chain, proving minimum-frontier inclusion rather than equality only.
   await drain(2);
+  assert.deepEqual(await epochRecord(2,'record-epoch-minimum-frontier'),[0,0,10000]);
   assert.equal(members[2].opening.available,1n);assert.equal(members[2].opening.reserved,0n);
   assert.equal(members[2].opening.accepted,0n);assert.equal(members[2].opening.punished,2n);
   await assert.rejects(members[2].expire(reordered.outgoing,now));
@@ -341,9 +454,23 @@ try{
   now=Number(members[3].slots.get(silent.outgoing.toString()).expiresAt);
   members[3]=(await submit(10,[await members[3].expire(silent.outgoing,now++)],'fixed-refund')).next;
   await settledEvidence(3,silent.outgoing,'silence');
+  // A newer epoch can publish between a genuine proof check and its final CAS.
+  // The update must certify the NEW frozen leaf, while an exact old retry keeps
+  // its original certificate (or original absence), never a reminted one.
+  now=Math.ceil((now+1)/100)*100;
+  publishedEpoch=Math.floor(now/100);
+  members[3]=(await submit(10,[await members[3].reblind(now++)],'epoch-racing-acceptance',false,true,{raceEpoch:true})).next;
+  await call({op:'retry',member:7,now});
+  await call({op:'retry',member:10,now});
+  await call({op:'recordEpoch',now});
+  members[3]=(await submit(10,[await members[3].reblind(now++)],'concurrent-exact-acceptance',false,true,{raceAcceptance:'same'})).next;
+  await call({op:'retry',member:10,now});
+  await submit(9,[await members[2].reblind(now++)],'concurrent-stale-cas',false,false,{raceAcceptance:'stale'});
   await writeFile(resolve(directory,'public-wave-trace.json'),JSON.stringify(publicWaveTrace));
-  console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
-  await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
+  }
+  await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify(recordEpochProofs));
+  console.log(recordDiagnostic?'Diagnostic exact and late-ingestion record proofs passed; full extension suite not selected':'Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
+  await writeFile(resolve(directory,'results.json'),JSON.stringify({validationScope:recordDiagnostic?'g2-record-diagnostic':'full-extension',benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
   // Only fictional public requests/proofs cross this fixture pipe. Replaying
   // them measures issuer coverage without generating another set of proofs.
   await writeFile(resolve(directory,'public-trace.json'),JSON.stringify(publicTrace));

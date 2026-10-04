@@ -7,7 +7,11 @@ import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {once} from 'node:events';
 
-const directory=resolve('.extension-test'),tracePath=resolve(directory,'public-trace.json');
+const recordDiagnostic=process.argv.length===3&&process.argv[2]==='--record-diagnostic';
+if(process.argv.length!==2&&!recordDiagnostic)throw new Error('Unknown extension replay selector');
+if(recordDiagnostic&&!process.env.CBLC_EXTENSION_DIRECTORY)throw new Error('Separate diagnostic artifact directory required');
+const directory=resolve(process.env.CBLC_EXTENSION_DIRECTORY??'.extension-test'),tracePath=resolve(directory,'public-trace.json');
+assert.equal(JSON.parse(await readFile(resolve(directory,'results.json'))).validationScope,recordDiagnostic?'g2-record-diagnostic':'full-extension');
 assert((await stat(tracePath)).size <= 256*1024*1024);
 const trace=JSON.parse(await readFile(tracePath,'utf8'));
 assert(Array.isArray(trace)&&trace.length>0&&trace.length<=256);
@@ -84,6 +88,7 @@ console.log(`Replayed ${trace.length} real-proof issuer calls and ${adversaries}
 
 // Recheck the counterpart evidence independently, using this build's actual
 // Wallet verifier and original signed public material. Never replay it at issuer.
+if(!recordDiagnostic){
 const waveTracePath=resolve(directory,'public-wave-trace.json');
 assert((await stat(waveTracePath)).size<=64*1024*1024);
 const waveTrace=JSON.parse(await readFile(waveTracePath,'utf8'));
@@ -107,3 +112,21 @@ try {
 assert.equal(accepted,6);assert(refused>=58);
 assert.deepEqual(new Set(waveTrace.filter(x=>x.verified).map(x=>x.request.expectedOutcome??"active")),new Set(["active","answer","close","silence"]));
 console.log(`Replayed ${accepted} actual member Wave proofs and ${refused} refusals`);
+}
+
+// Original record-epoch circuit proofs expose only the public descriptor and
+// decision context. No private HPKE plaintext or ancestry signature is retained.
+const {loadArtifacts}=await import('../runtime/extensions/artifacts.mjs');
+const {verify:verifyExtension}=await import('../runtime/extensions/node-verifier.mjs');
+const epochPath=resolve(directory,'public-record-epoch-proofs.json');
+assert((await stat(epochPath)).size<=64*1024*1024);
+const epochProofs=JSON.parse(await readFile(epochPath));
+assert.equal(epochProofs.length,recordDiagnostic?2:3);
+const epochArtifacts=await loadArtifacts(configPath);
+for(const proof of epochProofs){
+  assert.deepEqual(Object.keys(proof.statement.record).sort(),['context','epoch','owner','shares']);
+  await verifyExtension(proof,epochArtifacts);
+  const replay=structuredClone(proof);replay.statement.record.context.challenge[0]^=1;
+  await assert.rejects(verifyExtension(replay,epochArtifacts));
+}
+console.log(`Replayed ${epochProofs.length} original exact/descended record-epoch proofs (${recordDiagnostic?'diagnostic only':'full extension suite'})`);

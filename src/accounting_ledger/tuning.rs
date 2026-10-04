@@ -2,6 +2,10 @@
 
 use super::*;
 
+#[cfg(test)]
+#[path = "../../tests/internal/epoch_tuning.rs"]
+mod tests;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WaitingPeriodTuning {
@@ -32,7 +36,7 @@ pub(super) fn config_bytes(
     tuning_revision: u64,
 ) -> Result<Vec<u8>, Error> {
     serde_json::to_vec(&StoredConfig {
-        format: "cblc.account.database.v4".into(),
+        format: "cblc.account.database.v5".into(),
         community_id: trust.community_id.clone(),
         admission_policy_digest: trust.policy_digest.clone(),
         policy_keys: trust.policy_keys.to_cbor(),
@@ -50,6 +54,27 @@ pub(super) fn check_config(
 ) -> Result<(), Error> {
     let stored: Vec<u8> = transaction.get(b"config")?.ok_or(Error::Storage)?;
     if stored != expected {
+        return Err(Error::PolicyMismatch);
+    }
+    Ok(())
+}
+
+/// A published epoch survives the one supported live tuning operation. Every
+/// other byte remains bound to its original authority/policy/proof configuration.
+/// This is not the live writer CAS: check_config above stays strictly exact.
+pub(super) fn check_epoch_config(frozen: &[u8], current: &[u8]) -> Result<(), Error> {
+    let mut prior: StoredConfig = serde_json::from_slice(frozen).map_err(|_| Error::Storage)?;
+    let active: StoredConfig = serde_json::from_slice(current).map_err(|_| Error::Storage)?;
+    prior.policy.validate()?;
+    active.policy.validate()?;
+    if active.tuning_revision > MAX_INTEGER || active.tuning_revision < prior.tuning_revision {
+        return Err(Error::PolicyMismatch);
+    }
+    if active.tuning_revision > prior.tuning_revision {
+        prior.tuning_revision = active.tuning_revision;
+        prior.policy.account.abandon_after = active.policy.account.abandon_after;
+    }
+    if serde_json::to_vec(&prior).map_err(|_| Error::Storage)? != current {
         return Err(Error::PolicyMismatch);
     }
     Ok(())

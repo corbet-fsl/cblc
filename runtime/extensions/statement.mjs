@@ -1,4 +1,5 @@
 import {POLICY_WIRE,validateStatement} from '../accounting/statement.mjs';
+import {recordEpochPublicInputs} from '@corbet-labs/czkp/record';
 export const exact=(value,keys)=>!!value&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
 export const equal=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((v,i)=>v===b[i]);
 export const zero=()=>Array(32).fill(0);
@@ -40,6 +41,12 @@ export async function expectedProofs(statement,bundle,manifest) {
   }
   if(bundle.proofs.length!==1||!exact(bundle.proofs[0],['proof']))throw new Error('Anonymous proof shape');
   const proof=bundle.proofs[0].proof;
+  if(statement.kind==='recordEpoch') {
+    if(!exact(statement,['kind','policy','record']))throw new Error('Record epoch shape');
+    const scope={circuitDigest:Array.from(Buffer.from(manifest.circuitSha256,'hex')),
+      verifyingKeyDigest:Array.from(Buffer.from(manifest.vkSha256,'hex'))};
+    return [{kind:'record_epoch',proof,input:{extension,...recordEpochPublicInputs(statement.record,scope,manifest.issuerKey)}}];
+  }
   if(statement.kind==='wave') {
     if(!exact(statement,['kind','policy','certificateKey','wave']))throw new Error('Wave shape');
     if(!equal(statement.certificateKey,manifest.issuerKey))throw new Error('Wave issuer key');

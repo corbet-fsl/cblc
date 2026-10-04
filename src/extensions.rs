@@ -32,6 +32,58 @@ pub struct StateCertificate {
     pub accepted_at: u64,
     pub signature: Vec<u8>,
 }
+/// Private ancestry witness returned only on the authenticated account response.
+/// It must never be projected into a listing or contact's public record inputs.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EpochAncestryCertificate {
+    /// Hash of the issuer's community identifier.
+    pub community: [u8; 32],
+    /// Private community-scoped account owner.
+    pub owner: [u8; 32],
+    /// Published epoch number.
+    pub epoch: u64,
+    /// Original published epoch root.
+    pub root: [u8; 32],
+    /// Commitment to the original blinded owner frontier leaf.
+    pub frozen_leaf: [u8; 32],
+    /// Newly accepted private state commitment.
+    pub state: [u8; 32],
+    /// Newly accepted private version.
+    pub version: u64,
+    /// Original circuit and verification-key digests.
+    pub proof_scope: AccountProofScope,
+    /// Original acceptance time, unchanged by an exact retry.
+    pub issued_at: u64,
+    /// Canonical low-S P-256 signature, exactly 64 bytes.
+    pub signature: Vec<u8>,
+}
+impl EpochAncestryCertificate {
+    /// Original fixed-width issuer transcript; no JSON is signed.
+    pub fn body(&self) -> cssr::certificate::EpochAncestry {
+        cssr::certificate::EpochAncestry {
+            community: self.community,
+            owner: self.owner,
+            epoch: self.epoch,
+            root: self.root,
+            frozen_leaf: self.frozen_leaf,
+            state: self.state,
+            version: self.version,
+            circuit_digest: self.proof_scope.circuit_digest,
+            verifying_key_digest: self.proof_scope.verifying_key_digest,
+            issued_at: self.issued_at,
+        }
+    }
+}
+/// Coherent result of one committed extended update, including its original
+/// optional ancestry certificate. Exact retries never acquire a later epoch.
+pub struct ExtendedAcceptance {
+    /// Signed acceptance committed by the original ledger.
+    pub acceptance: crate::accounting::AccountAcceptance,
+    /// Original certificate, present only when issued in that acceptance's CAS.
+    pub ancestry: Option<EpochAncestryCertificate>,
+}
 /// The public effect to prove in addition to all ordinary account constraints.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -138,8 +190,7 @@ pub struct ExtensionActivation {
 pub(crate) struct Extensions {
     #[cfg(feature = "publication")]
     pub artifact_config: std::path::PathBuf,
-    #[cfg(feature = "publication")]
-    pub artifact_binding: crate::publication::binding::Binding,
+    pub artifact_binding: crate::verification::binding::Binding,
     pub policy: ExtensionPolicy,
     pub verifier: Box<dyn ExtensionVerifier>,
     pub config: Vec<u8>,

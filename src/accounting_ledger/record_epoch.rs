@@ -13,9 +13,171 @@ type Aead = hpke::aead::ChaCha20Poly1305;
 const RECIPIENT_PREFIX: &[u8] = b"record-recipient:v1:";
 const FROZEN: &[u8] = b"record-epoch-frozen:v1";
 const PUBLISHED: &[u8] = b"record-epoch-published:v1";
+const ANCHOR: &[u8] = b"record-epoch-anchor:v1";
 const OBJECT_PREFIX: &[u8] = b"cblc.record-witnesses.v1\0";
 const HPKE_INFO: &[u8] = b"cblc.record-witness.v1\0";
 const MAX_FRONTIERS: u32 = 100_000;
+const ANCESTRY_PREFIX: &[u8] = b"record-ancestry-latest:v1:";
+
+// Attached to the current Frontier in the publication transaction. It can only move
+// with that Frontier's verified linear CAS, never with a caller's version claim.
+#[derive(Serialize, Deserialize)]
+pub(super) struct Lineage {
+    epoch: u64,
+    leaf: czkp::record::Leaf,
+    index: u32,
+    path: Vec<[u8; 32]>,
+    pub(super) consumed: bool,
+}
+impl Lineage {
+    pub(super) fn required_inbox(&self) -> [u8; 32] {
+        self.leaf.required_inbox
+    }
+}
+
+// Small immutable authority header, installed with the common object and all
+// owner paths. Accepted updates never scan/decode the entire community object.
+#[derive(Serialize, Deserialize)]
+struct PublishedAnchor {
+    descriptor: czkp::record::Epoch,
+    period_seconds: u64,
+    frozen_at: u64,
+    configuration: Vec<u8>,
+    extension_configuration: Vec<u8>,
+}
+
+fn ancestry_key(owner: &[u8; 32]) -> Vec<u8> {
+    [ANCESTRY_PREFIX, owner.as_slice()].concat()
+}
+
+pub(super) fn require_issuer(
+    tx: &mut Transaction<'_>,
+    owner: &[u8; 32],
+    now: u64,
+) -> Result<(), Error> {
+    if tx
+        .get::<Frontier>(&key(1, &[owner]))?
+        .is_some_and(|f| f.record_ancestry.is_some())
+    {
+        let published: PublishedAnchor = tx.get(ANCHOR)?.ok_or(Error::Storage)?;
+        if now < published.descriptor.expires_at {
+            return Err(Error::UnsupportedCapability);
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn retain(
+    tx: &mut Transaction<'_>,
+    owner: &[u8; 32],
+    certificate: Option<&crate::extensions::EpochAncestryCertificate>,
+) -> Result<(), Error> {
+    match certificate {
+        Some(certificate) => tx.put(&ancestry_key(owner), certificate),
+        None => tx.delete(&ancestry_key(owner)),
+    }
+}
+
+// Recovery is part of the same authenticated exact-retry transaction. It never
+// consults the current epoch and cannot turn an old acceptance into new evidence.
+pub(super) fn recover(
+    tx: &mut Transaction<'_>,
+    accepted: &AccountAcceptance,
+    issuer: Option<&cssr::certificate::CertificateIssuer>,
+) -> Result<Option<crate::extensions::EpochAncestryCertificate>, Error> {
+    let Some(issuer) = issuer else {
+        return Ok(None);
+    };
+    let certificate: Option<crate::extensions::EpochAncestryCertificate> =
+        tx.get(&ancestry_key(&accepted.statement.owner))?;
+    if let Some(certificate) = &certificate {
+        if certificate.community != accepted.statement.community
+            || certificate.owner != accepted.statement.owner
+            || certificate.state != accepted.statement.next_state
+            || certificate.version != accepted.statement.next_version
+            || certificate.proof_scope != accepted.proof_scope
+            || certificate.issued_at != accepted.accepted_at
+        {
+            return Err(Error::Storage);
+        }
+        let signature = certificate
+            .signature
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::Storage)?;
+        cssr::certificate::verify_ancestry(&issuer.public_key(), &certificate.body(), signature)
+            .map_err(|_| Error::Storage)?;
+    }
+    Ok(certificate)
+}
+
+// Called only after full proof verification, mutable CAS checks and complete
+// inbox consumption, with the lineage inherited from the actual predecessor.
+pub(super) fn certify(
+    tx: &mut Transaction<'_>,
+    accepted: &AccountAcceptance,
+    lineage: &Lineage,
+    configuration: &[u8],
+    extensions: &Extensions,
+    issuer: &cssr::certificate::CertificateIssuer,
+) -> Result<Option<crate::extensions::EpochAncestryCertificate>, Error> {
+    let published: PublishedAnchor = tx.get(ANCHOR)?.ok_or(Error::Storage)?;
+    let descriptor = &published.descriptor;
+    if accepted.accepted_at >= descriptor.expires_at {
+        return Ok(None);
+    }
+    tuning::check_epoch_config(&published.configuration, configuration)?;
+    if descriptor.community != accepted.statement.community
+        || published.extension_configuration != extensions.config
+        || descriptor.proof_scope != accepted.proof_scope
+        || published.frozen_at > accepted.accepted_at
+        || lineage.epoch != descriptor.epoch
+        || !lineage.consumed
+        || extensions.artifact_binding.certificate_key != issuer.public_key()
+    {
+        return Err(Error::PolicyMismatch);
+    }
+    descriptor.validate(&accepted.statement.community, published.period_seconds)?;
+    if published.frozen_at < descriptor.starts_at
+        || published.frozen_at >= descriptor.expires_at
+        || descriptor.leaf_count > MAX_FRONTIERS
+        || lineage.leaf.owner != accepted.statement.owner
+        || lineage.index >= descriptor.leaf_count
+        || lineage.path.len() != descriptor.depth() as usize
+    {
+        return Err(Error::Storage);
+    }
+    let leaf = lineage
+        .leaf
+        .commitment(&descriptor.community, descriptor.epoch)?;
+    // This exact owner leaf/path was installed atomically from the real snapshot.
+    // Keep the check O(log n); neither a caller nor a version comparison supplies it.
+    if !rs_merkle::MerkleProof::<rs_merkle::algorithms::Sha256>::new(lineage.path.clone()).verify(
+        descriptor.root,
+        &[lineage.index as usize],
+        &[leaf],
+        (descriptor.leaf_count as usize).max(2).next_power_of_two(),
+    ) {
+        return Err(Error::Storage);
+    }
+    let mut certificate = crate::extensions::EpochAncestryCertificate {
+        community: descriptor.community,
+        owner: accepted.statement.owner,
+        epoch: descriptor.epoch,
+        root: descriptor.root,
+        frozen_leaf: leaf,
+        state: accepted.statement.next_state,
+        version: accepted.statement.next_version,
+        proof_scope: accepted.proof_scope.clone(),
+        issued_at: accepted.accepted_at,
+        signature: Vec::new(),
+    };
+    certificate.signature = issuer
+        .issue_ancestry(&certificate.body())
+        .map_err(|_| Error::CryptoProvider)?
+        .to_vec();
+    Ok(Some(certificate))
+}
 
 #[cfg(test)]
 #[path = "../../tests/internal/record_epoch.rs"]
@@ -218,8 +380,10 @@ fn packet_aad(epoch: &czkp::record::Epoch) -> Result<Vec<u8>, Error> {
 }
 
 impl<V: AccountProofVerifier> AccountLedger<V> {
-    /// Scheduled publication only. Persist the exact ciphertext bytes once;
-    /// retries and concurrent publishers return the original object unchanged.
+    /// Prepare the common object without mutating member authority, then install
+    /// it with every lineage in one checked transaction. A racing member update
+    /// invalidates preparation, never blocks member accounting. Concurrent or
+    /// repeated successful publications return the original object unchanged.
     pub fn publish_record_epoch(
         &mut self,
         policy_epoch: u64,
@@ -234,24 +398,21 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         published.descriptor.check_time(now)?;
         check_config(&mut tx, &self.config)?;
         check_extension_config(&mut tx, self.extensions.as_ref())?;
-        let current: FrozenEpochState = tx.get(FROZEN)?.ok_or(Error::Storage)?;
-        if current.epoch != frozen.0.epoch
-            || current.policy_epoch != frozen.0.policy_epoch
-            || current.period_seconds != frozen.0.period_seconds
-            || current.configuration != frozen.0.configuration
-            || current.extension_configuration != frozen.0.extension_configuration
-        {
-            return Err(Error::Replay);
-        }
         if let Some(prior) = tx.get::<RecordEpochPublication>(PUBLISHED)? {
             if prior.descriptor.epoch > published.descriptor.epoch {
                 return Err(Error::Replay);
             }
             if prior.descriptor.epoch == published.descriptor.epoch {
-                let mut expected = published.descriptor.clone();
-                expected.download_digest = prior.descriptor.download_digest;
-                if prior.descriptor != expected {
-                    return Err(Error::Replay);
+                prior.descriptor.validate(&self.community, period_seconds)?;
+                let anchor: PublishedAnchor = tx.get(ANCHOR)?.ok_or(Error::Storage)?;
+                tuning::check_epoch_config(&anchor.configuration, &self.config)?;
+                tuning::check_epoch_config(&frozen.0.configuration, &self.config)?;
+                if prior.descriptor.policy_epoch != policy_epoch
+                    || prior.descriptor.proof_scope != frozen.0.proof_scope
+                    || anchor.descriptor != prior.descriptor
+                    || anchor.extension_configuration != frozen.0.extension_configuration
+                {
+                    return Err(Error::PolicyMismatch);
                 }
                 let digest: [u8; 32] = Sha256::digest(&prior.object).into();
                 if prior.descriptor.download_digest != digest
@@ -263,7 +424,63 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Ok(prior);
             }
         }
+        // Validate the complete snapshot after encryption. No owner addition,
+        // accepted state change, recipient change or late deposit may be missed.
+        let rows: Vec<(Vec<u8>, Frontier)> = tx.current_range(&[1], &[2], MAX_FRONTIERS + 1)?;
+        if rows.len() != frozen.0.frontiers.len() {
+            return Err(Error::Replay);
+        }
+        let mut leaves = frozen
+            .0
+            .frontiers
+            .iter()
+            .map(|frontier| frontier.leaf.commitment(&self.community, frozen.0.epoch))
+            .collect::<Result<Vec<_>, _>>()?;
+        leaves.resize(leaves.len().max(2).next_power_of_two(), [0; 32]);
+        let tree = rs_merkle::MerkleTree::<rs_merkle::algorithms::Sha256>::from_leaves(&leaves);
+        if tree.root() != Some(published.descriptor.root) {
+            return Err(Error::Storage);
+        }
+        for (index, ((stored_key, mut current), snapshot)) in
+            rows.into_iter().zip(&frozen.0.frontiers).enumerate()
+        {
+            let leaf = &snapshot.leaf;
+            if stored_key != key(1, &[&leaf.owner])
+                || current.state != leaf.state
+                || current.version != leaf.version
+                || crate::extensions::inbox(&mut tx, &leaf.owner)?.root != leaf.required_inbox
+                || tx.get::<[u8; 32]>(&recipient_key(&leaf.owner))? != Some(snapshot.recipient_key)
+            {
+                return Err(Error::Replay);
+            }
+            current.record_ancestry = Some(Lineage {
+                epoch: frozen.0.epoch,
+                leaf: czkp::record::Leaf {
+                    owner: leaf.owner,
+                    version: leaf.version,
+                    state: leaf.state,
+                    required_inbox: leaf.required_inbox,
+                    blinding: leaf.blinding,
+                },
+                index: index as u32,
+                path: tree.proof(&[index]).proof_hashes().to_vec(),
+                consumed: crate::extensions::applied(&mut tx, &leaf.owner)?.root
+                    == leaf.required_inbox,
+            });
+            tx.put(&stored_key, &current)?;
+        }
+        tx.put(FROZEN, &frozen.0)?;
         tx.put(PUBLISHED, &published)?;
+        tx.put(
+            ANCHOR,
+            &PublishedAnchor {
+                descriptor: published.descriptor.clone(),
+                period_seconds,
+                frozen_at: now,
+                configuration: frozen.0.configuration,
+                extension_configuration: frozen.0.extension_configuration,
+            },
+        )?;
         advance_clock(&mut tx, now)?;
         tx.commit()?;
         Ok(published)
@@ -323,7 +540,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.commit()
     }
 
-    /// Freeze all current account frontiers together once per configured epoch.
+    /// Prepare a read-only candidate snapshot of all current account frontiers.
+    /// It becomes a durable freeze only when publish_record_epoch atomically
+    /// validates and installs it with the common object and every owner lineage.
     /// Trusted scheduled publication supplies current Policy epoch and original
     /// Rulebook duration. Member service requests do not expose this method.
     /// Missing recipient registration, malformed storage or capacity overflow
@@ -364,10 +583,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::ClockRollback);
             }
             if prior.epoch == epoch {
+                tuning::check_epoch_config(&prior.configuration, &self.config)?;
                 if prior.community != self.community
                     || prior.policy_epoch != policy_epoch
                     || prior.period_seconds != period_seconds
-                    || prior.configuration != self.config
                     || prior.extension_configuration != extensions.config
                 {
                     return Err(Error::PolicyMismatch);
@@ -398,7 +617,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 owner,
                 version: frontier.version,
                 state: frontier.state,
-                required_inbox: extensions::inbox(&mut tx, &owner)?.root,
+                required_inbox: crate::extensions::inbox(&mut tx, &owner)?.root,
                 blinding,
             };
             leaf.commitment(&self.community, epoch)?;
@@ -423,9 +642,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             proof_scope: extensions.verifier.scope(),
             frontiers,
         };
-        tx.put(FROZEN, &frozen)?;
-        advance_clock(&mut tx, completed)?;
-        tx.commit()?;
+        tx.rollback()?;
         Ok(FrozenEpoch(frozen))
     }
 }

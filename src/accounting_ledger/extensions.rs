@@ -75,9 +75,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             },
             &activation.proof,
         )?;
-        #[cfg(feature = "publication")]
         let artifact_binding =
-            crate::publication::binding::configured(&verifier.artifact_config, &scope)?;
+            crate::verification::binding::configured(&verifier.artifact_config, &scope)?;
         let config =
             serde_json::to_vec(&(policy.clone(), &scope)).map_err(|_| Error::InvalidInput)?;
         let mut tx = self.connection.transaction()?;
@@ -90,7 +89,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         self.extensions = Some(Extensions {
             #[cfg(feature = "publication")]
             artifact_config: verifier.artifact_config.clone(),
-            #[cfg(feature = "publication")]
             artifact_binding,
             policy,
             budget,
@@ -101,6 +99,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     }
 
     /// Verify the full extended account relation and consume the exact inbox frontier.
+    /// Once this owner has an active record epoch, callers must use
+    /// apply_extended_certified so the accepted descendant has its certificate.
     pub fn apply_extended(
         &mut self,
         grant: &AdmissionGrant,
@@ -109,7 +109,29 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         update: &ExtendedUpdate,
         clock: impl Fn() -> u64,
     ) -> Result<AccountAcceptance, Error> {
-        self.apply_inner(grant, authorization, request, Some(update), clock)
+        self.apply_inner(grant, authorization, request, Some(update), None, clock)
+            .map(|result| result.acceptance)
+    }
+
+    /// Issue ancestry only inside the original verified update transaction.
+    /// The configured issuer key must be the one in the original proof manifest.
+    pub fn apply_extended_certified(
+        &mut self,
+        grant: &AdmissionGrant,
+        authorization: &DeviceAuthorization,
+        request: &AccountRequest,
+        update: &ExtendedUpdate,
+        issuer: &cssr::certificate::CertificateIssuer,
+        clock: impl Fn() -> u64,
+    ) -> Result<crate::extensions::ExtendedAcceptance, Error> {
+        self.apply_inner(
+            grant,
+            authorization,
+            request,
+            Some(update),
+            Some(issuer),
+            clock,
+        )
     }
 
     /// Accept a delayed batch of anonymous settlements. Every outcome uses the
@@ -333,8 +355,10 @@ pub(super) fn consume(
     tx: &mut Transaction<'_>,
     owner: &[u8; 32],
     update: &ExtendedUpdate,
-) -> Result<(), Error> {
+    required: Option<[u8; 32]>,
+) -> Result<bool, Error> {
     let mut cursor = update.inbox.clone();
+    let mut consumed = required == Some(cursor.root);
     let mut count = 0;
     while cursor != update.previous_inbox {
         if count >= 64 {
@@ -344,10 +368,12 @@ pub(super) fn consume(
         let pending: PendingObligation = tx.get(&entry_key)?.ok_or(Error::Storage)?;
         tx.delete(&entry_key)?;
         cursor = pending.previous;
+        consumed |= required == Some(cursor.root);
         count += 1;
     }
     tx.delete(&key(10, &[owner]))?;
-    tx.put(&key(7, &[owner]), &update.inbox)
+    tx.put(&key(7, &[owner]), &update.inbox)?;
+    Ok(consumed)
 }
 
 pub(super) fn read_obligations(

@@ -1,0 +1,101 @@
+# Exact-source diagnostic transport. Product dependencies remain on main.
+when:
+  - event: manual
+skip_clone: true
+variables:
+  SOURCE_ARCHIVE: {default: ""}
+  SOURCE_SHA256: {default: ""}
+  G2_CODEC_SOURCE_ARCHIVE: {default: ""}
+  G2_CODEC_SOURCE_SHA256: {default: ""}
+  G2_CSSR_SOURCE_ARCHIVE: {default: ""}
+  G2_CSSR_SOURCE_SHA256: {default: ""}
+  G2_CVFY_SOURCE_ARCHIVE: {default: ""}
+  G2_CVFY_SOURCE_SHA256: {default: ""}
+  G2_CWLT_SOURCE_ARCHIVE: {default: ""}
+  G2_CWLT_SOURCE_SHA256: {default: ""}
+  G2_CBCN_SOURCE_ARCHIVE: {default: ""}
+  G2_CBCN_SOURCE_SHA256: {default: ""}
+  G2_CKMG_SOURCE_ARCHIVE: {default: ""}
+  G2_CKMG_SOURCE_SHA256: {default: ""}
+  G2_CPSD_SOURCE_ARCHIVE: {default: ""}
+  G2_CPSD_SOURCE_SHA256: {default: ""}
+  DEPENDENCY_SOURCE_ARCHIVE: {default: ""}
+  DEPENDENCY_SOURCE_SHA256: {default: ""}
+  G2_WASM_PACK_BINARY: {default: ""}
+  G2_WASM_PACK_SHA256: {default: ""}
+  CI_TOOL_ARCHIVE: {default: ""}
+  CI_TOOL_SHA256: {default: ""}
+  CI_TOOL_BINARY: {default: ""}
+  CI_TOOL_BINARY_SHA256: {default: ""}
+  SUPPLEMENT_SETUP: {default: ""}
+  SUPPLEMENT_SHA256: {default: ""}
+  CHECKS: {default: g2-diagnostic}
+  CI_JOBS: {default: "2"}
+  CI_TEST_THREADS: {default: "2"}
+  CI_MEMORY_MB: {default: "16384"}
+  CI_MEMORY_PER_JOB_MB: {default: ""}
+  CI_MIN_AVAILABLE_MB: {default: "8192"}
+  CI_REPOSITORY_URL: {default: ""}
+  CI_TIMEOUT: {default: "1230"}
+  CI_CACHE_ROOT: {default: ""}
+  CARGO_TARGET_DIR: {default: ""}
+  CI_NIX_JOBS: {default: ""}
+  CI_LINKER: {default: system}
+  TMPDIR: {default: ""}
+steps:
+  - name: selected-checks
+    image: bash
+    environment:
+      CCID_REVISION: '9f9f65f305491ceb146ee31e356eb561af06af9b'
+    commands:
+      - |
+        set -eu
+        printf '%s  %s\n' "$CI_TOOL_SHA256" "$CI_TOOL_ARCHIVE" | sha256sum --check --strict
+        test "$(git get-tar-commit-id < "$CI_TOOL_ARCHIVE")" = "$CCID_REVISION"
+        test -n "$CI_TOOL_BINARY"
+        test -n "$CI_TOOL_BINARY_SHA256"
+        printf '%s  %s\n' "$CI_TOOL_BINARY_SHA256" "$CI_TOOL_BINARY" | sha256sum --check --strict
+        test "$("$CI_TOOL_BINARY" source-revision)" = "$CCID_REVISION"
+        TMPDIR="$${TMPDIR:-/tmp}"
+        export TMPDIR
+        : "$${SUPPLEMENT_SETUP:?}"
+        : "$${SUPPLEMENT_SHA256:?}"
+        printf '%s  %s\n' "$SUPPLEMENT_SHA256" "$SUPPLEMENT_SETUP" | sha256sum --check --strict
+        . "$SUPPLEMENT_SETUP"
+        set -eu
+        : "$${SOURCE_ARCHIVE:?}" "$${SOURCE_SHA256:?}" "$${CI_COMMIT_SHA:?}"
+        : "$${G2_CODEC_SOURCE_ARCHIVE:?}" "$${G2_CODEC_SOURCE_SHA256:?}"
+        if test "$$CHECKS" = g2-diagnostic; then
+          exec "$$CI_TOOL_BINARY" check --archive "$$SOURCE_ARCHIVE" --sha256 "$$SOURCE_SHA256" \
+            --commit "$$CI_COMMIT_SHA" --check "$$CHECKS"
+        fi
+        case "$$CHECKS" in
+          g2-proof-diagnostic|g2-full-extension) ;;
+          *) exit 2 ;;
+        esac
+        : "$${DEPENDENCY_SOURCE_ARCHIVE:?}" "$${DEPENDENCY_SOURCE_SHA256:?}"
+        exec python3 - "$$DEPENDENCY_SOURCE_ARCHIVE" "$$DEPENDENCY_SOURCE_SHA256" \
+          "$$SOURCE_ARCHIVE" "$$SOURCE_SHA256" "$$CI_COMMIT_SHA" "$$CI_REPOSITORY_URL" \
+          "$${TMPDIR:-/tmp}" "$$CI_TOOL_BINARY" "$$CHECKS" <<'PY'
+        import hashlib, pathlib, re, sys, tarfile
+        archive, digest, source, source_digest, commit, repository, scratch, binary, checks = sys.argv[1:]
+        if not re.fullmatch('[0-9a-f]{64}', digest):
+            raise SystemExit('invalid closure SHA256')
+        with open(archive, 'rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != digest:
+                raise SystemExit('closure SHA256 mismatch')
+            stream.seek(0)
+            with tarfile.open(fileobj=stream, mode='r:') as package:
+                matches = [m for m in package if m.name == 'closure.py']
+                if len(matches) != 1 or not matches[0].isfile() or matches[0].size > 1024 * 1024:
+                    raise SystemExit('invalid consumer member')
+                program = package.extractfile(matches[0]).read()
+        if hashlib.sha256(program).hexdigest() != '293450018834cd60ff58e0c62d78de8cfcf21c060fb4de5d905200afd0bd84da':
+            raise SystemExit('unreviewed closure consumer')
+        sys.argv = ['closure.py', 'consume', '--archive', archive, '--sha256', digest,
+                    '--source-archive', source, '--source-sha256', source_digest,
+                    '--commit', commit, '--repository', repository, '--scratch', scratch,
+                    '--', binary, 'check', '--archive', source, '--sha256', source_digest,
+                    '--commit', commit, '--check', checks]
+        exec(compile(program, 'verified-closure-consumer', 'exec'), {'__name__': '__main__'})
+        PY

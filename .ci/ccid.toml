@@ -1,0 +1,14 @@
+schema = 1
+project = "cblc"
+
+[checks.g2-diagnostic]
+kind = "commands"
+commands = [["timeout", "--kill-after=15s", "1200", "bash", ".ci/g2-diagnostic.sh"]]
+
+[checks.g2-proof-diagnostic]
+kind = "commands"
+commands = [["timeout", "--kill-after=15s", "1800", "bash", ".ci/g2-proof.sh"]]
+
+[checks.g2-full-extension]
+kind = "commands"
+commands = [["timeout", "--kill-after=15s", "3300", "bash", ".ci/g2-proof.sh", "--full-extension"]]

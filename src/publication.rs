@@ -1,12 +1,12 @@
 //! Authenticated public policy and proof-artifact bindings. This is not a
 //! member-currentness, reservation, release or punishment capability.
+pub(crate) use crate::verification::binding;
 use crate::{
     Error, accounting::AccountProofScope, accounting_ledger::AccountLedgerPolicy,
     extensions::ExtensionPolicy,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-pub(crate) mod binding;
 
 /// Strict payload purpose inside the existing SettingsSnapshot envelope kind.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -130,7 +130,7 @@ jobs:
       with:
         path: .extension-test
         key: extension-public-v1-${{ runner.os }}-${{ hashFiles('circuits/extensions/**',
-          'runtime/extensions/**', 'tests/extensions-proof.mjs', 'tests/holder/extension-checkpoint.mjs', 'tests/common/mod.rs',
+          'runtime/extensions/**', 'tests/extensions-proof.mjs', 'tests/holder/**', 'tests/common/mod.rs',
           'examples/extension_issuer.rs', 'examples/wave_verifier.rs', 'package*.json') }}
     - run: node runtime/extensions/compile.mjs
       if: steps.extension-cache.outputs.cache-hit != 'true'

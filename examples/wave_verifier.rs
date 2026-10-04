@@ -53,6 +53,9 @@ fn main() {
                 assert_eq!(value.outcome(), outcome);
                 assert_eq!(value.receipt_digest(), &digest);
             }
+            if let Err(error) = &result {
+                eprintln!("CI public Wave refusal: {error}");
+            }
             result.is_ok()
         } else {
             let statement: WaveStatement =
@@ -60,6 +63,9 @@ fn main() {
             let result = verifier.verify(&statement, &proof, &expected, now);
             if let Ok(value) = &result {
                 assert_eq!(value.context(), &expected);
+            }
+            if let Err(error) = &result {
+                eprintln!("CI public Wave refusal: {error}");
             }
             result.is_ok()
         };
