@@ -276,9 +276,9 @@ try{
     benchmarks.push({label:label+'-presentation',kind:'record-presentation',backend:'Ed25519',signMs:performance.now()-signedAt});
     assert.equal(second.proof,presentation.proof); // No per-contact proving.
     await call({op:'checkEpochRecord',challenge:contact.challenge,presentation:second,now},true);
-    for(const field of ['presentationKeyCommitment','community','owner','root','epoch','scope','shares']){
+    for(const field of ['presentationKey','community','owner','root','epoch','scope','shares']){
       const changed=structuredClone(record),r=changed.statement.record;
-      if(field==='presentationKeyCommitment')r.presentationKeyCommitment[0]^=1;
+      if(field==='presentationKey')r.presentationKey[0]^=1;
       else if(field==='community')r.epoch.community[0]^=1;
       else if(field==='owner')r.owner[0]^=1;
       else if(field==='root')r.epoch.root[0]^=1;
@@ -313,11 +313,11 @@ try{
     assert.equal(Number(version),leaf.version);assert.deepEqual(toArray(state),leaf.state);
     assert.notDeepEqual(toArray(opening.inbox),leaf.requiredInbox);
     const path=structuredClone(witness.path);while(path.length<32)path.push(Array(32).fill(0));
-    const record={epoch:witness.epoch,owner:local.statement.record.owner,presentationKeyCommitment:toArray(sha(bytes(197))),shares:local.statement.record.shares};
+    const record={epoch:witness.epoch,owner:local.statement.record.owner,presentationKey:toArray(bytes(197)),shares:local.statement.record.shares};
     const exact={...recordEpochPublicInputs(record,artifacts.scope,manifest.issuerKey),extension,
       version,state,state_policy,registered_secret,opening,frozen_version:leaf.version,frozen_state:leaf.state,
       required_inbox:leaf.requiredInbox,blinding:leaf.blinding,index:witness.index,path,
-      presentation_public_key:bytes(197),descended:false,issued_at:0,certificate:Array(64).fill(0)};
+      descended:false,issued_at:0,certificate:Array(64).fill(0)};
     await assert.rejects(new Noir(programs.record_epoch).execute(witnessInputs(programs.record_epoch,exact)));
   }
   await call({op:'record',record:stale.statement.record,proof:stale.proof,now},false);

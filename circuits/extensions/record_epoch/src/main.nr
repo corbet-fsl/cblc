@@ -2,7 +2,7 @@
 // This source is not an activated verifier until its exact manifest and real
 // proof vectors pass the same publication/consumer gates as the original relation.
 use core::{Opening, ExtensionPolicy, extension_hash, state_hash, field, verify_p256};
-use core::epoch::{leaf, node, ancestry_digest, presentation_key};
+use core::epoch::{leaf, node, ancestry_digest};
 
 fn main(
     extension: pub ExtensionPolicy,
@@ -10,20 +10,18 @@ fn main(
     community: pub [u8;32], owner: pub [u8;32],
     epoch: pub u64, epoch_start: pub u64, epoch_end: pub u64,
     epoch_root: pub [u8;32], leaf_count: pub u32,
-    presentation_key_commitment: pub [u8;32],
+    presentation_key: pub [Field;2],
     present: pub bool, shares: pub [u16;3],
     version: u64, state: [u8;32], frozen_version: u64, frozen_state: [u8;32],
     required_inbox: [u8;32], descended: bool, issued_at: u64, certificate: [u8;64],
     blinding: [u8;32], path: [[u8;32];32], index: u32,
     state_policy: [u8;32], registered_secret: Field, opening: Opening,
-    presentation_public_key: [u8;32],
 ) {
     let safe: u64=9007199254740991;
     let ext=extension_hash(extension);
-    // Fresh Ed25519 possession is checked against this committed key by the
-    // relying party. The expensive relation is independent of its challenge.
-    assert(presentation_public_key!=[0;32]);
-    assert(presentation_key(presentation_public_key)==presentation_key_commitment);
+    // Fresh Ed25519 possession is verified against this plain public key.
+    assert(presentation_key!=[0;2]);
+    for limb in presentation_key {assert(limb==(limb as u128) as Field);}
     assert((epoch>0)&(epoch<=safe)&(epoch_start>0)&(epoch_start<epoch_end)&(epoch_end<=safe));
     assert((version<=safe)&(frozen_version<=safe)&(blinding!=[0;32])&(leaf_count>0)&(index<leaf_count));
     assert((community!=[0;32])&(owner!=[0;32])&(epoch_root!=[0;32])&(scope!=[0;32])&(verification_scope!=[0;32]));
@@ -42,7 +40,7 @@ fn main(
         assert((issued_at==0)&(certificate==[0;64]));
     }
 
-    // Byte-identical to czkp::record::Leaf::commitment. Maintained SHA-256 only.
+    // Byte-identical to czkp::record::Leaf::commitment and EpochTree.
     let mut current=frozen_leaf;
     let mut position=index;
     let mut width=2 as u64;

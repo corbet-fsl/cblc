@@ -213,7 +213,7 @@ pub(super) fn certify(
         .commitment(&descriptor.community, descriptor.epoch)?;
     // This exact owner leaf/path was installed atomically from the real snapshot.
     // Keep the check O(log n); neither a caller nor a version comparison supplies it.
-    if !rs_merkle::MerkleProof::<rs_merkle::algorithms::Sha256>::new(lineage.path.clone()).verify(
+    if !rs_merkle::MerkleProof::<czkp::record::EpochTree>::new(lineage.path.clone()).verify(
         descriptor.root,
         &[lineage.index as usize],
         &[leaf],
@@ -340,7 +340,7 @@ impl FrozenEpoch {
             .map(|f| f.leaf.commitment(&frozen.community, frozen.epoch))
             .collect::<Result<Vec<_>, _>>()?;
         leaves.resize(padded, [0; 32]);
-        let tree = rs_merkle::MerkleTree::<rs_merkle::algorithms::Sha256>::from_leaves(&leaves);
+        let tree = rs_merkle::MerkleTree::<czkp::record::EpochTree>::from_leaves(&leaves);
         let root = tree.root().ok_or(Error::Storage)?;
         let depth = padded.ilog2() as usize;
         let packet_bytes = 32 + 16 + 140 + 32 * depth;
@@ -357,7 +357,7 @@ impl FrozenEpoch {
             return Err(Error::Capacity);
         }
         let mut descriptor = czkp::record::Epoch {
-            purpose: czkp::record::Purpose::RecordEpochV1,
+            purpose: czkp::record::Purpose::RecordEpochV2,
             community: frozen.community,
             policy_epoch: frozen.policy_epoch,
             epoch: frozen.epoch,
@@ -498,7 +498,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             .map(|frontier| frontier.leaf.commitment(&self.community, frozen.0.epoch))
             .collect::<Result<Vec<_>, _>>()?;
         leaves.resize(leaves.len().max(2).next_power_of_two(), [0; 32]);
-        let tree = rs_merkle::MerkleTree::<rs_merkle::algorithms::Sha256>::from_leaves(&leaves);
+        let tree = rs_merkle::MerkleTree::<czkp::record::EpochTree>::from_leaves(&leaves);
         if tree.root() != Some(published.descriptor.root) {
             return Err(Error::Storage);
         }

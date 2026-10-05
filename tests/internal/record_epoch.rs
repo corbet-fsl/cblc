@@ -92,7 +92,7 @@ fn assert_witness(
         .chunks_exact(32)
         .map(|chunk| chunk.try_into().unwrap())
         .collect();
-    let proof = rs_merkle::MerkleProof::<rs_merkle::algorithms::Sha256>::new(path);
+    let proof = rs_merkle::MerkleProof::<czkp::record::EpochTree>::new(path);
     assert!(
         proof.verify(
             publication.descriptor.root,
