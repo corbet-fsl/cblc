@@ -23,6 +23,7 @@ import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,rec
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mjs';
 import {verify as verifyExtension} from '../runtime/extensions/node-verifier.mjs';
+import {fullWaveCapture} from './support/full-wave-capture.mjs';
 import init,{prepare} from '../.extension-wasm/cwlt.js';
 await init({module_or_path:await readFile('.extension-wasm/cwlt_bg.wasm')});
 const transition=input=>JSON.parse(prepare(JSON.stringify(input)));
@@ -388,7 +389,9 @@ try{
   members[0]=(await submit(7,[await members[0].activate(acceptedContact.outgoing,now++,acceptedContact.recipientSignature)],'activate-outgoing')).next;
   const policyPath=resolve(directory,'wave-policy.json');
   await writeFile(policyPath,JSON.stringify(await call({op:'publication'})));
-  const peerVerifier=spawn(resolve('target/debug/examples/wave_verifier'),[configPath,policyPath,fileURLToPath(import.meta.resolve('@corbet-labs/czkp/node-verifier'))],{stdio:['pipe','pipe','inherit']});
+  const peerExecutable=resolve('target/debug/examples/wave_verifier'),workerScript=fileURLToPath(import.meta.resolve('@corbet-labs/czkp/node-verifier'));
+  const capture=process.env.CBLC_CAPTURE_FULL_WAVE==='1'?await fullWaveCapture(directory,workerScript,configPath,peerExecutable):null;
+  const peerVerifier=spawn(peerExecutable,[configPath,policyPath,workerScript],{stdio:['pipe','pipe','inherit'],env:capture?.environment??process.env});
   let peerWait;const peerLines=createInterface({input:peerVerifier.stdout});
   peerLines.on('line',line=>{const w=peerWait;peerWait=undefined;w.resolve(JSON.parse(line));});
   peerVerifier.on('exit',code=>{if(peerWait)peerWait.reject(new Error(`Peer verifier exited ${code}`));});
@@ -405,8 +408,10 @@ try{
   async function checkWave(statement,expected,proof,at,ok){
     const request={statement,expected,proof,now:at};
     await retainWaveAttempt(request,ok);
+    await capture?.before(publicWaveTrace.length);
     const reply=await new Promise((resolve,reject)=>{peerWait={resolve,reject};peerVerifier.stdin.write(JSON.stringify(request)+'\n');});
     await retainWaveAttempt(request,ok,reply);
+    await capture?.after(publicWaveTrace.length);
     assert.equal(reply.verified,ok);
     publicWaveTrace.push({request:{statement,expected,proof,now:at},verified:ok});
   }

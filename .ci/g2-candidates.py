@@ -13,7 +13,7 @@ NPM_CANDIDATES = ROOT / 'experiments/private-accounting/node_modules/@corbet-lab
 REPORT = Path(os.environ['CBLC_DIAGNOSTIC_OUTPUT'])
 SOURCES = {
     'cssr': ('868d0c6441f062d7be4fb17af8c966e2fa3034f0', 'CSSR', ROOT / '.g2-candidates/cssr'),
-    'czkp': ('645ed05c81d5c3305cfb6e860d346c6882472237', 'CODEC', NPM_CANDIDATES / 'czkp'),
+    'czkp': ('632e91a99db2f57e263b9c8131b4a82ff3142442', 'CODEC', NPM_CANDIDATES / 'czkp'),
     'cvfy': ('30a78099a27581ee16ed17a589e64d089a839182', 'CVFY', ROOT / '.g2-candidates/cvfy'),
     'cwlt': ('2797a7f45f84975eeb2106302cfba1750bb4e048', 'CWLT', NPM_CANDIDATES / 'cwlt'),
     'cbcn': ('22f3179cd661f46e6d77fda197b171f6c83c637c', 'CBCN', ROOT / '.g2-candidates/cbcn'),
@@ -128,13 +128,64 @@ MAIN_SOURCE = re.compile(r'git\+https://github\.com/(corbet-foss|corbet-labs|cor
                          r'([A-Za-z0-9][A-Za-z0-9_.-]*)\?branch=main#([0-9a-f]{40})')
 
 
+def retained_observation(closure):
+    # Task-only reuse of the exact previously observed source set. This is not
+    # a fresh main observation and cannot substitute a different dependency.
+    historical_sha = '1939d250816990ba56c9b9be3fbaf229c0b1b4e2f73fac64bc6eba146b649770'
+    archive = Path(os.environ['G2_RETAINED_SOURCE_ARCHIVE'])
+    if closure['freshness'] != 'lock-only' or digest(archive) != historical_sha:
+        raise ValueError('Retained source observation is not the original run 24 archive')
+    with tarfile.open(archive, mode='r:') as package:
+        entries = [m for m in package if m.name == 'manifest.json']
+        if len(entries) != 1 or not entries[0].isfile() or entries[0].size > 1024 * 1024:
+            raise ValueError('Invalid retained source observation')
+        raw = package.extractfile(entries[0]).read()
+    historical = json.loads(raw)
+    if historical['freshness'] != 'main-observed':
+        raise ValueError('Original source set was not observed')
+    def identities(value):
+        return [{key: item[key] for key in ('url', 'main', 'commits', 'bundle', 'sha256')}
+                for item in value['repositories']]
+    if len(closure['repositories']) != 13 or identities(closure) != identities(historical):
+        raise ValueError('Replay dependencies differ from the observed source set')
+    if len(closure['consumers']) != 9 or len(historical['consumers']) != 9:
+        raise ValueError('Retained consumer set changed')
+    codec_changes = []
+    for current, previous in zip(closure['consumers'][1:], historical['consumers'][1:], strict=True):
+        if previous['url'] == 'https://github.com/corbet-foss/czkp':
+            expected = dict(previous, commit=SOURCES['czkp'][0],
+                            tree='0c39b5271719f49f0284554487ed17baaf4226e7',
+                            source_sha256=os.environ['G2_CODEC_SOURCE_SHA256'])
+            if previous['commit'] != '645ed05c81d5c3305cfb6e860d346c6882472237' or current != expected:
+                raise ValueError('Codec candidate differs from reviewed entry-point correction')
+            codec_changes.append({'previous': previous, 'current': current})
+        elif current != previous:
+            raise ValueError('Unrelated non-root consumer changed')
+    if len(codec_changes) != 1:
+        raise ValueError('Expected one explicit codec candidate replacement')
+    current, previous = closure['consumers'][0], historical['consumers'][0]
+    if current['url'] != previous['url'] or current['metadata_sha256'] != previous['metadata_sha256']:
+        raise ValueError('Replay root dependency declaration changed')
+    (REPORT / 'historical-main-closure.json').write_bytes(raw)
+    (REPORT / 'source-provenance.json').write_text(json.dumps({
+        'freshness': 'retained-run24-observation', 'fresh_main_observation': False,
+        'current_closure_sha256': os.environ['DEPENDENCY_CLOSURE_SHA256'],
+        'historical_main_closure_sha256': historical_sha,
+        'all_thirteen_dependency_bundles_identical': True,
+        'other_seven_non_root_consumers_identical': True,
+        'explicit_codec_candidate_changes': codec_changes,
+        'root_dependency_metadata_identical': True,
+    }, indent=2, sort_keys=True) + '\n')
+    return historical
+
+
 def observed_sources():
     path = REPORT / 'observed-main-closure.json'
     if path.read_bytes() != Path(os.environ['DEPENDENCY_CLOSURE_MANIFEST']).read_bytes():
         raise ValueError('Retained observed-main closure changed')
     closure = json.loads(path.read_text())
     if closure['freshness'] != 'main-observed':
-        raise ValueError('Diagnostic needs observed-main dependencies')
+        closure = retained_observation(closure)
     sources = {}
     for entry in closure['repositories']:
         url, oid = entry['url'], entry['main']

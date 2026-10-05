@@ -47,7 +47,9 @@ receipt = {'schema': 1, 'scope': scope,
            'status': 'passed' if code == 0 else 'failed', 'exit_code': code,
            'commit': os.environ['CI_COMMIT_SHA'], 'source_sha256': os.environ['SOURCE_SHA256'],
            'repository': os.environ['CI_REPOSITORY_URL'],
-           'observed_main_closure_sha256': os.environ['DEPENDENCY_CLOSURE_SHA256'],
+           'dependency_closure_sha256': os.environ['DEPENDENCY_CLOSURE_SHA256'],
+           'source_freshness': json.loads((root / 'source-provenance.json').read_text())
+               if (root / 'source-provenance.json').exists() else {'status': 'see closure manifest'},
            'candidate_sources': 'candidate-sources.json',
            'candidate_patches': {name: f'candidate-patches-{name}.toml' for name in ['cblc', 'cwlt', 'czkp']},
            'artifacts': files, 'product_acceptance': False, 'full_suite': False,
@@ -103,7 +105,7 @@ assert.equal(findBbBinary(),process.env.BB_BINARY_PATH);
 assert((await readFile(process.env.CBLC_DIAGNOSTIC_OUTPUT+'/bb-version.txt','utf8')).includes(pkg.version));
 JS
 run python3 .ci/g2-candidates.py unpack
-run node --test "$codec_dir/tests/abi.test.mjs" "$codec_dir/tests/record.test.mjs"
+run node --test "$codec_dir/tests/abi.test.mjs" "$codec_dir/tests/record.test.mjs" "$codec_dir/tests/node-worker-entry.test.mjs"
 if [[ $fixture == proof-time ]]; then
     printf '%s  %s\n' "$G2_CVLT_SOURCE_SHA256" "$G2_CVLT_SOURCE_ARCHIVE" | sha256sum --check --strict
     mkdir .g2-vault
@@ -258,6 +260,9 @@ sha256sum "$CBLC_EXTENSION_ISSUER" > "$report_dir/issuer-executable.sha256"
 if [[ $fixture == full-extension ]]; then
     CBLC_WAVE_VERIFIER=$(example_executable wave_verifier)
     export CBLC_WAVE_VERIFIER
+    # Observe the actual first public Wave peer inside this full fixture. This
+    # never substitutes a retained proof or turns a refusal into acceptance.
+    export CBLC_CAPTURE_FULL_WAVE=1
     test -x "$CBLC_WAVE_VERIFIER"
     sha256sum "$CBLC_WAVE_VERIFIER" > "$report_dir/wave-verifier-executable.sha256"
     # The unchanged fixture uses this original relative path. Only link the

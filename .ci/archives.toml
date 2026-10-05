@@ -1,11 +1,7 @@
 schema = 1
 
-# Exact diagnostic codec candidate, imported locally from the original czkp
-# repository. This is extra test source, never a claim about dependency main.
-[archives.g2_codec]
-revision = "645ed05c81d5c3305cfb6e860d346c6882472237"
-archive_variable = "G2_CODEC_SOURCE_ARCHIVE"
-digest_variable = "G2_CODEC_SOURCE_SHA256"
+# The v0.1 manual workflow receives its reviewed codec candidate explicitly from
+# the task namespace. g2-candidates.py binds its exact commit and source digest.
 
 [archives.g2_cssr]
 revision = "868d0c6441f062d7be4fb17af8c966e2fa3034f0"
