@@ -1,7 +1,7 @@
 // Counterpart-only evidence. No private opening or peer identity reaches an issuer.
 use core::{Opening, Obligation, MapWitness, ExtensionPolicy, extension_hash,
-    state_hash, secret_hash, obligation_hash, marker, certificate_digest,
-    verify_p256, field, hash, limbs, Enrollment, Resolution, Acknowledgment,
+    state_hash, secret_hash, obligation_hash, marker,
+    field, hash, limbs, Enrollment, Resolution, Acknowledgment,
     enrollment_leaf, verify_resolution, verify_acknowledgment};
 use core::indexed::present;
 
@@ -17,7 +17,7 @@ fn main(
     version: pub u64, state: pub [u8;32], accepted_at: pub u64, binding: pub [u8;32],
     outcome: pub u8, receipt_digest: pub [u8;32],
     secret: [u8;32], opening: Opening, slot: Obligation, selected: MapWitness,
-    certificate: [u8;64], owner_enrollment: Enrollment, peer_enrollment: Enrollment,
+    certificate: pub [u8;64], owner_enrollment: Enrollment, peer_enrollment: Enrollment,
     resolution: Resolution, acknowledgment: Acknowledgment,
 ) {
     assert((owner!=peer)&(role<=1)&(secret!=[0;32]));
@@ -28,7 +28,10 @@ fn main(
     assert(commitment!=0);
     assert(state_hash(community,owner,state_policy,secret_hash(community,secret),version,
         extension_hash(extension),opening)==commitment);
-    verify_p256(issuer_key,certificate,certificate_digest(community,owner,state,scope,version,accepted_at));
+    // The authenticated public ABI binds these bytes; czkp verifies the issuer
+    // certificate over all public certificate fields before accepting this proof.
+    assert(issuer_key!=[0;64]);
+    assert(certificate!=[0;64]);
     assert((slot.role==role)&(slot.peer==peer)&(slot.nonce==nonce)&(slot.group==group));
     assert((slot.contact_policy==contact_policy)&(slot.admitted_at==opened_at)&(slot.expires_at==expires_at));
     assert((slot.owner_authority==field(owner_authority))&(slot.peer_authority==field(peer_authority)));

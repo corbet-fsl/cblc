@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { gunzipSync, inflateRawSync } from 'node:zlib';
 
 const hash = data => createHash('sha256').update(data).digest('hex');
+if (!process.env.CI) throw new Error('CI only');
 const circuitPath = process.env.CIRCUIT_PATH;
 const expectedHash = process.env.CIRCUIT_SHA256;
 const outputDir = process.env.PROFILE_ARTIFACT_DIR;
@@ -16,33 +17,41 @@ if (!circuitPath || !isAbsolute(circuitPath) || !outputDir || !isAbsolute(output
 }
 await mkdir(outputDir, { recursive: true });
 const started = performance.now();
+const backendPackageBytes = await readFile(new URL('./node_modules/@aztec/bb.js/package.json', import.meta.url));
+const backendPackage = JSON.parse(backendPackageBytes);
 let api;
 const evidence = { version: 1, ok: false, circuitPath, expectedHash,
-  backend: '5.0.0', threads: 1, maximumWasmBytes: 32768 * 65536,
+  backend: backendPackage.version, backendPackageSha256: hash(backendPackageBytes),
+  dependencyLockSha256: hash(await readFile(new URL('./package-lock.json', import.meta.url))),
+  node: process.version, threads: 1, maximumWasmBytes: 65536 * 65536,
   provingPerformed: false, setupInitialized: false, witnessRead: false };
 
 try {
   const rawCircuit = await readFile(circuitPath);
   if (rawCircuit.length > 16 * 1024 * 1024 || hash(rawCircuit) !== expectedHash) throw new Error('Compiled circuit hash or size mismatch');
   const circuit = JSON.parse(rawCircuit.toString('utf8'));
+  evidence.compiler = circuit.noir_version ?? null;
   if (typeof circuit.bytecode !== 'string' || typeof circuit.debug_symbols !== 'string') throw new Error('Missing compiled circuit/debug metadata');
   const bytecode = new Uint8Array(gunzipSync(Buffer.from(circuit.bytecode, 'base64'), { maxOutputLength: 64 * 1024 * 1024 }));
   // Pinned Noir beta.26 emits base64-encoded raw DEFLATE JSON debug symbols.
   const symbols = JSON.parse(inflateRawSync(Buffer.from(circuit.debug_symbols, 'base64'),
     { maxOutputLength: 64 * 1024 * 1024 }).toString('utf8'));
-  if (symbols.debug_infos?.length !== 1) throw new Error('Profiler requires the spike single-function debug map');
+  if (symbols.debug_infos?.length !== 1) throw new Error('Profiler requires a single-function debug map');
   const debug = symbols.debug_infos[0];
   const locations = debug.location_tree?.locations;
   if (!Array.isArray(locations) || !debug.acir_locations || !circuit.file_map) throw new Error('Unsupported debug metadata shape');
 
   api = await Barretenberg.new({ backend: BackendType.Wasm, threads: 1, skipSrsInit: true,
-    memory: { initial: 2048, maximum: 32768 } });
+    memory: { initial: 2048, maximum: 65536 } });
   const stats = await api.circuitStats({
     circuit: { name: 'private-accounting-spike-profile', bytecode, verificationKey: new Uint8Array() },
     includeGatesPerOpcode: true,
     settings: { ipaAccumulation: false, oracleHashType: 'poseidon2', disableZk: false, optimizedSolidityVerifier: false },
   });
   evidence.stats = stats;
+  if (!Number.isSafeInteger(stats.numGates) || stats.numGates < 1
+    || !Number.isSafeInteger(stats.numGatesDyadic) || stats.numGatesDyadic < stats.numGates
+    || !Number.isInteger(Math.log2(stats.numGatesDyadic))) throw new Error('Invalid upstream gate/dyadic counts');
   await writeFile(resolve(outputDir, 'circuit-stats.json'), JSON.stringify(stats, null, 2) + '\n');
   await writeFile(resolve(outputDir, 'debug-symbols.json'), JSON.stringify(symbols, null, 2) + '\n');
   if (!Array.isArray(stats.gatesPerOpcode) || stats.gatesPerOpcode.length !== stats.numAcirOpcodes
@@ -83,6 +92,7 @@ try {
     const stack = stackFor(opcode);
     const primitiveHint = stack.some(frame => frame.file.endsWith('/ecdsa_secp256r1.nr')) ? 'p256'
       : stack.some(frame => frame.file.endsWith('/sha256.nr')) ? 'sha256'
+      : stack.some(frame => /(?:^|\/)poseidon2(?:\/|\.nr$)/.test(frame.file)) ? 'poseidon2'
       : stack.length ? 'other' : 'no-debug-location';
     const previous = groups.get(primitiveHint) ?? { gates: 0, opcodes: 0 };
     previous.gates += gates; previous.opcodes += 1; groups.set(primitiveHint, previous);
@@ -113,6 +123,7 @@ try {
   await writeFile(resolve(outputDir, 'profile-evidence.json'), JSON.stringify(evidence, null, 2) + '\n');
 }
 console.log(JSON.stringify({ ok: evidence.ok, circuitSha256: expectedHash,
-  numGates: evidence.stats?.numGates, attribution: evidence.mapping?.byPrimitiveHint,
+  numGates: evidence.stats?.numGates, numGatesDyadic: evidence.stats?.numGatesDyadic,
+  attribution: evidence.mapping?.byPrimitiveHint,
   outputDir, error: evidence.error, cleanupError: evidence.cleanupError }));
 if (!evidence.ok) process.exitCode = 1;

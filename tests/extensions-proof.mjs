@@ -14,6 +14,7 @@ import {OPTIONS,hex,be,canonicalSignature,zeros} from '@corbet-labs/czkp/encodin
 import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
 import {recordEpochPublicInputs,recordPresentationBytes,verifyRecordPresentation} from '@corbet-labs/czkp/record';
 import {createProver} from '@corbet-labs/czkp/prove';
+import {verifyPublicCertificates} from '@corbet-labs/czkp/public-checks';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
@@ -61,6 +62,16 @@ child.on('exit',code=>{if(pending)pending.reject(new Error(`Issuer exited ${code
 async function call(request,expected=true,retain=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
   assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);publicCases.push({operation:request.op,ok:result.ok,error:result.error});
   if(retain)publicTrace.push({request:structuredClone(request),response:result});return result.value;}
+// The moved refusals still execute, now in the verifier's public certificate check.
+async function checkPublicCertificate(kind,input){
+  await verifyPublicCertificates(programs[kind],publicInputs(programs[kind],input));
+  for(const key of ['certificate','issuer_key','scope','community','owner','state','version','accepted_at']){
+    const bad=structuredClone(input);
+    if(Array.isArray(bad[key])||bad[key] instanceof Uint8Array)bad[key][0]^=1;
+    else bad[key]=BigInt(bad[key])+1n;
+    await assert.rejects(verifyPublicCertificates(programs[kind],publicInputs(programs[kind],bad)),key);
+  }
+}
 let activeProver;
 async function proof(kind,input,label,measure=false){
   if(recordDiagnostic&&kind!=='record_epoch')measure=false;
@@ -344,6 +355,7 @@ try{
   try {
     for(const [index,event] of [[0,acceptedContact.outgoing],[2,acceptedContact.incoming]]) {
       const candidate=await members[index].wave(event,{history:bytes(201),challenge:bytes(202)},artifacts.scope.circuitDigest,manifest.issuerKey);
+      await checkPublicCertificate('wave',candidate.input);
       const encoded=await proof('wave',candidate.input,'accepted-active-wave',index===0);
       const statement=candidate.statement.wave,expected=statement.context;
       await checkWave(statement,expected,encoded,now,true);
@@ -356,8 +368,8 @@ try{
       await checkWave(statement,expected,encoded,expected.expiresAt,false);
       const wrong=structuredClone(statement);wrong.state[31]^=1;await checkWave(wrong,expected,encoded,now,false);
       for(const mutate of [i=>i.slot.phase=1,i=>i.slot.outcome=1,i=>i.slot.answered=true,i=>i.slot.self_punished=true,
-        i=>i.opening.debt+=1n,i=>i.opening.inbox[0]^=1,i=>i.certificate[0]^=1,i=>i.issuer_key[0]^=1,
-        i=>i.selected.leaf[1]+=1n,i=>i.state_policy[0]^=1,i=>i.scope[0]^=1]) {
+        i=>i.opening.debt+=1n,i=>i.opening.inbox[0]^=1,
+        i=>i.selected.leaf[1]+=1n,i=>i.state_policy[0]^=1]) {
         const wrong=structuredClone(candidate.input);mutate(wrong);
         await assert.rejects(new Noir(programs.wave).execute(witnessInputs(programs.wave,wrong)));
       }
@@ -366,6 +378,7 @@ try{
   async function settledEvidence(index,event,outcome,resolution,acknowledgment){
     const candidate=await members[index].waveOutcome(event,{history:resolution?.historyDigest??bytes(213),challenge:bytes(214)},
       artifacts.scope.circuitDigest,manifest.issuerKey,outcome,resolution,acknowledgment);
+    await checkPublicCertificate('outcome',candidate.input);
     const encoded=await proof('outcome',candidate.input,`settled-${outcome}`,outcome==='answer'&&index===2);
     const statement=candidate.statement.outcome,expected=statement.evidence.context;
     const request={statement,expected,proof:encoded,now,expectedOutcome:outcome,expectedReceiptDigest:statement.receiptDigest};
@@ -386,7 +399,7 @@ try{
         const bad=structuredClone(request);mutate(bad);await check(bad,false);
       }
     }finally{peer.stdin.end();}
-    for(const mutate of [i=>i.slot.phase=2,i=>i.certificate[0]^=1,i=>i.opening.debt+=1n,
+    for(const mutate of [i=>i.slot.phase=2,i=>i.opening.debt+=1n,
       ...(outcome==='silence'?[i=>i.receipt_digest[0]^=1,i=>i.outcome=2]:[i=>i.resolution.signature[0]^=1,i=>i.resolution.history_digest[0]^=1,i=>i.peer_enrollment.key[0]^=1]),
       ...(outcome==='answer'?[i=>i.acknowledgment.signature[0]^=1]:[])]){
       const bad=structuredClone(candidate.input);mutate(bad);

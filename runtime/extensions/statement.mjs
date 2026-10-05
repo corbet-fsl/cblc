@@ -51,12 +51,12 @@ export async function expectedProofs(statement,bundle,manifest) {
     if(!exact(statement,['kind','policy','certificateKey','wave']))throw new Error('Wave shape');
     if(!equal(statement.certificateKey,manifest.issuerKey))throw new Error('Wave issuer key');
     const w=statement.wave,c=w.context;
-    if(!exact(w,['context','statePolicy','version','state','acceptedAt','binding'])
+    if(!exact(w,['context','statePolicy','version','state','acceptedAt','binding','certificate'])
       ||!exact(c,['community','owner','peer','role','nonce','group','contactPolicy','history','challenge','openedAt','expiresAt','ownerAuthority','peerAuthority']))throw new Error('Wave fields');
     return [{kind:'wave',proof,input:{extension,issuer_key:manifest.issuerKey,scope:Array.from(Buffer.from(manifest.circuitSha256,'hex')),
       community:c.community,owner:c.owner,peer:c.peer,role:c.role,nonce:c.nonce,group:c.group,contact_policy:c.contactPolicy,
       history:c.history,challenge:c.challenge,opened_at:c.openedAt,expires_at:c.expiresAt,owner_authority:c.ownerAuthority,peer_authority:c.peerAuthority,
-      state_policy:w.statePolicy,version:w.version,state:w.state,accepted_at:w.acceptedAt,binding:w.binding}}];
+      state_policy:w.statePolicy,version:w.version,state:w.state,accepted_at:w.acceptedAt,binding:w.binding,certificate:w.certificate}}];
   }
   if(statement.kind==='deposit') {
     if(!exact(statement,['kind','policy','deposit']))throw new Error('Deposit shape');
