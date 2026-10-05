@@ -40,35 +40,38 @@ fn main() {
             .decode(request["proof"].as_str().unwrap().as_bytes())
             .unwrap();
         let now = request["now"].as_u64().unwrap();
-        let verified = if let Some(outcome) = request.get("expectedOutcome") {
+        let result = if let Some(outcome) = request.get("expectedOutcome") {
             let statement: WaveOutcomeStatement =
                 serde_json::from_value(request["statement"].clone()).unwrap();
             let outcome: WaveOutcome = serde_json::from_value(outcome.clone()).unwrap();
             let digest: [u8; 32] =
                 serde_json::from_value(request["expectedReceiptDigest"].clone()).unwrap();
-            let result =
-                verifier.verify_outcome(&statement, &proof, &expected, outcome, &digest, now);
+            let result = verifier
+                .verify_outcome_detailed(&statement, &proof, &expected, outcome, &digest, now);
             if let Ok(value) = &result {
                 assert_eq!(value.context(), &expected);
                 assert_eq!(value.outcome(), outcome);
                 assert_eq!(value.receipt_digest(), &digest);
             }
-            if let Err(error) = &result {
-                eprintln!("CI public Wave refusal: {error}");
-            }
-            result.is_ok()
+            result.map(|_| ())
         } else {
             let statement: WaveStatement =
                 serde_json::from_value(request["statement"].clone()).unwrap();
-            let result = verifier.verify(&statement, &proof, &expected, now);
+            let result = verifier.verify_detailed(&statement, &proof, &expected, now);
             if let Ok(value) = &result {
                 assert_eq!(value.context(), &expected);
             }
-            if let Err(error) = &result {
-                eprintln!("CI public Wave refusal: {error}");
-            }
-            result.is_ok()
+            result.map(|_| ())
         };
-        println!("{}", serde_json::json!({"verified":verified}));
+        // The full fixture retains this public reply for the exact attempt.
+        // Never attach request bytes, stderr, OS messages or executable paths.
+        let diagnostic = result.as_ref().err().map(|failure| failure.category());
+        if let Err(failure) = &result {
+            eprintln!("CI public Wave refusal: {}", failure.category());
+        }
+        println!(
+            "{}",
+            serde_json::json!({"verified":result.is_ok(),"diagnostic":diagnostic})
+        );
     }
 }
