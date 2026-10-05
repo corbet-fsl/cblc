@@ -69,13 +69,24 @@ const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-
 const manifestBytes=Buffer.from(JSON.stringify(manifest));await writeFile(resolve(directory,'manifest.json'),manifestBytes);
 const configPath=resolve(directory,'config.json');await writeFile(configPath,JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
 const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
+const epochSnapshots=new Map(),epochChecks=[];
 const hashApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const hashes=extensionHashes(hashApi);
 const child=spawn(resolve(process.env.CBLC_EXTENSION_ISSUER??'target/debug/examples/extension_issuer'),[configPath],{stdio:['pipe','pipe','inherit']});
 let pending;const lines=createInterface({input:child.stdout});
 lines.on('line',line=>{const waiter=pending;pending=undefined;if(!waiter)throw new Error('Unexpected issuer reply');waiter.resolve(JSON.parse(line));});
 child.on('exit',code=>{if(pending)pending.reject(new Error(`Issuer exited ${code}`));});
-async function call(request,expected=true,retain=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
+async function call(request,expected=true,retain=true){
+  if(request.op==='checkEpochRecord'||request.op==='publication'){
+    assert(retain);
+    const rows=await call({op:'capturePublicEpoch'},true,false);
+    assert(Array.isArray(rows)&&rows.length===2&&rows.every(row=>typeof row==='string'&&row.length<=128*1024&&/^[0-9a-f]+$/.test(row)));
+    const digest=sha(JSON.stringify(rows)).toString('hex');
+    epochSnapshots.set(digest,{sha256:digest,rows});
+    epochChecks.push({index:publicTrace.length,requestSha256:sha(JSON.stringify(request)).toString('hex'),snapshotSha256:digest});
+    assert(epochSnapshots.size<=16&&epochChecks.length<=128);
+  }
+  assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
   assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);publicCases.push({operation:request.op,ok:result.ok,error:result.error});
   if(retain)publicTrace.push({request:structuredClone(request),response:result});return result.value;}
 // The moved refusals still execute, now in the verifier's public certificate check.
@@ -451,7 +462,11 @@ try{
       await retainWaveAttempt(request,verified);
       peer.stdin.write(JSON.stringify(request)+'\n');const reply=await replies.next();assert(!reply.done);
       const response=JSON.parse(reply.value);await retainWaveAttempt(request,verified,response);
-      assert.deepEqual(response,{verified});publicWaveTrace.push({request:structuredClone(request),verified});
+      assert.deepEqual(Object.keys(response).sort(),['diagnostic','verified']);
+      assert.equal(response.verified,verified);
+      if(verified)assert.equal(response.diagnostic,null);
+      else assert.equal(typeof response.diagnostic,'string');
+      publicWaveTrace.push({request:structuredClone(request),verified});
     }
     try{
       await check(request,true);
@@ -578,5 +593,9 @@ try{
   await writeFile(resolve(directory,'results.json'),JSON.stringify({validationScope:recordDiagnostic?'g2-record-diagnostic':'full-extension',benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
   // Only fictional public requests/proofs cross this fixture pipe. Replaying
   // them measures issuer coverage without generating another set of proofs.
-  await writeFile(resolve(directory,'public-trace.json'),JSON.stringify(publicTrace));
+  const traceBytes=JSON.stringify(publicTrace);
+  await writeFile(resolve(directory,'public-trace.json'),traceBytes);
+  const authority=JSON.stringify({version:1,traceSha256:sha(traceBytes).toString('hex'),snapshots:[...epochSnapshots.values()],checks:epochChecks});
+  assert(Buffer.byteLength(authority)<=8*1024*1024);
+  await writeFile(resolve(directory,'public-epoch-authority.json'),authority);
 }finally{child.stdin.end();await activeProver?.prover.destroy();await hashApi.destroy();}

@@ -8,6 +8,8 @@ mod common;
 #[cfg(feature = "publication")]
 #[path = "../tests/holder/epoch_publication.rs"]
 mod epoch_publication;
+#[path = "../tests/holder/epoch_replay.rs"]
+mod epoch_replay;
 use cblc::{
     Error,
     accounting::*,
@@ -61,6 +63,14 @@ fn config(scope: AccountProofScope) -> cvfy::ProcessVerifierConfig {
     }
 }
 fn main() {
+    let arguments: Vec<_> = std::env::args().collect();
+    let mut replay = match arguments.as_slice() {
+        [_, _] => None,
+        [_, _, mode, path, digest] if mode == "--replay-public-authority" => Some(
+            epoch_replay::Replay::load(std::path::Path::new(path), digest),
+        ),
+        _ => panic!("Unknown issuer fixture mode"),
+    };
     let fixture = common::Fixture::new();
     let directory = tempfile::tempdir().unwrap();
     let mut ledger: Option<AccountLedger<RejectLegacy>> = None;
@@ -74,9 +84,42 @@ fn main() {
     let mut record_challenges = std::collections::BTreeMap::new();
     let companion = std::sync::Arc::new(std::sync::Mutex::new(None::<AccountLedger<RejectLegacy>>));
     for line in io::stdin().lock().lines() {
-        let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        let line = line.unwrap();
+        let v: Value = serde_json::from_str(&line).unwrap();
+        let operation = v["op"].as_str().unwrap();
+        if let Some(replay) = &replay {
+            replay.before(operation);
+        }
+        // Both consumers must see the original authenticated public epoch pair.
+        // The guard restores the replay ledger's own pair before any reply.
+        let restore = if matches!(operation, "checkEpochRecord" | "publication") {
+            replay
+                .as_mut()
+                .map(|replay| replay.install(&line, &directory.path().join("issuer.db")))
+        } else {
+            None
+        };
         let result = (|| -> Result<Value, Error> {
             match v["op"].as_str().unwrap() {
+                "capturePublicEpoch" => {
+                    assert!(replay.is_none());
+                    #[cfg(feature = "publication")]
+                    ledger.as_mut().unwrap().public_verifier_material(
+                        1,
+                        1,
+                        &cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                    )?;
+                    Ok(json!(epoch_replay::capture(
+                        &directory.path().join("issuer.db")
+                    )))
+                }
+                "replayPublicEpoch" => {
+                    replay
+                        .as_mut()
+                        .unwrap()
+                        .select(v["index"].as_u64().unwrap().try_into().unwrap());
+                    Ok(json!(true))
+                }
                 "init" => {
                     let proof_scope: AccountProofScope =
                         serde_json::from_value(v["scope"].clone()).unwrap();
@@ -841,6 +884,7 @@ fn main() {
                 _ => Err(Error::InvalidInput),
             }
         })();
+        drop(restore);
         println!(
             "{}",
             match result {
@@ -849,5 +893,8 @@ fn main() {
             }
         );
         io::stdout().flush().unwrap();
+    }
+    if let Some(replay) = &replay {
+        replay.complete();
     }
 }
