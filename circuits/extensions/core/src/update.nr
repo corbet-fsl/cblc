@@ -4,7 +4,7 @@ use crate::{Enrollment,Opening,Obligation,MapWitness,Resolution,Acknowledgment,E
     verify_acknowledgment,resolution_claim,extension_hash,advance,delivery,authorization,contact_claim,verify_p256};
 use crate::indexed;
 global SAFE: u64 = 9007199254740991;
-pub fn apply<let CLASS: u8>(
+pub fn apply<let CLASS: u32>(
     extension: ExtensionPolicy, previous_inbox: [u8;32], inbox: [u8;32],
     consume_only: bool, change_binding: [u8;32],
     community: [u8; 32], owner: [u8; 32], policy_digest: [u8; 32], state_policy: [u8;32],
