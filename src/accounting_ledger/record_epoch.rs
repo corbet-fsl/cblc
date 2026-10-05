@@ -14,8 +14,8 @@ const RECIPIENT_PREFIX: &[u8] = b"record-recipient:v1:";
 const FROZEN: &[u8] = b"record-epoch-frozen:v1";
 const PUBLISHED: &[u8] = b"record-epoch-published:v1";
 const ANCHOR: &[u8] = b"record-epoch-anchor:v1";
-const OBJECT_PREFIX: &[u8] = b"cblc.record-witnesses.v1\0";
-const HPKE_INFO: &[u8] = b"cblc.record-witness.v1\0";
+const OBJECT_PREFIX: &[u8] = b"cblc.record-witnesses.v2\0";
+const HPKE_INFO: &[u8] = b"cblc.record-witness.v2\0";
 const MAX_FRONTIERS: u32 = 1 << 20;
 const ANCESTRY_PREFIX: &[u8] = b"record-ancestry-latest:v1:";
 
@@ -28,6 +28,7 @@ pub(super) struct Lineage {
     index: u32,
     path: Vec<[u8; 32]>,
     pub(super) consumed: bool,
+    requires_descendant: bool,
 }
 impl Lineage {
     pub(super) fn required_inbox(&self) -> [u8; 32] {
@@ -145,6 +146,7 @@ pub(super) fn recover(
     tx: &mut Transaction<'_>,
     accepted: &AccountAcceptance,
     issuer: Option<&cssr::certificate::CertificateIssuer>,
+    record_key: &[u8; 32],
 ) -> Result<Option<crate::extensions::EpochAncestryCertificate>, Error> {
     let Some(issuer) = issuer else {
         return Ok(None);
@@ -168,6 +170,23 @@ pub(super) fn recover(
             .map_err(|_| Error::Storage)?;
         cssr::certificate::verify_ancestry(&issuer.public_key(), &certificate.body(), signature)
             .map_err(|_| Error::Storage)?;
+        if certificate.record.leaf.owner != certificate.owner
+            || certificate.record.leaf.version > certificate.version
+        {
+            return Err(Error::Storage);
+        }
+        let leaf = certificate
+            .record
+            .leaf
+            .commitment(&certificate.community, certificate.epoch)?;
+        czkp::record::verify_certificate(
+            record_key,
+            &certificate.community,
+            certificate.epoch,
+            &leaf,
+            &certificate.record.signature,
+        )
+        .map_err(|_| Error::Storage)?;
     }
     Ok(certificate)
 }
@@ -181,6 +200,7 @@ pub(super) fn certify(
     configuration: &[u8],
     extensions: &Extensions,
     issuer: &cssr::certificate::CertificateIssuer,
+    record_issuer: &cssr::certificate::RecordIssuer,
 ) -> Result<Option<crate::extensions::EpochAncestryCertificate>, Error> {
     let published: PublishedAnchor = tx.get(ANCHOR)?.ok_or(Error::Storage)?;
     let descriptor = &published.descriptor;
@@ -194,6 +214,7 @@ pub(super) fn certify(
         || published.frozen_at > accepted.accepted_at
         || lineage.epoch != descriptor.epoch
         || !lineage.consumed
+        || descriptor.issuer_key != record_issuer.public_key()
         || extensions.artifact_binding.certificate_key != issuer.public_key()
     {
         return Err(Error::PolicyMismatch);
@@ -221,6 +242,33 @@ pub(super) fn certify(
     ) {
         return Err(Error::Storage);
     }
+    // Keep the frozen public leaf stable unless the frozen required inbox forced
+    // a descendant. Ordinary later updates never make record leaves track activity.
+    let record_leaf = if lineage.requires_descendant {
+        let applied = crate::extensions::applied(tx, &accepted.statement.owner)?;
+        if applied != crate::extensions::inbox(tx, &accepted.statement.owner)? {
+            return Err(Error::Admission);
+        }
+        let mut blinding = [0; 32];
+        getrandom::fill(&mut blinding).map_err(|_| Error::CryptoProvider)?;
+        czkp::record::Leaf {
+            owner: accepted.statement.owner,
+            version: accepted.statement.next_version,
+            state: accepted.statement.next_state,
+            required_inbox: applied.root,
+            blinding,
+        }
+    } else {
+        lineage.leaf.clone()
+    };
+    let record_commitment = record_leaf.commitment(&descriptor.community, descriptor.epoch)?;
+    let record = czkp::record::SignedLeaf {
+        leaf: record_leaf,
+        signature: record_issuer
+            .issue(&descriptor.community, descriptor.epoch, &record_commitment)
+            .map_err(|_| Error::CryptoProvider)?
+            .to_vec(),
+    };
     let mut certificate = crate::extensions::EpochAncestryCertificate {
         community: descriptor.community,
         owner: accepted.statement.owner,
@@ -232,6 +280,7 @@ pub(super) fn certify(
         proof_scope: accepted.proof_scope.clone(),
         issued_at: accepted.accepted_at,
         signature: Vec::new(),
+        record,
     };
     certificate.signature = issuer
         .issue_ancestry(&certificate.body())
@@ -296,6 +345,7 @@ struct FrozenFrontier {
 #[derive(Serialize, Deserialize)]
 struct FrozenEpochState {
     community: [u8; 32],
+    issuer_key: [u8; 32],
     policy_epoch: u64,
     epoch: u64,
     period_seconds: u64,
@@ -327,8 +377,14 @@ impl RecordEpochPublication {
 }
 
 impl FrozenEpoch {
-    fn encrypt(&self) -> Result<RecordEpochPublication, Error> {
+    fn encrypt(
+        &self,
+        issuer: &cssr::certificate::RecordIssuer,
+    ) -> Result<RecordEpochPublication, Error> {
         let frozen = &self.0;
+        if issuer.public_key() != frozen.issuer_key {
+            return Err(Error::PolicyMismatch);
+        }
         let count = frozen.frontiers.len();
         let padded = count
             .max(2)
@@ -343,7 +399,7 @@ impl FrozenEpoch {
         let tree = rs_merkle::MerkleTree::<czkp::record::EpochTree>::from_leaves(&leaves);
         let root = tree.root().ok_or(Error::Storage)?;
         let depth = padded.ilog2() as usize;
-        let packet_bytes = 32 + 16 + 140 + 32 * depth;
+        let packet_bytes = 32 + 16 + 140 + 32 * depth + 64;
         let object_bytes = OBJECT_PREFIX
             .len()
             .checked_add(8)
@@ -357,13 +413,14 @@ impl FrozenEpoch {
             return Err(Error::Capacity);
         }
         let mut descriptor = czkp::record::Epoch {
-            purpose: czkp::record::Purpose::RecordEpochV2,
+            purpose: czkp::record::Purpose::RecordEpochV3,
             community: frozen.community,
             policy_epoch: frozen.policy_epoch,
             epoch: frozen.epoch,
             starts_at: frozen.epoch * frozen.period_seconds,
             expires_at: (frozen.epoch + 1) * frozen.period_seconds,
             root,
+            issuer_key: frozen.issuer_key,
             proof_scope: frozen.proof_scope.clone(),
             leaf_count: count as u32,
             download_digest: [0; 32],
@@ -381,7 +438,7 @@ impl FrozenEpoch {
             }
             // Fixed width within the epoch: no clear owner, variable integer
             // length, recipient label, or per-member download path.
-            let mut plaintext = Zeroizing::new(Vec::with_capacity(140 + depth * 32));
+            let mut plaintext = Zeroizing::new(Vec::with_capacity(140 + depth * 32 + 64));
             plaintext.extend_from_slice(&frontier.leaf.owner);
             plaintext.extend_from_slice(&frontier.leaf.version.to_be_bytes());
             plaintext.extend_from_slice(&frontier.leaf.state);
@@ -391,6 +448,11 @@ impl FrozenEpoch {
             for sibling in path.proof_hashes() {
                 plaintext.extend_from_slice(sibling);
             }
+            plaintext.extend_from_slice(
+                &issuer
+                    .issue(&frozen.community, frozen.epoch, &leaves[index])
+                    .map_err(|_| Error::CryptoProvider)?,
+            );
             let key = <Kem as hpke::Kem>::PublicKey::from_bytes(&frontier.recipient_key)
                 .map_err(|_| Error::InvalidInput)?;
             // Base confidentiality is authenticated by the original signed
@@ -426,13 +488,14 @@ impl FrozenEpoch {
 
 fn packet_aad(epoch: &czkp::record::Epoch) -> Result<Vec<u8>, Error> {
     serde_json::to_vec(&serde_json::json!([
-        "cblc.record-packet.v1",
+        "cblc.record-packet.v2",
         epoch.community,
         epoch.policy_epoch,
         epoch.epoch,
         epoch.starts_at,
         epoch.expires_at,
         epoch.root,
+        epoch.issuer_key,
         epoch.proof_scope,
         epoch.leaf_count,
         epoch.download_bytes,
@@ -452,7 +515,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         clock: impl Fn() -> u64,
     ) -> Result<RecordEpochPublication, Error> {
         let frozen = self.freeze_record_epoch(policy_epoch, period_seconds, &clock)?;
-        let published = frozen.encrypt()?;
+        let record_issuer = cssr::certificate::RecordIssuer::new(&self.operator.to_bytes());
+        let published = frozen.encrypt(&record_issuer)?;
         let mut tx = self.connection.transaction()?;
         let now = clock();
         check_time(now, frozen.0.frozen_at.max(clock_floor(&mut tx)?))?;
@@ -527,6 +591,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 path: tree.proof(&[index]).proof_hashes().to_vec(),
                 consumed: crate::extensions::applied(&mut tx, &leaf.owner)?.root
                     == leaf.required_inbox,
+                requires_descendant: crate::extensions::applied(&mut tx, &leaf.owner)?.root
+                    != leaf.required_inbox,
             });
             tx.put(&stored_key, &current)?;
         }
@@ -694,6 +760,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         }
         let frozen = FrozenEpochState {
             community: self.community,
+            issuer_key: self.operator.verifying_key().to_bytes(),
             policy_epoch,
             epoch,
             period_seconds,

@@ -3,6 +3,22 @@ when:
   - event: manual
 skip_clone: true
 variables:
+  B0_MAIN_SOURCE_ARCHIVE: {default: ""}
+  B0_MAIN_SOURCE_SHA256: {default: ""}
+  B0_PRECACHE_SOURCE_ARCHIVE: {default: ""}
+  B0_PRECACHE_SOURCE_SHA256: {default: ""}
+  B0_CACHED_SOURCE_ARCHIVE: {default: ""}
+  B0_CACHED_SOURCE_SHA256: {default: ""}
+  B0_M1_SOURCE_ARCHIVE: {default: ""}
+  B0_M1_SOURCE_SHA256: {default: ""}
+  B0_M4_SOURCE_ARCHIVE: {default: ""}
+  B0_M4_SOURCE_SHA256: {default: ""}
+  B0_M5_SOURCE_ARCHIVE: {default: ""}
+  B0_M5_SOURCE_SHA256: {default: ""}
+  B0_D3_SOURCE_ARCHIVE: {default: ""}
+  B0_D3_SOURCE_SHA256: {default: ""}
+  B0_D2_SOURCE_ARCHIVE: {default: ""}
+  B0_D2_SOURCE_SHA256: {default: ""}
   SOURCE_ARCHIVE: {default: ""}
   SOURCE_SHA256: {default: ""}
   G2_CODEC_SOURCE_ARCHIVE: {default: ""}
@@ -69,7 +85,7 @@ steps:
         set -eu
         : "$${SOURCE_ARCHIVE:?}" "$${SOURCE_SHA256:?}" "$${CI_COMMIT_SHA:?}"
         : "$${G2_CODEC_SOURCE_ARCHIVE:?}" "$${G2_CODEC_SOURCE_SHA256:?}"
-        if test "$$CHECKS" = g2-diagnostic; then
+        if test "$$CHECKS" = g2-diagnostic || test "$$CHECKS" = proof-b0; then
           exec "$$CI_TOOL_BINARY" check --archive "$$SOURCE_ARCHIVE" --sha256 "$$SOURCE_SHA256" \
             --commit "$$CI_COMMIT_SHA" --check "$$CHECKS"
         fi

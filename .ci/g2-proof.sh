@@ -103,6 +103,7 @@ assert.equal(findBbBinary(),process.env.BB_BINARY_PATH);
 assert((await readFile(process.env.CBLC_DIAGNOSTIC_OUTPUT+'/bb-version.txt','utf8')).includes(pkg.version));
 JS
 run python3 .ci/g2-candidates.py unpack
+run node --test "$codec_dir/tests/abi.test.mjs" "$codec_dir/tests/record.test.mjs"
 if [[ $fixture == proof-time ]]; then
     printf '%s  %s\n' "$G2_CVLT_SOURCE_SHA256" "$G2_CVLT_SOURCE_ARCHIVE" | sha256sum --check --strict
     mkdir .g2-vault
@@ -231,6 +232,7 @@ PYCODEC
 sha256sum --check --strict "$report_dir/cargo-locks.sha256"
 run python3 .ci/g2-candidates.py select-patches cblc fmt
 run cargo fmt --all -- --check
+run cargo test --locked --all-features --lib
 run python3 .ci/g2-candidates.py select-patches cblc issuer
 examples=(--example extension_issuer)
 if [[ $fixture == full-extension ]]; then examples+=(--example wave_verifier); fi

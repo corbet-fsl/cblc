@@ -468,15 +468,20 @@ fn main() {
                         let step = tick.replace(tick.get() + 1);
                         if step == 1 { now + 1 } else { now }
                     });
-                    assert!(matches!(result, Err(Error::ClockRollback)));
+                    assert!(
+                        matches!(result, Err(Error::ClockRollback)),
+                        "Expected clock rollback, got {:?}",
+                        result.as_ref().err()
+                    );
                     Ok(json!(true))
                 }
                 "recordWitness" => {
                     let member = v["member"].as_u64().unwrap() as u8;
                     let published = record_publication.as_ref().unwrap();
-                    let (leaf, index, path) = ancestry::open_witness(published, member);
+                    let (leaf, index, path, certificate) =
+                        ancestry::open_witness(published, member);
                     Ok(
-                        json!({"epoch":published.descriptor(),"leaf":leaf,"index":index,"path":path,
+                        json!({"epoch":published.descriptor(),"leaf":leaf,"index":index,"path":path,"certificate":certificate,
                         "ancestry":latest.get(&member).unwrap().1}),
                     )
                 }

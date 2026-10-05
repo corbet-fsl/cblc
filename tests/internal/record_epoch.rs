@@ -29,6 +29,7 @@ fn fixture(count: u32) -> FrozenEpoch {
     }
     FrozenEpoch(FrozenEpochState {
         community: [1; 32],
+        issuer_key: cssr::certificate::RecordIssuer::new(&[19; 32]).public_key(),
         policy_epoch: 3,
         epoch: 2,
         period_seconds: 86400,
@@ -88,7 +89,20 @@ fn assert_witness(
     assert_eq!(leaf.owner, expected_owner);
     let index = u32::from_be_bytes(plaintext[136..140].try_into().unwrap()) as usize;
     assert!(index < publication.descriptor.leaf_count as usize);
-    let path = plaintext[140..]
+    czkp::record::verify_certificate(
+        &publication.descriptor.issuer_key,
+        &publication.descriptor.community,
+        publication.descriptor.epoch,
+        &leaf
+            .commitment(
+                &publication.descriptor.community,
+                publication.descriptor.epoch,
+            )
+            .unwrap(),
+        &plaintext[plaintext.len() - 64..],
+    )
+    .unwrap();
+    let path = plaintext[140..plaintext.len() - 64]
         .chunks_exact(32)
         .map(|chunk| chunk.try_into().unwrap())
         .collect();
@@ -114,7 +128,9 @@ fn assert_witness(
 fn whole_common_object_decrypts_only_own_unlabeled_witness() {
     for count in [1, 2, 3, 8] {
         let original = fixture(count);
-        let publication = original.encrypt().unwrap();
+        let publication = original
+            .encrypt(&cssr::certificate::RecordIssuer::new(&[19; 32]))
+            .unwrap();
         let digest: [u8; 32] = Sha256::digest(publication.common_object()).into();
         assert_eq!(digest, publication.descriptor.download_digest);
         for index in 0..count {
@@ -136,7 +152,9 @@ fn whole_common_object_decrypts_only_own_unlabeled_witness() {
         let mut wrong_scope = publication.clone();
         wrong_scope.descriptor.proof_scope.circuit_digest[0] ^= 1;
         assert!(open_matches(&wrong_scope, &material(0).0).is_empty());
-        let repeated = original.encrypt().unwrap();
+        let repeated = original
+            .encrypt(&cssr::certificate::RecordIssuer::new(&[19; 32]))
+            .unwrap();
         assert_eq!(publication.descriptor.root, repeated.descriptor.root);
         assert_ne!(publication.common_object(), repeated.common_object());
         // The ledger publication method, rather than this private builder,
@@ -148,7 +166,9 @@ fn whole_common_object_decrypts_only_own_unlabeled_witness() {
 fn report_actual_five_thousand_member_download_and_trial_decryption() {
     let source = fixture(5000);
     let start = Instant::now();
-    let publication = source.encrypt().unwrap();
+    let publication = source
+        .encrypt(&cssr::certificate::RecordIssuer::new(&[19; 32]))
+        .unwrap();
     let build = start.elapsed();
     let start = Instant::now();
     let found = open_matches(&publication, &material(2718).0);

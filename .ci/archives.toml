@@ -3,12 +3,12 @@ schema = 1
 # Exact diagnostic codec candidate, imported locally from the original czkp
 # repository. This is extra test source, never a claim about dependency main.
 [archives.g2_codec]
-revision = "93d157e3961170153e92fb7dd9b4038edba2d498"
+revision = "74008f418642ef2f001f0f3ae958f8342ef8f9e8"
 archive_variable = "G2_CODEC_SOURCE_ARCHIVE"
 digest_variable = "G2_CODEC_SOURCE_SHA256"
 
 [archives.g2_cssr]
-revision = "1091bafed66d9127a5f4ea4513cdf224470c4eea"
+revision = "868d0c6441f062d7be4fb17af8c966e2fa3034f0"
 archive_variable = "G2_CSSR_SOURCE_ARCHIVE"
 digest_variable = "G2_CSSR_SOURCE_SHA256"
 
@@ -18,7 +18,7 @@ archive_variable = "G2_CVFY_SOURCE_ARCHIVE"
 digest_variable = "G2_CVFY_SOURCE_SHA256"
 
 [archives.g2_cwlt]
-revision = "167abb7613a3edf0497213e4edc29e185716df7f"
+revision = "de0c19b7f14d17216a21a7c7f4114c4b367c5ee1"
 archive_variable = "G2_CWLT_SOURCE_ARCHIVE"
 digest_variable = "G2_CWLT_SOURCE_SHA256"
 
@@ -49,3 +49,43 @@ digest_variable = "G2_CVLT_SOURCE_SHA256"
 revision = "de04691c4c654ddbc5f0cd985e342606059b98ba"
 archive_variable = "G2_CWST_SOURCE_ARCHIVE"
 digest_variable = "G2_CWST_SOURCE_SHA256"
+
+[archives.b0_main]
+revision = "b7449bdd32e884cfe29eff3bdbf787577bdda545"
+archive_variable = "B0_MAIN_SOURCE_ARCHIVE"
+digest_variable = "B0_MAIN_SOURCE_SHA256"
+
+[archives.b0_precache]
+revision = "1e096241b2d293f2e85c9456fa96c2d2d17d8abf"
+archive_variable = "B0_PRECACHE_SOURCE_ARCHIVE"
+digest_variable = "B0_PRECACHE_SOURCE_SHA256"
+
+[archives.b0_cached]
+revision = "3b2ced7fb3057ea917bb391ec86023e596666924"
+archive_variable = "B0_CACHED_SOURCE_ARCHIVE"
+digest_variable = "B0_CACHED_SOURCE_SHA256"
+
+[archives.b0_m1]
+revision = "2892b662712ed3e092c01efbd98367aa3cdc2c6a"
+archive_variable = "B0_M1_SOURCE_ARCHIVE"
+digest_variable = "B0_M1_SOURCE_SHA256"
+
+[archives.b0_m4]
+revision = "394bc1367f5ec85b68b9fd1791d1c7fcd642c9a7"
+archive_variable = "B0_M4_SOURCE_ARCHIVE"
+digest_variable = "B0_M4_SOURCE_SHA256"
+
+[archives.b0_m5]
+revision = "07992ca33e605186a3a050dad39df9e61e35fb46"
+archive_variable = "B0_M5_SOURCE_ARCHIVE"
+digest_variable = "B0_M5_SOURCE_SHA256"
+
+[archives.b0_d2]
+revision = "d74c6e6bed7d952e752b84c09e85c294216a2ee0"
+archive_variable = "B0_D2_SOURCE_ARCHIVE"
+digest_variable = "B0_D2_SOURCE_SHA256"
+
+[archives.b0_d3]
+revision = "c46abc5d88d7ffe8ebe002565f010795be045313"
+archive_variable = "B0_D3_SOURCE_ARCHIVE"
+digest_variable = "B0_D3_SOURCE_SHA256"

@@ -379,7 +379,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::Replay);
             }
             advance_clock(&mut transaction, now)?;
-            let ancestry = record_epoch::recover(&mut transaction, &result, issuer)?;
+            let ancestry = record_epoch::recover(
+                &mut transaction,
+                &result,
+                issuer,
+                &self.operator.verifying_key().to_bytes(),
+            )?;
             transaction.commit()?;
             return Ok(crate::extensions::ExtendedAcceptance {
                 acceptance: result,
@@ -447,7 +452,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::Replay);
             }
             advance_clock(&mut transaction, completed)?;
-            let ancestry = record_epoch::recover(&mut transaction, &result, issuer)?;
+            let ancestry = record_epoch::recover(
+                &mut transaction,
+                &result,
+                issuer,
+                &self.operator.verifying_key().to_bytes(),
+            )?;
             transaction.commit()?;
             return Ok(crate::extensions::ExtendedAcceptance {
                 acceptance: result,
@@ -518,6 +528,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 &self.config,
                 extensions,
                 issuer,
+                &cssr::certificate::RecordIssuer::new(&self.operator.to_bytes()),
             )?
         } else {
             None

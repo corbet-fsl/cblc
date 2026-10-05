@@ -22,15 +22,15 @@ await mkdir(output, { recursive: true });
 const receipt = { schema: 1, benchmark: 'B0', sourcePlanSha256: sha(planBytes), node: process.version,
   compiler: JSON.parse(await readFile(new URL('../../node_modules/@noir-lang/noir_wasm/package.json', import.meta.url))).version,
   dependencyLockSha256: sha(await readFile(new URL('../../experiments/private-accounting/package-lock.json', import.meta.url))),
-  provingPerformed: false, sources: [] };
+  provingPerformed: false, sources: [], failures: [] };
 const profilePlan = { schema: 1, bundles: [] };
 const names = new Set();
-async function fingerprint(root) {
+async function fingerprint(root, includeDependencies = false) {
   const files = [];
   async function visit(directory) {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name, 'en'))) {
-      if (entry.name === 'target') continue;
+      if (entry.name === 'target' || (!includeDependencies && ['libs','archives'].includes(entry.name))) continue;
       const path = resolve(directory, entry.name);
       if (entry.isSymbolicLink()) throw new Error('Circuit source symlink refused');
       if (entry.isDirectory()) await visit(path);
@@ -53,6 +53,7 @@ try {
     names.add(source.variant);
     const directory = resolve(source.root, 'circuits/extensions');
     const sourceFingerprint = await fingerprint(directory);
+    try {
     const circuits = {};
     const started = performance.now();
     for (const kind of [...kinds,...(source.updateClasses??[])]) {
@@ -77,13 +78,23 @@ try {
       absent: source.absent,updateClasses:source.updateClasses??[] };
     profilePlan.bundles.push({ ...identity, path, sha256: sha(bytes) });
     receipt.sources.push({ ...identity, circuitSourceFingerprint: sourceFingerprint,
+      resolvedSourcesFingerprint: await fingerprint(directory, true),
       bundleSha256: sha(bytes), compileMs: performance.now() - started, artifactBytes: bytes.length });
+    await writeFile(resolve(output, 'profile-plan.json'), JSON.stringify(profilePlan, null, 2) + '\n');
+    } catch(error) {
+      const failure={variant:source.variant,sourceCommit:source.sourceCommit,sourceArchiveSha256:source.sourceArchiveSha256,
+        circuitSourceFingerprint:sourceFingerprint,error:String(error.message??error)};
+      receipt.failures.push(failure);console.error('B0 source failed:',JSON.stringify(failure));
+    }
   }
-  await writeFile(resolve(output, 'profile-plan.json'), JSON.stringify(profilePlan, null, 2) + '\n', { flag: 'wx' });
-  receipt.ok = true;
+  await writeFile(resolve(output, 'profile-plan.json'), JSON.stringify(profilePlan, null, 2) + '\n');
+  receipt.ok = receipt.failures.length===0;
+  if(!receipt.ok)process.exitCode=1;
 } catch (error) {
   receipt.ok = false;
-  receipt.error = String(error.message);
+  receipt.error = String(error.message ?? error);
+  console.error('B0 compilation failed:', receipt.error);
+  if(error.diagnostics)console.error(JSON.stringify(error.diagnostics));
   process.exitCode = 1;
 } finally {
   await writeFile(resolve(output, 'compile-receipt.json'), JSON.stringify(receipt, null, 2) + '\n');

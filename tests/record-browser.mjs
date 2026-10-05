@@ -44,7 +44,7 @@ export async function measureRecordBrowser(artifacts,witness) {
       }
       if(req.url==='/input'){
         res.end(JSON.stringify({artifacts:{circuit:artifacts.circuit,circuitKind:artifacts.circuitKind,manifest:artifacts.manifest,limits:artifacts.limits,verificationKey:Array.from(artifacts.verificationKey)},
-          witness,threads:mode==='single'?1:undefined,expectedThreads:mode==='multi'?2:1}));return;
+          witness,threads:mode==='fallback'?8:Number(mode),expectedThreads:mode==='fallback'?1:Number(mode)}));return;
       }
       if(req.url==='/setup/g2.dat'){res.end(loaded.setup['g2.dat']);return;}
       if(req.url===`/setup/g1-${loaded.numPoints}.dat`){res.end(loaded.setup['g1.dat']);return;}
@@ -61,7 +61,7 @@ export async function measureRecordBrowser(artifacts,witness) {
     const port=server.address().port;
     community=`https://community.example.test:${port}`;vault=`https://vault.community.example.test:${port}`;
     const results=[];
-    for(mode of ['single','multi','fallback']) {
+    for(mode of ['1','2','4','8','fallback']) {
       const profile=join(scratch,mode);
       browser=spawn(process.env.BROWSER_BIN??'chromium',['--headless','--no-sandbox','--disable-dev-shm-usage','--disable-background-networking','--no-proxy-server',
         '--ignore-certificate-errors','--host-resolver-rules=MAP community.example.test 127.0.0.1, MAP vault.community.example.test 127.0.0.1',

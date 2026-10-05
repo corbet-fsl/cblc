@@ -45,7 +45,22 @@ pub fn check_certificate(
         certificate.signature.as_slice().try_into().unwrap(),
     )
     .unwrap();
-    let (leaf, _, _) = open_witness(publication, member);
+    let record_leaf = certificate
+        .record
+        .leaf
+        .commitment(&epoch.community, epoch.epoch)
+        .unwrap();
+    czkp::record::verify_certificate(
+        &epoch.issuer_key,
+        &epoch.community,
+        epoch.epoch,
+        &record_leaf,
+        &certificate.record.signature,
+    )
+    .unwrap();
+    assert_eq!(certificate.record.leaf.owner, accepted.statement.owner);
+    assert!(certificate.record.leaf.version <= accepted.statement.next_version);
+    let (leaf, _, _, _) = open_witness(publication, member);
     assert_eq!(leaf.owner, accepted.statement.owner);
     assert_eq!(
         leaf.commitment(&epoch.community, epoch.epoch).unwrap(),
@@ -56,11 +71,11 @@ pub fn check_certificate(
 pub fn open_witness(
     publication: &RecordEpochPublication,
     member: u8,
-) -> (czkp::record::Leaf, u32, Vec<[u8; 32]>) {
+) -> (czkp::record::Leaf, u32, Vec<[u8; 32]>, Vec<u8>) {
     let epoch = publication.descriptor();
     // Independently open the member's packet from the real common object and
     // verify the leaf path. No issuer-internal leaf accessor is used.
-    let prefix = b"cblc.record-witnesses.v1\0";
+    let prefix = b"cblc.record-witnesses.v2\0";
     let object = publication.common_object();
     assert_eq!(&object[..prefix.len()], prefix);
     let packet_size = u32::from_be_bytes(
@@ -69,13 +84,14 @@ pub fn open_witness(
             .unwrap(),
     ) as usize;
     let aad = serde_json::to_vec(&serde_json::json!([
-        "cblc.record-packet.v1",
+        "cblc.record-packet.v2",
         epoch.community,
         epoch.policy_epoch,
         epoch.epoch,
         epoch.starts_at,
         epoch.expires_at,
         epoch.root,
+        epoch.issuer_key,
         epoch.proof_scope,
         epoch.leaf_count,
         epoch.download_bytes,
@@ -90,7 +106,7 @@ pub fn open_witness(
                 &hpke::OpModeR::Base,
                 &private,
                 &enc,
-                b"cblc.record-witness.v1\0",
+                b"cblc.record-witness.v2\0",
                 &packet[32..],
                 &aad,
             )
@@ -109,7 +125,7 @@ pub fn open_witness(
     let hash = leaf.commitment(&epoch.community, epoch.epoch).unwrap();
     let index = u32::from_be_bytes(bytes[136..140].try_into().unwrap()) as usize;
     let path = rs_merkle::MerkleProof::<czkp::record::EpochTree>::new(
-        bytes[140..]
+        bytes[140..bytes.len() - 64]
             .chunks_exact(32)
             .map(|b| b.try_into().unwrap())
             .collect(),
@@ -120,7 +136,21 @@ pub fn open_witness(
         &[hash],
         (epoch.leaf_count as usize).max(2).next_power_of_two()
     ));
-    (leaf, index as u32, path.proof_hashes().to_vec())
+    let certificate = bytes[bytes.len() - 64..].to_vec();
+    czkp::record::verify_certificate(
+        &epoch.issuer_key,
+        &epoch.community,
+        epoch.epoch,
+        &hash,
+        &certificate,
+    )
+    .unwrap();
+    (
+        leaf,
+        index as u32,
+        path.proof_hashes().to_vec(),
+        certificate,
+    )
 }
 
 /// Reuse a genuine signed request/proof against damaged private storage. Each

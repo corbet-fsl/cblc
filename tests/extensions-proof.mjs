@@ -14,9 +14,9 @@ import {Barretenberg,BackendType,UltraHonkBackend} from '@aztec/bb.js';
 import {Noir} from '@noir-lang/noir_js';
 import {OPTIONS,hex,be,canonicalSignature,zeros} from '@corbet-labs/czkp/encoding';
 import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
-import {recordEpochPublicInputs,recordPresentationBytes,verifyRecordPresentation} from '@corbet-labs/czkp/record';
+import {recordEpochPublicInputs,recordPresentationBytes,verifyRecordPresentation,recordLeafCommitment,verifyRecordCertificate} from '@corbet-labs/czkp/record';
 import {createProver} from '@corbet-labs/czkp/prove';
-import {verifyPublicCertificates} from '@corbet-labs/czkp/public-checks';
+import {verifyPublicCertificates,verifyPublicRecordCertificate} from '@corbet-labs/czkp/public-checks';
 import {verifyPublicPolicy} from '@corbet-labs/czkp/public-policy';
 import {updateCircuit,UPDATE_CIRCUITS} from '@corbet-labs/czkp/update';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes,receiptDigest} from '@corbet-labs/cwlt/extensions';
@@ -112,7 +112,7 @@ async function proof(kind,input,label,measure=false){
   let chosen;
   for(const backendType of measure?['NativeUnixSocket','Wasm']:['NativeUnixSocket']){
     if(activeProver&&(activeProver.kind!==kind||backendType!=='NativeUnixSocket')){await activeProver.prover.destroy();activeProver=undefined;}
-    const prover=activeProver?.prover??await createProver({artifacts:selected,backendType});
+    const prover=activeProver?.prover??await createProver({artifacts:selected,backendType,threads:1});
     if(backendType==='NativeUnixSocket')activeProver={kind,prover};
     try{const result=await prover.prove(witness,expected);chosen??=hex(result.proof);
       if(measure){benchmarks.push({label,kind,backend:backendType,...result.timings});console.log(`Measured ${label} ${backendType}: ${JSON.stringify(result.timings)}`);}}
@@ -240,7 +240,8 @@ try{
   await call({op:'recordEpoch',now}); // Same root/object survives authorized waiting-only tuning.
   await call({op:'retry',member:7,now}); // Publishing cannot recertify a prior acceptance.
   const recordEpochProofs=[];
-  let priorAncestrySignature;
+  let frozenHolders=members.map(member=>member.clone());
+  let priorRecordSignature;
   async function epochRecord(index,label,measure=false){
     // Fictional member-only decryption output. Never retained in publicTrace,
     // result reports or proof artifacts; only the resulting ZK proof is public.
@@ -248,7 +249,15 @@ try{
     const context={purpose:'forumListing',challenge:toArray(bytes(193+index)),expiresAt:Math.min(now+50,witness.epoch.expiresAt)};
     const presentationKeys=generateKeyPairSync('ed25519');
     const publicKey=Array.from(presentationKeys.publicKey.export({type:'spki',format:'der'}).subarray(-32));
-    const candidate=await members[index].recordEpoch(publicKey,witness,artifacts.scope,manifest.issuerKey);
+    const candidate=await members[index].recordEpoch(publicKey,witness,artifacts.scope,manifest.issuerKey,{frozenHolder:frozenHolders[index]});
+    const frozen=frozenHolders[index];
+    if(frozen.opening.inbox.every((n,i)=>n===witness.leaf.requiredInbox[i])){
+      // A later activity state cannot force a fresher public record leaf.
+      const later=(await members[index].reblind(now)).next;
+      const reused=await later.recordEpoch(publicKey,witness,artifacts.scope,manifest.issuerKey,{frozenHolder:frozen});
+      assert.deepEqual(reused.statement.record,candidate.statement.record);
+      assert.deepEqual(candidate.statement.record.certificate,witness.certificate);
+    }
     const encoded=await proof('record_epoch',candidate.input,label,measure);
     const record={statement:candidate.statement,proof:encodeBundle([{proof:encoded}]),proofScope:artifacts.scope};
     await verifyExtension(record,artifacts);recordEpochProofs.push(record);
@@ -278,9 +287,12 @@ try{
     benchmarks.push({label:label+'-presentation',kind:'record-presentation',backend:'Ed25519',signMs:performance.now()-signedAt});
     assert.equal(second.proof,presentation.proof); // No per-contact proving.
     await call({op:'checkEpochRecord',challenge:contact.challenge,presentation:second,now},true);
-    for(const field of ['presentationKey','community','owner','root','epoch','scope','shares']){
+    for(const field of ['presentationKey','community','owner','root','epoch','scope','shares','blindedLeaf','certificate','issuerKey']){
       const changed=structuredClone(record),r=changed.statement.record;
-      if(field==='presentationKey')r.presentationKey[0]^=1;
+      if(field==='blindedLeaf')r.blindedLeaf[31]^=1;
+      else if(field==='certificate')r.certificate[0]^=1;
+      else if(field==='issuerKey')r.epoch.issuerKey[0]^=1;
+      else if(field==='presentationKey')r.presentationKey[0]^=1;
       else if(field==='community')r.epoch.community[0]^=1;
       else if(field==='owner')r.owner[0]^=1;
       else if(field==='root')r.epoch.root[0]^=1;
@@ -289,17 +301,27 @@ try{
       else r.epoch.proofScope.verifyingKeyDigest[0]^=1;
       await assert.rejects(verifyExtension(changed,artifacts));
     }
-    if(candidate.input.descended){
-      const highS=Array.from(candidate.input.certificate),order=0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
-      highS.splice(32,32,...be(order-BigInt('0x'+hex(highS.slice(32))),32));
-      for(const change of [v=>{v.certificate[0]^=1;},v=>{v.frozen_state[31]^=1;},
-        v=>{v.required_inbox[0]^=1;},v=>{v.issued_at=v.epoch_start-1;},v=>{v.path[0][0]^=1;},
-        v=>{v.version+=1n;},v=>{v.descended=false;},v=>{v.certificate=highS;},
-        ...(priorAncestrySignature?[v=>{v.certificate=priorAncestrySignature;}]:[])]){
-        const changed=structuredClone(candidate.input);change(changed);
-        await assert.rejects(new Noir(programs.record_epoch).execute(witnessInputs(programs.record_epoch,changed)));
-      }
-      priorAncestrySignature=Array.from(candidate.input.certificate);
+    // Native R2 issuer authentication covers the same exact public ABI fields
+    // consumed by the opening proof. No detached certificate object is trusted.
+    await verifyPublicRecordCertificate(programs.record_epoch,publicInputs(programs.record_epoch,candidate.input));
+    for(const change of [v=>{v.record_certificate[0]^=1;},v=>{v.record_issuer_key[0]^=1;},
+      v=>{v.community[0]^=1;},v=>{v.epoch+=1;},v=>{v.blinded_leaf[31]^=1;},
+      ...(priorRecordSignature?[v=>{v.record_certificate=priorRecordSignature;}]:[])]){
+      const changed=structuredClone(candidate.input);change(changed);
+      await assert.rejects(verifyPublicRecordCertificate(programs.record_epoch,publicInputs(programs.record_epoch,changed)));
+    }
+    for(const change of [v=>{v.state[31]^=1;},v=>{v.required_inbox[0]^=1;},v=>{v.version+=1n;},
+      v=>{v.blinding[0]^=1;},v=>{v.opening.punished+=1n;},v=>{v.opening.debt+=1n;},
+      v=>{v.state_policy[0]^=1;},v=>{v.registered_secret+=1n;}]){
+      const changed=structuredClone(candidate.input);change(changed);
+      await assert.rejects(new Noir(programs.record_epoch).execute(witnessInputs(programs.record_epoch,changed)));
+    }
+    priorRecordSignature=Array.from(candidate.input.record_certificate);
+    if(witness.ancestry?.record){
+      const bad=structuredClone(witness);bad.ancestry.record.signature[0]^=1;
+      // Exercise this when the frozen pending inbox requires the descendant.
+      if(!frozenHolders[index].opening.inbox.every((n,i)=>n===witness.leaf.requiredInbox[i]))
+        await assert.rejects(members[index].recordEpoch(publicKey,bad,artifacts.scope,manifest.issuerKey));
     }
     return candidate.statement.record.shares;
   }
@@ -314,12 +336,12 @@ try{
     const {extension,version,state,state_policy,registered_secret,opening}=local.input;
     assert.equal(Number(version),leaf.version);assert.deepEqual(toArray(state),leaf.state);
     assert.notDeepEqual(toArray(opening.inbox),leaf.requiredInbox);
-    const path=structuredClone(witness.path);while(path.length<20)path.push(Array(32).fill(0));
-    const record={epoch:witness.epoch,owner:local.statement.record.owner,presentationKey:toArray(bytes(197)),shares:local.statement.record.shares};
+    const record={epoch:witness.epoch,owner:local.statement.record.owner,presentationKey:toArray(bytes(197)),
+      blindedLeaf:Array.from(await recordLeafCommitment(witness.epoch.community,witness.epoch.epoch,leaf,hashes.raw)),
+      certificate:witness.certificate,shares:local.statement.record.shares};
+    await verifyRecordCertificate(record); // Authentic frozen certificate still cannot hide pending punishment.
     const exact={...recordEpochPublicInputs(record,artifacts.scope,manifest.issuerKey),extension,
-      version,state,state_policy,registered_secret,opening,frozen_version:leaf.version,frozen_state:leaf.state,
-      required_inbox:leaf.requiredInbox,blinding:leaf.blinding,index:witness.index,path,
-      descended:false,issued_at:0,certificate:Array(64).fill(0)};
+      version,state,state_policy,registered_secret,opening,required_inbox:leaf.requiredInbox,blinding:leaf.blinding};
     await assert.rejects(new Noir(programs.record_epoch).execute(witnessInputs(programs.record_epoch,exact)));
   }
   await call({op:'record',record:stale.statement.record,proof:stale.proof,now},false);
@@ -516,6 +538,7 @@ try{
   await call({op:'deposit',batch:[{deposit:earlyProof.statement.deposit,proof:earlyProof.proof},batch[1]],now});
   assert(Math.floor(now/100)>publishedEpoch);
   await call({op:'recordEpoch',now});publishedEpoch=Math.floor(now/100);
+  frozenHolders=members.map(member=>member.clone());
   await call({op:'deposit',batch:[{deposit:lateProof.statement.deposit,proof:lateProof.proof},batch[1]],now});
   // The frozen required root is now IN THE MIDDLE of the genuine consumed
   // chain, proving minimum-frontier inclusion rather than equality only.

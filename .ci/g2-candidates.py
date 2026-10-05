@@ -12,10 +12,10 @@ ROOT = Path.cwd()
 NPM_CANDIDATES = ROOT / 'experiments/private-accounting/node_modules/@corbet-labs'
 REPORT = Path(os.environ['CBLC_DIAGNOSTIC_OUTPUT'])
 SOURCES = {
-    'cssr': ('1091bafed66d9127a5f4ea4513cdf224470c4eea', 'CSSR', ROOT / '.g2-candidates/cssr'),
-    'czkp': ('93d157e3961170153e92fb7dd9b4038edba2d498', 'CODEC', NPM_CANDIDATES / 'czkp'),
+    'cssr': ('868d0c6441f062d7be4fb17af8c966e2fa3034f0', 'CSSR', ROOT / '.g2-candidates/cssr'),
+    'czkp': ('74008f418642ef2f001f0f3ae958f8342ef8f9e8', 'CODEC', NPM_CANDIDATES / 'czkp'),
     'cvfy': ('30a78099a27581ee16ed17a589e64d089a839182', 'CVFY', ROOT / '.g2-candidates/cvfy'),
-    'cwlt': ('167abb7613a3edf0497213e4edc29e185716df7f', 'CWLT', NPM_CANDIDATES / 'cwlt'),
+    'cwlt': ('de0c19b7f14d17216a21a7c7f4114c4b367c5ee1', 'CWLT', NPM_CANDIDATES / 'cwlt'),
     'cbcn': ('22f3179cd661f46e6d77fda197b171f6c83c637c', 'CBCN', ROOT / '.g2-candidates/cbcn'),
     'ckmg': ('6910adaa591c1f2e9f2b51da8e2ac2a5716cbaca', 'CKMG', ROOT / '.g2-candidates/ckmg'),
     'cpsd': ('24a61c9500b4141b10abc1650c55767b4be9a9ef', 'CPSD', ROOT / '.g2-candidates/cpsd'),
@@ -399,7 +399,9 @@ def check():
     check_lock_patches()
     check_frozen_locks()
     graphs = {}
-    for label, required in [('cblc', PATCH_SETS['cblc']), ('cwlt', {'cwlt', 'czkp', 'ckmg', 'cwst'}),
+    # cwst is optional in the default Wallet build. Its exact identity remains
+    # mandatory in the frozen lock below, even when metadata omits that edge.
+    for label, required in [('cblc', PATCH_SETS['cblc']), ('cwlt', {'cwlt', 'czkp', 'ckmg'}),
                             ('czkp', {'czkp'})]:
         metadata = graphs[label] = json.loads((REPORT / f'{label}-metadata.json').read_text())
         receipt = json.loads((REPORT / f'{label}-metadata-patches.json').read_text())
@@ -426,10 +428,12 @@ def check():
     observed = observed_sources()
     graph_comparison(graphs, observed)
     versions = []
-    for path in [ROOT / 'Cargo.lock', SOURCES['cwlt'][2] / 'Cargo.lock']:
+    for label, path in [('cblc', ROOT / 'Cargo.lock'), ('cwlt', SOURCES['cwlt'][2] / 'Cargo.lock')]:
         entries = tomllib.loads(path.read_text())['package']
         for name, (_, _, candidate) in SOURCES.items():
             matches = [p for p in entries if p['name'] == name]
+            if name in PATCH_SETS[label] and not matches:
+                raise ValueError(f'{label}: required candidate {name} missing from frozen lock')
             if not matches:
                 continue
             version = tomllib.loads((candidate / 'Cargo.toml').read_text())['package']['version']

@@ -11,6 +11,9 @@ if (!process.env.CI) throw new Error('CI only');
 const circuitPath = process.env.CIRCUIT_PATH;
 const expectedHash = process.env.CIRCUIT_SHA256;
 const outputDir = process.env.PROFILE_ARTIFACT_DIR;
+const backendType=process.env.PROFILE_BACKEND??'Wasm';
+const includeAttribution=process.env.PROFILE_ATTRIBUTION!=='0';
+if(!['Wasm','NativeUnixSocket'].includes(backendType))throw new Error('Profile backend');
 if (!circuitPath || !isAbsolute(circuitPath) || !outputDir || !isAbsolute(outputDir)
   || !/^[0-9a-f]{64}$/.test(expectedHash ?? '')) {
   throw new Error('Require absolute CIRCUIT_PATH/PROFILE_ARTIFACT_DIR and exact CIRCUIT_SHA256');
@@ -23,6 +26,7 @@ let api;
 const evidence = { version: 1, ok: false, circuitPath, expectedHash,
   backend: backendPackage.version, backendPackageSha256: hash(backendPackageBytes),
   dependencyLockSha256: hash(await readFile(new URL('./package-lock.json', import.meta.url))),
+  backendType, includeAttribution, nativeBinarySha256:backendType==='NativeUnixSocket'?hash(await readFile(process.env.BB_BINARY_PATH)):null,
   node: process.version, threads: 1, maximumWasmBytes: 65536 * 65536,
   provingPerformed: false, setupInitialized: false, witnessRead: false };
 
@@ -41,11 +45,11 @@ try {
   const locations = debug.location_tree?.locations;
   if (!Array.isArray(locations) || !debug.acir_locations || !circuit.file_map) throw new Error('Unsupported debug metadata shape');
 
-  api = await Barretenberg.new({ backend: BackendType.Wasm, threads: 1, skipSrsInit: true,
+  api = await Barretenberg.new({ backend: BackendType[backendType], threads: 1, skipSrsInit: true,
     memory: { initial: 2048, maximum: 65536 } });
   const stats = await api.circuitStats({
     circuit: { name: 'private-accounting-spike-profile', bytecode, verificationKey: new Uint8Array() },
-    includeGatesPerOpcode: true,
+    includeGatesPerOpcode: includeAttribution,
     settings: { ipaAccumulation: false, oracleHashType: 'poseidon2', disableZk: false, optimizedSolidityVerifier: false },
   });
   evidence.stats = stats;
@@ -54,6 +58,7 @@ try {
     || !Number.isInteger(Math.log2(stats.numGatesDyadic))) throw new Error('Invalid upstream gate/dyadic counts');
   await writeFile(resolve(outputDir, 'circuit-stats.json'), JSON.stringify(stats, null, 2) + '\n');
   await writeFile(resolve(outputDir, 'debug-symbols.json'), JSON.stringify(symbols, null, 2) + '\n');
+  if (includeAttribution) {
   if (!Array.isArray(stats.gatesPerOpcode) || stats.gatesPerOpcode.length !== stats.numAcirOpcodes
     || stats.gatesPerOpcode.some(n => !Number.isSafeInteger(n) || n < 0)) {
     throw new Error('Gate counts do not map one-to-one to ACIR opcode indices');
@@ -111,6 +116,7 @@ try {
   };
   await writeFile(resolve(outputDir, 'source-files.json'), JSON.stringify(sourceFiles, null, 2) + '\n');
   await writeFile(resolve(outputDir, 'opcode-source-mapping.json'), JSON.stringify(mappings, null, 2) + '\n');
+  }
   evidence.ok = true;
 } catch (error) {
   evidence.error = String(error?.stack ?? error);

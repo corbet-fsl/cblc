@@ -58,6 +58,8 @@ pub struct EpochAncestryCertificate {
     pub issued_at: u64,
     /// Canonical low-S P-256 signature, exactly 64 bytes.
     pub signature: Vec<u8>,
+    /// Same private signed-leaf packet used by frozen and descendant records.
+    pub record: czkp::record::SignedLeaf,
 }
 impl EpochAncestryCertificate {
     /// Original fixed-width issuer transcript; no JSON is signed.

@@ -25,8 +25,10 @@ if (plan.schema !== 1 || !Array.isArray(plan.bundles) || plan.bundles.length < 1
 await mkdir(output, { recursive: true });
 const evidence = { schema: 1, benchmark: 'B0', planSha256: sha(planBytes), node: process.version,
   provingPerformed: false, setupInitialized: false, witnessRead: false, adopted: false, rows: [] };
-const names = new Set();
 try {
+  // Exact counts for every relation survive a later attribution timeout.
+  for(const attribution of [false,true]) {
+  const names = new Set();
   for (const bundle of plan.bundles) {
     if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(bundle.variant ?? '') || names.has(bundle.variant)
       || !revision.test(bundle.sourceCommit ?? '') || !digest.test(bundle.sourceArchiveSha256 ?? '')
@@ -47,11 +49,11 @@ try {
         bundleSha256: bundle.sha256, relation };
       if (!Object.hasOwn(circuits, relation)) {
         if (!bundle.absent.includes(relation)) throw new Error(`Unexpected missing relation: ${relation}`);
-        evidence.rows.push({ ...row, status: 'absent-in-source', numGates: null, numGatesDyadic: null });
+        if(!attribution)evidence.rows.push({ ...row, status: 'absent-in-source', numGates: null, numGatesDyadic: null });
         continue;
       }
       if (bundle.absent.includes(relation)) throw new Error('Declared absent relation is present');
-      const directory = resolve(output, bundle.variant, relation);
+      const directory = resolve(output, bundle.variant, relation,attribution?'attribution':'counts');
       await mkdir(directory, { recursive: true });
       const circuitBytes = Buffer.from(JSON.stringify(circuits[relation]));
       const circuitPath = resolve(directory, 'circuit.json');
@@ -61,7 +63,7 @@ try {
         const child = spawn(process.execPath,
           [fileURLToPath(new URL('../../experiments/private-accounting/profile.mjs', import.meta.url))],
           { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env,
-            CIRCUIT_PATH: circuitPath, CIRCUIT_SHA256: circuitSha256, PROFILE_ARTIFACT_DIR: directory } });
+            PROFILE_ATTRIBUTION:attribution?'1':'0', CIRCUIT_PATH: circuitPath, CIRCUIT_SHA256: circuitSha256, PROFILE_ARTIFACT_DIR: directory } });
         const timer = setTimeout(() => child.kill('SIGKILL'), 300000);
         child.once('error', error => { clearTimeout(timer); reject(error); });
         child.once('exit', (code, signal) => {
@@ -73,17 +75,25 @@ try {
       const profile = JSON.parse(await readFile(resolve(directory, 'profile-evidence.json')));
       if (!profile.ok || profile.expectedHash !== circuitSha256
         || profile.dependencyLockSha256 !== bundle.dependencyLockSha256) throw new Error('Profile receipt mismatch');
-      evidence.rows.push({ ...row, status: 'profiled', circuitSha256, compiler: profile.compiler,
-        backend: profile.backend, backendPackageSha256: profile.backendPackageSha256,
+      const result={ ...row, status:attribution?'profiled':'counted-attribution-pending',circuitSha256,compiler:profile.compiler,
+        backend: profile.backend, backendType:profile.backendType,nativeBinarySha256:profile.nativeBinarySha256,backendPackageSha256: profile.backendPackageSha256,
         numGates: profile.stats.numGates, numGatesDyadic: profile.stats.numGatesDyadic,
-        byPrimitiveHint: profile.mapping.byPrimitiveHint, totalMinusAttributed: profile.mapping.totalMinusAttributed });
+        byPrimitiveHint:profile.mapping?.byPrimitiveHint??null,totalMinusAttributed:profile.mapping?.totalMinusAttributed??null};
+      if(attribution){
+        const index=evidence.rows.findIndex(r=>r.variant===row.variant&&r.relation===row.relation);
+        if(index<0||evidence.rows[index].numGates!==result.numGates||evidence.rows[index].numGatesDyadic!==result.numGatesDyadic
+          ||evidence.rows[index].circuitSha256!==result.circuitSha256)throw new Error('Attribution changed gate identity/counts');
+        evidence.rows[index]=result;
+      } else evidence.rows.push(result);
       await writeFile(resolve(output, 'B0.json'), JSON.stringify(evidence, null, 2) + '\n');
     }
+  }
   }
   evidence.ok = true;
 } catch (error) {
   evidence.ok = false;
   evidence.error = String(error.message);
+  console.error(evidence.error);
   process.exitCode = 1;
 } finally {
   await writeFile(resolve(output, 'B0.json'), JSON.stringify(evidence, null, 2) + '\n');

@@ -12,15 +12,15 @@ async function main() {
     const parts=[];let size=0;for await(const chunk of response.body){size+=chunk.length;if(size>max)throw new Error('Setup size');parts.push(chunk);}
     const bytes=new Uint8Array(size);let at=0;for(const part of parts){bytes.set(part,at);at+=part.length;}return bytes;
   },verificationOnly);
-  let actualThreads;
+  let configuredThreads;
   const prover=await createProver({artifacts,threads:input.threads,browserFactory:options=>{
-    actualThreads=options.threads;
+    configuredThreads=options.threads;
     return Barretenberg.new({...options,wasmPath:'/barretenberg.wasm'});
   }});
   try {
     const result=await prover.prove(witnessInputs(artifacts.circuit,input.witness),publicInputs(artifacts.circuit,input.witness));
-    if(actualThreads!==input.expectedThreads)throw new Error('Unexpected prover thread count');
-    return {ok:true,threads:actualThreads,isolated:crossOriginIsolated,sharedArrayBuffer:typeof SharedArrayBuffer==='function',
+    if(configuredThreads!==input.expectedThreads)throw new Error('Unexpected prover thread count');
+    return {ok:true,configuredThreads,isolated:crossOriginIsolated,sharedArrayBuffer:typeof SharedArrayBuffer==='function',
       userAgent:navigator.userAgent,proofBytes:result.proof.length,timings:result.timings};
   }finally{await prover.destroy();}
 }
