@@ -175,6 +175,9 @@ try{
       enrollment:checkpoint,ownerSecret:bytes(20),expectedStatement:genesis[0].statement,checkpointBytes,limits});
     assert.deepEqual(encodeExtensionCheckpoint(restored,limits),checkpointBytes);
   } finally {await wasmHashes.destroy();}
+  const highIndex=structuredClone(genesis[0].input);highIndex.owner_enrollment.index+=1n<<20n;
+  await assert.rejects(new Noir(updateProgram(highIndex)).execute(witnessInputs(updateProgram(highIndex),highIndex)));
+  assert.throws(()=>genesis[0].next.outgoing.tree.path(1n<<20n));
   genesis[0].preparedProof=await proof('update',genesis[0].input,'genesis');
   // Capacity uses the actual pinned proof size, including hex/JSON framing.
   // This checks the transport bound only; repeated genesis is not a valid chain.
@@ -312,7 +315,7 @@ try{
     const {extension,version,state,state_policy,registered_secret,opening}=local.input;
     assert.equal(Number(version),leaf.version);assert.deepEqual(toArray(state),leaf.state);
     assert.notDeepEqual(toArray(opening.inbox),leaf.requiredInbox);
-    const path=structuredClone(witness.path);while(path.length<32)path.push(Array(32).fill(0));
+    const path=structuredClone(witness.path);while(path.length<20)path.push(Array(32).fill(0));
     const record={epoch:witness.epoch,owner:local.statement.record.owner,presentationKey:toArray(bytes(197)),shares:local.statement.record.shares};
     const exact={...recordEpochPublicInputs(record,artifacts.scope,manifest.issuerKey),extension,
       version,state,state_policy,registered_secret,opening,frozen_version:leaf.version,frozen_state:leaf.state,

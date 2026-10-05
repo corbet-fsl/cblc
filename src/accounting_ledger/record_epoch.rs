@@ -16,7 +16,7 @@ const PUBLISHED: &[u8] = b"record-epoch-published:v1";
 const ANCHOR: &[u8] = b"record-epoch-anchor:v1";
 const OBJECT_PREFIX: &[u8] = b"cblc.record-witnesses.v1\0";
 const HPKE_INFO: &[u8] = b"cblc.record-witness.v1\0";
-const MAX_FRONTIERS: u32 = 100_000;
+const MAX_FRONTIERS: u32 = 1 << 20;
 const ANCESTRY_PREFIX: &[u8] = b"record-ancestry-latest:v1:";
 
 // Attached to the current Frontier in the publication transaction. It can only move

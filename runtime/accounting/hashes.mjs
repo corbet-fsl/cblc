@@ -8,8 +8,8 @@ export const ACCOUNT_DOMAIN = 0x6366726d2e6163636f756e742d73746174652e7632n;
 export const POLICY_KEYS = ['initialCredit','maximumAvailable','outgoingReservation','incomingReservation',
   'policyRevision','policyValidFrom','policyValidUntil','newcomerPeriod','rateWindow','newcomerAdmissions',
   'maximumAdmissions','refillPeriod','refillUnits','abandonAfter'];
-export const DEPTH = 32;
-export const LIMIT = 1n << 32n;
+export const DEPTH = 20;
+export const LIMIT = 1n << 20n;
 export const SAFE = 9007199254740991n;
 const utf8 = text => new TextEncoder().encode(text);
 export const integer = (value, bits) => {
@@ -79,7 +79,7 @@ export function accountHashes(api) {
 }
 
 // Sparse backing store for fixed-position Merkle paths. Missing leaf = zero;
-// internal empty hashes depend on level. Never allocate 2^32 leaves.
+// internal empty hashes depend on level. Never allocate 2^20 leaves.
 export class SparseTree {
   constructor(node, empty) { this.node = node; this.empty = empty; this.nodes = new Map(); }
   static async create(node) {
@@ -91,12 +91,12 @@ export class SparseTree {
   at(level, index) { return this.nodes.get(`${level}:${index}`) ?? this.empty[level]; }
   get root() { return this.at(DEPTH, 0n); }
   path(index) {
-    let position = integer(index, 32); const result = [];
+    let position = integer(index, DEPTH); const result = [];
     for (let level = 0; level < DEPTH; level++) { result.push(this.at(level, position ^ 1n)); position >>= 1n; }
     return result;
   }
   async set(index, value) {
-    let position = integer(index, 32); fieldBytes(value);
+    let position = integer(index, DEPTH); fieldBytes(value);
     this.nodes.set(`0:${position}`, value);
     for (let level = 0; level < DEPTH; level++) {
       const left = position & ~1n;

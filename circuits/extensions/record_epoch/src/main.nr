@@ -14,7 +14,7 @@ fn main(
     present: pub bool, shares: pub [u16;3],
     version: u64, state: [u8;32], frozen_version: u64, frozen_state: [u8;32],
     required_inbox: [u8;32], descended: bool, issued_at: u64, certificate: [u8;64],
-    blinding: [u8;32], path: [[u8;32];32], index: u32,
+    blinding: [u8;32], path: [[u8;32];20], index: u32,
     state_policy: [u8;32], registered_secret: Field, opening: Opening,
 ) {
     let safe: u64=9007199254740991;
@@ -23,7 +23,7 @@ fn main(
     assert(presentation_key!=[0;2]);
     for limb in presentation_key {assert(limb==(limb as u128) as Field);}
     assert((epoch>0)&(epoch<=safe)&(epoch_start>0)&(epoch_start<epoch_end)&(epoch_end<=safe));
-    assert((version<=safe)&(frozen_version<=safe)&(blinding!=[0;32])&(leaf_count>0)&(index<leaf_count));
+    assert((version<=safe)&(frozen_version<=safe)&(blinding!=[0;32])&(leaf_count>0)&(leaf_count<=1048576)&(index<leaf_count));
     assert((community!=[0;32])&(owner!=[0;32])&(epoch_root!=[0;32])&(scope!=[0;32])&(verification_scope!=[0;32]));
     assert((field(state)!=0)&(field(frozen_state)!=0));
     assert(state_hash(community,owner,state_policy,registered_secret,version,ext,opening)==field(state));
@@ -44,8 +44,8 @@ fn main(
     let mut current=frozen_leaf;
     let mut position=index;
     let mut width=2 as u64;
-    for _ in 0..31 {if width<leaf_count as u64 {width*=2;}}
-    for level in 0..32 {
+    for _ in 0..19 {if width<leaf_count as u64 {width*=2;}}
+    for level in 0..20 {
         if width>1 {
             let right=(position & 1)==1;
             let left=if right {path[level]} else {current};

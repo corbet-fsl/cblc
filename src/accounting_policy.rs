@@ -162,7 +162,7 @@ impl AccountPolicy {
         let mut bytes = b"cfrm.account-state-policy.v1\0".to_vec();
         bytes.extend_from_slice(community);
         bytes.extend_from_slice(&policy);
-        bytes.push(32);
+        bytes.push(20);
         Ok(Sha256::digest(bytes).into())
     }
 
@@ -171,7 +171,7 @@ impl AccountPolicy {
         let mut bytes = b"cfrm.account-policy.v2\0".to_vec();
         bytes.extend_from_slice(community);
         self.append(&mut bytes);
-        bytes.push(32); // Circuit's indexed Merkle tree capacity, not a credit default.
+        bytes.push(20); // Circuit's indexed Merkle tree capacity, not a credit default.
         Ok(Sha256::digest(bytes).into())
     }
 }

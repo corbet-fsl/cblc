@@ -13,7 +13,7 @@ global SAFE: u64 = 9007199254740991;
 
 pub struct Enrollment {
     pub key: [u8; 64], pub secret_hash: [u8; 32], pub start: u64, pub end: u64,
-    pub delegation_digest: [u8; 32], pub path: [Field; 32], pub index: u32,
+    pub delegation_digest: [u8; 32], pub path: [Field; 20], pub index: u32,
 }
 
 pub struct Opening {
@@ -32,7 +32,7 @@ pub struct Obligation {
 }
 
 pub struct MapWitness {
-    pub leaf: [Field; 4], pub index: u32, pub path: [Field; 32], pub append_path: [Field; 32],
+    pub leaf: [Field; 4], pub index: u32, pub path: [Field; 20], pub append_path: [Field; 20],
 }
 
 pub struct Resolution {
@@ -164,8 +164,9 @@ pub fn verify_enrollment(community: [u8; 32], member: [u8; 32], enrolled: Enroll
     assert(enrolled.end >= valid_until);
     assert(enrolled.end <= SAFE);
     assert(enrolled.delegation_digest != [0; 32]);
+    assert(enrolled.index<1048576);
     let mut current = enrollment_leaf(community, member, enrolled);
-    for level in 0..32 {
+    for level in 0..20 {
         let left = ((enrolled.index >> (level as u32)) & 1) == 0;
         current = hash([LEGACY_DOMAIN, 6,
             if left { current } else { enrolled.path[level] },
@@ -214,7 +215,7 @@ pub fn policy_bytes(community: [u8; 32], initial_credit: u32, maximum_available:
     let abandon: [u8; 8] = (abandon_after as Field).to_be_bytes();
     for i in 0..8 { bytes[119+i] = refill[i]; bytes[131+i] = abandon[i]; }
     for i in 0..4 { bytes[127+i] = units[i]; }
-    bytes[139] = 32;
+    bytes[139] = 20;
     bytes
 }
 
@@ -224,7 +225,7 @@ pub fn state_policy_hash(bytes: [u8; 140]) -> [u8; 32] {
     for i in 0..29 { stable[i] = prefix[i]; }
     for i in 0..32 { stable[29+i] = bytes[23+i]; }
     for i in 0..76 { stable[61+i] = bytes[55+i]; }
-    stable[137] = 32;
+    stable[137] = 20;
     digest(stable)
 }
 
