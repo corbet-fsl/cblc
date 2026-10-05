@@ -13,9 +13,9 @@ NPM_CANDIDATES = ROOT / 'experiments/private-accounting/node_modules/@corbet-lab
 REPORT = Path(os.environ['CBLC_DIAGNOSTIC_OUTPUT'])
 SOURCES = {
     'cssr': ('868d0c6441f062d7be4fb17af8c966e2fa3034f0', 'CSSR', ROOT / '.g2-candidates/cssr'),
-    'czkp': ('74008f418642ef2f001f0f3ae958f8342ef8f9e8', 'CODEC', NPM_CANDIDATES / 'czkp'),
+    'czkp': ('645ed05c81d5c3305cfb6e860d346c6882472237', 'CODEC', NPM_CANDIDATES / 'czkp'),
     'cvfy': ('30a78099a27581ee16ed17a589e64d089a839182', 'CVFY', ROOT / '.g2-candidates/cvfy'),
-    'cwlt': ('de0c19b7f14d17216a21a7c7f4114c4b367c5ee1', 'CWLT', NPM_CANDIDATES / 'cwlt'),
+    'cwlt': ('2797a7f45f84975eeb2106302cfba1750bb4e048', 'CWLT', NPM_CANDIDATES / 'cwlt'),
     'cbcn': ('22f3179cd661f46e6d77fda197b171f6c83c637c', 'CBCN', ROOT / '.g2-candidates/cbcn'),
     'ckmg': ('6910adaa591c1f2e9f2b51da8e2ac2a5716cbaca', 'CKMG', ROOT / '.g2-candidates/ckmg'),
     'cpsd': ('24a61c9500b4141b10abc1650c55767b4be9a9ef', 'CPSD', ROOT / '.g2-candidates/cpsd'),

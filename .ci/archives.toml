@@ -3,7 +3,7 @@ schema = 1
 # Exact diagnostic codec candidate, imported locally from the original czkp
 # repository. This is extra test source, never a claim about dependency main.
 [archives.g2_codec]
-revision = "74008f418642ef2f001f0f3ae958f8342ef8f9e8"
+revision = "645ed05c81d5c3305cfb6e860d346c6882472237"
 archive_variable = "G2_CODEC_SOURCE_ARCHIVE"
 digest_variable = "G2_CODEC_SOURCE_SHA256"
 
@@ -18,7 +18,7 @@ archive_variable = "G2_CVFY_SOURCE_ARCHIVE"
 digest_variable = "G2_CVFY_SOURCE_SHA256"
 
 [archives.g2_cwlt]
-revision = "de0c19b7f14d17216a21a7c7f4114c4b367c5ee1"
+revision = "2797a7f45f84975eeb2106302cfba1750bb4e048"
 archive_variable = "G2_CWLT_SOURCE_ARCHIVE"
 digest_variable = "G2_CWLT_SOURCE_SHA256"
 
