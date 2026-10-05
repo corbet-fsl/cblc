@@ -10,7 +10,7 @@ const report=resolve(process.env.CBLC_DIAGNOSTIC_OUTPUT),evidence=resolve(report
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const load=async p=>JSON.parse(await readFile(p));
 const attempt=await load(resolve(evidence,'public/public-wave-attempt.json'));
-assert.equal(attempt.sequence,0);assert.equal(attempt.expectedVerified,true);assert.deepEqual(attempt.reply,{verified:false});
+assert.equal(attempt.sequence,0);assert.equal(attempt.expectedVerified,true);assert.deepEqual(attempt.reply,{diagnostic:'verdict_decode',verified:false});
 const request=Buffer.from(JSON.stringify(attempt.request)+'\n');
 assert(request.length<3*1024*1024);
 await writeFile(resolve(report,'peer-request.json'),request);
@@ -39,7 +39,7 @@ async function peer(environment){
   const [code,signal]=await new Promise(done=>child.once('close',(code,signal)=>done([code,signal])));clearTimeout(timer);
   let verdict=null,accepted=false;
   if(wrote&&!writeError&&!readError&&!spawnError&&!timedOut&&code===0&&stdout.length<=4096){
-    try{verdict=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(stdout));assert.deepEqual(verdict,{verified:true});accepted=true;}catch{}
+    try{verdict=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(stdout));assert.deepEqual(verdict,{verified:true,diagnostic:null});accepted=true;}catch{}
   }
   return {args,cwd:process.cwd(),stdinSha256:sha(request),stdinBytes:request.length,wrote,writeError,readError,spawnError,
     code,signal,timedOut,milliseconds:performance.now()-start,stdoutHex:stdout.toString('hex'),stderr:stderr.toString('utf8'),verdict,accepted};
@@ -61,11 +61,13 @@ const second=await peer(environment);
 await writeFile(resolve(report,'captured-rust-peer.json'),JSON.stringify(second,null,2)+'\n');
 const captured=await readFile(resolve(capture,'worker-stdin.json')).catch(()=>null);
 const expected=await readFile(resolve(evidence,'worker-request.json'));
+const worker=await load(resolve(capture,'worker-process.json')).catch(()=>null);
 await writeFile(resolve(report,'peer-bindings.json'),JSON.stringify({executable,executableSha256:sha(await readFile(executable)),
   originalConfig:config,originalPolicy:policy,script,node:inputBindings.node,nodeSha256:inputBindings.node_sha256,
   wrapperSha256:sha(Buffer.from(wrapper)),expectedFrameSha256:sha(expected),capturedFrameSha256:captured?sha(captured):null,
   capturedFrameEqualsReconstruction:captured?captured.equals(expected):null,
   originalResultPreserved:true,proofRegeneration:false,authorityClaim:false},null,2)+'\n');
 console.log(JSON.stringify({originalRustPeerAccepted:first.accepted,capturedRustPeerAccepted:second.accepted,
-  capturedFrameEqualsReconstruction:captured?captured.equals(expected):null}));
-if(!first.accepted||!second.accepted)process.exitCode=1;
+  capturedFrameEqualsReconstruction:captured?captured.equals(expected):null,
+  workerOutputBytes:worker?.stdoutBytes??null,workerOutputShape:worker?.stdoutShape??'capture_unavailable'}));
+if(!first.accepted||!second.accepted||!captured?.equals(expected))process.exitCode=1;

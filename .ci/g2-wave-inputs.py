@@ -12,11 +12,11 @@ ROOT = Path.cwd().resolve()
 REPORT = Path(os.environ['CBLC_DIAGNOSTIC_OUTPUT'])
 EVIDENCE = REPORT / 'evidence'
 CODEC = ROOT / 'experiments/private-accounting/node_modules/@corbet-labs/czkp'
-CODEC_OID = '6e8755f2858dac3f72d61d8450158c2cd20d7d7c'
-CODEC_SHA = '9f171efe874735ebdf53b3899a5cd4de314b0c81dfbe2724be883eb380a71fe0'
-EVIDENCE_SHA = '31bd9e04a29c84744bed55949d0dd15b78a7d6630ce67f53b97da5260087a543'
-RECEIPT_SHA = '589e2897a7ec816ef760d9de9d6a2490844c2c7694166d09e2727ddabcf2a632'
-PEER_SHA = '0a5292149bbaaf49599677f80100e0be2cdda4ecea731559c63d78cad1f684db'
+CODEC_OID = '645ed05c81d5c3305cfb6e860d346c6882472237'
+CODEC_SHA = '0f4b5d79dc2a169143ceaf836511f692095977e4c29e4fe10a22449223b2a63d'
+EVIDENCE_SHA = '21365a62b1053b1520d37dea5bc46f465030136ca5aab5044f564c5f24d4a484'
+RECEIPT_SHA = '29853ead1c3197411d9afb4b9e7661e1c07a6685c509698276444ea777196d9a'
+PEER_SHA = 'e3fedce2d9ebcd9130d6703084428aa3e7cbd5662c8a3985a7bbc40bb9d1e513'
 
 
 def digest(path):
@@ -78,12 +78,12 @@ def run(mode):
     assert tree(CODEC) == codec and tree(EVIDENCE) == evidence
     assert (ROOT / 'node_modules/@corbet-labs/czkp').resolve() == CODEC and not CODEC.is_symlink()
     derivation = json.loads((EVIDENCE / 'derivation.json').read_bytes())
-    assert set(evidence) == set(derivation['files']) | {'derivation.json'} and len(evidence) == 12
+    assert set(evidence) == set(derivation['files']) | {'derivation.json'} and len(evidence) == 16
     assert {k: evidence[k] for k in derivation['files']} == derivation['files']
     assert evidence['original-receipt.json'] == RECEIPT_SHA == derivation['original_receipt_sha256']
     receipt = json.loads((EVIDENCE / 'original-receipt.json').read_bytes())
-    assert receipt['commit'] == '1567f773c212ebf17c00351f59e8f18f03ee5061'
-    assert receipt['scope'] == 'g2-full-extension-proof-diagnostic' and receipt['exit_code'] == 1
+    assert receipt['commit'] == '1425c333cd0488c4da95dfe1d409acc1e852495b'
+    assert receipt['scope'] == 'g2-full-extension' and receipt['exit_code'] == 1
     for name in evidence:
         if name.startswith('public/'):
             assert evidence[name] == receipt['artifacts'][name]
@@ -114,7 +114,7 @@ def run(mode):
             if name != 'wave_verifier':
                 assert files[name] == receipt['artifacts'][name]
         binding = json.loads((target / 'wave-verifier-binding.json').read_bytes())
-        assert files['wave_verifier'] == binding['executable_sha256'] == 'ad916c4c00904d00916e8be87c844a7343f1cacd163af6c15b6f944fee1d94f7'
+        assert files['wave_verifier'] == binding['executable_sha256'] == 'd52a76228e6022ca77e39a075278cb16b4cb2ca62745dbef4e836eb5abb49e49'
         assert files['issuer-build.json'] == binding['compiler_artifacts_sha256']
         assert files['cblc-metadata.json'] == binding['metadata_sha256']
         metadata = json.loads((target / 'cblc-metadata.json').read_bytes())

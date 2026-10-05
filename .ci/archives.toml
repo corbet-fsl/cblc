@@ -3,39 +3,44 @@ schema = 1
 # Exact diagnostic codec candidate, imported locally from the original czkp
 # repository. This is extra test source, never a claim about dependency main.
 [archives.g2_codec]
-revision = "6e8755f2858dac3f72d61d8450158c2cd20d7d7c"
+revision = "645ed05c81d5c3305cfb6e860d346c6882472237"
 archive_variable = "G2_CODEC_SOURCE_ARCHIVE"
 digest_variable = "G2_CODEC_SOURCE_SHA256"
 
 [archives.g2_cssr]
+workflows = ["ccid"]
 revision = "1091bafed66d9127a5f4ea4513cdf224470c4eea"
 archive_variable = "G2_CSSR_SOURCE_ARCHIVE"
 digest_variable = "G2_CSSR_SOURCE_SHA256"
 
 [archives.g2_cvfy]
+workflows = ["ccid"]
 revision = "30a78099a27581ee16ed17a589e64d089a839182"
 archive_variable = "G2_CVFY_SOURCE_ARCHIVE"
 digest_variable = "G2_CVFY_SOURCE_SHA256"
 
 [archives.g2_cwlt]
-revision = "ed86f90c41f31dc23a7e439ab88d64b246676a08"
+revision = "2797a7f45f84975eeb2106302cfba1750bb4e048"
 archive_variable = "G2_CWLT_SOURCE_ARCHIVE"
 digest_variable = "G2_CWLT_SOURCE_SHA256"
 
 # Original authenticated Balance publication API required by Wallet compilation.
 [archives.g2_cbcn]
+workflows = ["ccid"]
 revision = "22f3179cd661f46e6d77fda197b171f6c83c637c"
 archive_variable = "G2_CBCN_SOURCE_ARCHIVE"
 digest_variable = "G2_CBCN_SOURCE_SHA256"
 
 # Original passport declaration only; forbidden in selected build graphs.
 [archives.g2_ckmg]
+workflows = ["ccid"]
 revision = "6910adaa591c1f2e9f2b51da8e2ac2a5716cbaca"
 archive_variable = "G2_CKMG_SOURCE_ARCHIVE"
 digest_variable = "G2_CKMG_SOURCE_SHA256"
 
 # Compatible browser bridge declaration only; forbidden in selected builds.
 [archives.g2_cpsd]
+workflows = ["ccid"]
 revision = "24a61c9500b4141b10abc1650c55767b4be9a9ef"
 archive_variable = "G2_CPSD_SOURCE_ARCHIVE"
 digest_variable = "G2_CPSD_SOURCE_SHA256"

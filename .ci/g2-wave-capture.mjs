@@ -8,6 +8,28 @@ const dir=resolve(process.env.G2_WAVE_CAPTURE),sha=b=>createHash('sha256').updat
 const record={stdinBytes:0,stdinEof:false,stdinSha256:null,code:null,signal:null,timedOut:false,error:null};
 const save=()=>writeFileSync(resolve(dir,'worker-process.json'),JSON.stringify(record,null,2)+'\n');
 let child;
+// Structural diagnostics only. The Rust transport remains the sole verdict
+// parser; a JSON suffix here never authorizes acceptance of noisy output.
+function outputShape(output,scope){
+  if(output.length===0)return 'empty';
+  if(output.length>4096)return 'over_limit';
+  let text;
+  try{text=new TextDecoder('utf-8',{fatal:true}).decode(output);}catch{return 'invalid_utf8';}
+  const envelope=value=>{
+    try{
+      assert.deepEqual(Object.keys(value).sort(),['proofScope','verified']);
+      assert.equal(typeof value.verified,'boolean');
+      assert.deepEqual(value.proofScope,scope);
+      return true;
+    }catch{return false;}
+  };
+  try{return envelope(JSON.parse(text))?'exact_envelope':'json_wrong_envelope';}catch{}
+  for(let at=1;at<text.length;at++){
+    if(text[at]!=='{')continue;
+    try{if(envelope(JSON.parse(text.slice(at))))return 'leading_output_before_envelope';}catch{}
+  }
+  return 'not_single_json';
+}
 // Shorter than both the independent170s group supervisor and Rust's180s limit.
 const timer=setTimeout(()=>{record.timedOut=true;record.error='capture-deadline';save();
   if(child)child.kill('SIGKILL');else process.exit(124);},160000);
@@ -40,6 +62,7 @@ try{
   child.stdin.end(bytes);
   const [code,signal]=await new Promise(done=>child.once('close',(code,signal)=>done([code,signal])));
   Object.assign(record,{args,code,signal,milliseconds:performance.now()-start,stdoutHex:stdout.toString('hex'),
+    stdoutBytes:stdout.length,stdoutShape:outputShape(stdout,request.proofScope),
     stderr:stderr.toString('utf8'),stdoutSha256:sha(stdout)});save();
   process.exitCode=record.timedOut?124:record.writeError||record.readError||record.error?1:code??1;
 }catch(error){record.error=error?.code??'capture-validation-or-io';save();if(child)child.kill('SIGKILL');process.exitCode=1;}

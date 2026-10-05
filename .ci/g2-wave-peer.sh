@@ -35,7 +35,7 @@ receipt = {'schema': 1, 'scope': 'g2-public-wave-peer-diagnostic',
            'evidence_sha256': os.environ['G2_WAVE_EVIDENCE_SHA256'],
            'codec_sha256': os.environ['G2_CODEC_SOURCE_SHA256'],
            'peer_archive_sha256': os.environ['G2_WAVE_PEER_SHA256'],
-           'codec_commit': '6e8755f2858dac3f72d61d8450158c2cd20d7d7c',
+           'codec_commit': '645ed05c81d5c3305cfb6e860d346c6882472237',
            'artifacts': files, 'proof_regeneration': False, 'rust_build': False,
            'product_acceptance': False, 'reconstructed_request_is_authority': False,
            'resources': {k: os.environ.get(k) for k in ['CI_JOBS', 'CI_TEST_THREADS', 'CI_MEMORY_MB']}}

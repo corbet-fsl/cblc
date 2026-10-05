@@ -1,0 +1,58 @@
+# Temporary manual replay transport; remove after permanent CI is available.
+when:
+  - event: manual
+    branch: foreman/wave-run24-replay-20261005
+labels:
+  backend: local
+skip_clone: true
+variables:
+  SOURCE_ARCHIVE: {default: ""}
+  SOURCE_SHA256: {default: ""}
+  G2_CODEC_SOURCE_ARCHIVE: {default: ""}
+  G2_CODEC_SOURCE_SHA256: {default: ""}
+  G2_CWLT_SOURCE_ARCHIVE: {default: ""}
+  G2_CWLT_SOURCE_SHA256: {default: ""}
+  G2_WAVE_EVIDENCE_ARCHIVE: {default: ""}
+  G2_WAVE_EVIDENCE_SHA256: {default: ""}
+  G2_WAVE_PEER_ARCHIVE: {default: ""}
+  G2_WAVE_PEER_SHA256: {default: ""}
+  DEPENDENCY_SOURCE_ARCHIVE: {default: ""}
+  DEPENDENCY_SOURCE_SHA256: {default: ""}
+  WORKER_TOOL_PATH: {default: ""}
+  WORKER_TEMP_ROOT: {default: ""}
+  CI_JOBS: {default: "2"}
+  CI_TEST_THREADS: {default: "2"}
+  CI_MEMORY_MB: {default: "16384"}
+  CI_MIN_AVAILABLE_MB: {default: "8192"}
+steps:
+  - name: retained-wave
+    image: bash
+    commands:
+      - |
+        set -eu
+        export PATH="$${WORKER_TOOL_PATH:?Provisioned tools required}:$${PATH}"
+        exec python3 - <<'PY'
+        import hashlib, json, os, pathlib, subprocess, tarfile, tempfile
+        archive = pathlib.Path(os.environ['SOURCE_ARCHIVE'])
+        with archive.open('rb') as stream:
+            assert hashlib.file_digest(stream, 'sha256').hexdigest() == os.environ['SOURCE_SHA256']
+            stream.seek(0)
+            assert subprocess.check_output(['git', 'get-tar-commit-id'], stdin=stream, text=True).strip() == os.environ['CI_COMMIT_SHA']
+        with tempfile.TemporaryDirectory(prefix='wave-replay-', dir=os.environ['WORKER_TEMP_ROOT']) as directory:
+            with tarfile.open(archive) as source:
+                source.extractall(directory, filter='data')
+            # This is the historical dependency receipt, not a new resolution.
+            # The replay installs only the original integrity-bound npm lock.
+            with open(os.environ['DEPENDENCY_SOURCE_ARCHIVE'], 'rb') as stream:
+                assert hashlib.file_digest(stream, 'sha256').hexdigest() == os.environ['DEPENDENCY_SOURCE_SHA256']
+                stream.seek(0)
+                with tarfile.open(fileobj=stream) as closure:
+                    payload = closure.extractfile('manifest.json').read()
+            manifest = pathlib.Path(directory) / 'historical-closure.json'
+            manifest.write_bytes(payload)
+            os.environ['DEPENDENCY_CLOSURE_MANIFEST'] = str(manifest)
+            os.environ['DEPENDENCY_CLOSURE_SHA256'] = os.environ['DEPENDENCY_SOURCE_SHA256']
+            os.environ['CI_REPOSITORY_URL'] = os.environ['CI_REPO_CLONE_URL']
+            os.environ['TMPDIR'] = directory
+            subprocess.run(['timeout', '--signal=TERM', '--kill-after=30s', '660s', 'bash', '.ci/g2-wave-peer.sh'], cwd=directory, check=True)
+        PY
