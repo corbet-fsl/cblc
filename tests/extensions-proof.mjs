@@ -19,8 +19,7 @@ import {createProver} from '@corbet-labs/czkp/prove';
 import {verifyPublicCertificates} from '@corbet-labs/czkp/public-checks';
 import {verifyPublicPolicy} from '@corbet-labs/czkp/public-policy';
 import {updateCircuit,UPDATE_CIRCUITS} from '@corbet-labs/czkp/update';
-import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
-import {receiptDigest} from '@corbet-labs/cwlt/hashes';
+import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes,receiptDigest} from '@corbet-labs/cwlt/extensions';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mjs';
 import {verify as verifyExtension} from '../runtime/extensions/node-verifier.mjs';
@@ -80,12 +79,12 @@ async function call(request,expected=true,retain=true){assert(!pending);const re
   if(retain)publicTrace.push({request:structuredClone(request),response:result});return result.value;}
 // The moved refusals still execute, now in the verifier's public certificate check.
 async function checkPublicCertificate(kind,input){
-  await verifyPublicCertificates(programs[kind],publicInputs(programs[kind],input));
+  await verifyPublicCertificates(programs[kind],publicInputs(programs[kind],input),hashes.raw);
   for(const key of ['certificate','issuer_key','scope','community','owner','state','version','accepted_at']){
     const bad=structuredClone(input);
     if(Array.isArray(bad[key])||bad[key] instanceof Uint8Array)bad[key][0]^=1;
     else bad[key]=BigInt(bad[key])+1n;
-    await assert.rejects(verifyPublicCertificates(programs[kind],publicInputs(programs[kind],bad)),key);
+    await assert.rejects(verifyPublicCertificates(programs[kind],publicInputs(programs[kind],bad),hashes.raw),key);
   }
 }
 const checkedClasses=new Set();
@@ -200,7 +199,7 @@ try{
   const stale=await record(0,'record-below-quorum');
   assert.equal(await call({op:'record',record:stale.statement.record,proof:stale.proof,now}),null);
   let nonce=60;
-  const signContact=(index,owner,slot)=>canonicalSignature(sign('sha256',contactBytes(community,owner,slot),{key:signing[index],dsaEncoding:'ieee-p1363'}));
+  const signContact=async(index,owner,slot)=>canonicalSignature(sign('sha256',await contactBytes(community,owner,slot,hashes.raw),{key:signing[index],dsaEncoding:'ieee-p1363'}));
   async function contact(sender,recipient){
     const n=bytes(nonce++),group=bytes(nonce++),contactPolicy=bytes(nonce++);
     const outgoing=await members[sender].reserve({peerIndex:recipient,role:0,nonce:n,group,contactPolicy,now:now++});
@@ -209,7 +208,7 @@ try{
     const incoming=await members[recipient].reserve({peerIndex:sender,role:1,nonce:n,group,contactPolicy,openedAt:s.admittedAt,expiresAt:s.expiresAt,now:now++});
     members[recipient]=(await submit(7+recipient,[incoming],'reserve')).next;
     const r=members[recipient].slots.get(incoming.event.toString());
-    return {sender,recipient,outgoing:outgoing.event,incoming:incoming.event,senderSignature:signContact(sender,members[recipient].owner.member,r),recipientSignature:signContact(recipient,members[sender].owner.member,s)};
+    return {sender,recipient,outgoing:outgoing.event,incoming:incoming.event,senderSignature:await signContact(sender,members[recipient].owner.member,r),recipientSignature:await signContact(recipient,members[sender].owner.member,s)};
   }
   const first=await contact(0,1),noise=await contact(3,1);
   const burns=[];
@@ -445,10 +444,10 @@ try{
   }
   const replySlot=members[2].slots.get(acceptedContact.incoming.toString());
   const resolution={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
-  const replyBytes=receiptBytes(community,members[2].owner.member,members[0].owner.member,replySlot,members[2].owner.delegationDigest,resolution);
+  const replyBytes=await receiptBytes(community,members[2].owner.member,members[0].owner.member,replySlot,members[2].owner.delegationDigest,resolution,hashes.raw);
   resolution.signature=canonicalSignature(sign('sha256',replyBytes,{key:signing[2],dsaEncoding:'ieee-p1363'}));
-  const answerDigest=await receiptDigest(replyBytes,resolution.signature);
-  const acknowledgment={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[0].owner.member,members[2].owner.member,replySlot,answerDigest,members[0].owner.delegationDigest,now),{key:signing[0],dsaEncoding:'ieee-p1363'}))};
+  const answerDigest=await receiptDigest(replyBytes,resolution.signature,hashes.raw);
+  const acknowledgment={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',await ackBytes(community,members[0].owner.member,members[2].owner.member,replySlot,answerDigest,members[0].owner.delegationDigest,now,hashes.raw),{key:signing[0],dsaEncoding:'ieee-p1363'}))};
   members[2]=(await submit(9,[await members[2].settle(acceptedContact.incoming,resolution,acknowledgment,now++)],'answer')).next;
   await settledEvidence(2,acceptedContact.incoming,'answer',resolution,acknowledgment);
   now=Math.ceil((now+10)/10)*10;
@@ -488,7 +487,7 @@ try{
   members[3]=(await submit(10,[await members[3].activate(declinedContact.incoming,now++,declinedContact.senderSignature)],'decline-activate')).next;
   const declinedSlot=members[3].slots.get(declinedContact.incoming.toString());
   const decline={kind:2,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
-  decline.signature=canonicalSignature(sign('sha256',receiptBytes(community,members[3].owner.member,members[0].owner.member,declinedSlot,members[3].owner.delegationDigest,decline),{key:signing[3],dsaEncoding:'ieee-p1363'}));
+  decline.signature=canonicalSignature(sign('sha256',await receiptBytes(community,members[3].owner.member,members[0].owner.member,declinedSlot,members[3].owner.delegationDigest,decline,hashes.raw),{key:signing[3],dsaEncoding:'ieee-p1363'}));
   members[3]=(await submit(10,[await members[3].settle(declinedContact.incoming,decline,undefined,now++)],'decline')).next;
   await settledEvidence(3,declinedContact.incoming,'close',decline);
   now=Math.ceil((now+10)/10)*10;
@@ -504,10 +503,10 @@ try{
   members[1]=(await submit(8,[await members[1].activate(reordered.incoming,now++,reordered.senderSignature)],'reordered-activate')).next;
   const delayedSlot=members[1].slots.get(reordered.incoming.toString());
   const delayedAnswer={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
-  const delayedBytes=receiptBytes(community,members[1].owner.member,members[2].owner.member,delayedSlot,members[1].owner.delegationDigest,delayedAnswer);
+  const delayedBytes=await receiptBytes(community,members[1].owner.member,members[2].owner.member,delayedSlot,members[1].owner.delegationDigest,delayedAnswer,hashes.raw);
   delayedAnswer.signature=canonicalSignature(sign('sha256',delayedBytes,{key:signing[1],dsaEncoding:'ieee-p1363'}));
-  const delayedDigest=await receiptDigest(delayedBytes,delayedAnswer.signature);
-  const delayedAck={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[2].owner.member,members[1].owner.member,delayedSlot,delayedDigest,members[2].owner.delegationDigest,now),{key:signing[2],dsaEncoding:'ieee-p1363'}))};
+  const delayedDigest=await receiptDigest(delayedBytes,delayedAnswer.signature,hashes.raw);
+  const delayedAck={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',await ackBytes(community,members[2].owner.member,members[1].owner.member,delayedSlot,delayedDigest,members[2].owner.delegationDigest,now,hashes.raw),{key:signing[2],dsaEncoding:'ieee-p1363'}))};
   const answered=(await submit(8,[await members[1].settle(reordered.incoming,delayedAnswer,delayedAck,now++)],'reordered-answer')).next;
   const early=await answered.punish(reordered.incoming,now++,reordered.senderSignature);
   members[1]=(await submit(8,[early],'reordered-punishment')).next;

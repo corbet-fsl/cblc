@@ -33,5 +33,5 @@ pub fn ancestry_digest(community: [u8;32], owner: [u8;32], epoch: u64,
     let v: [u8;8]=(version as Field).to_be_bytes();
     let t: [u8;8]=(issued_at as Field).to_be_bytes();
     for i in 0..8 {bytes[87+i]=e[i];bytes[191+i]=v[i];bytes[263+i]=t[i];}
-    digest(bytes)
+    digest(crate::compact::message(bytes))
 }

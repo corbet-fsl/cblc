@@ -3,6 +3,7 @@
 pub mod indexed;
 pub mod epoch;
 pub mod update;
+pub mod compact;
 use sha2lib::digest;
 use p2hash::poseidon2::Poseidon2;
 
@@ -90,7 +91,7 @@ pub fn contact_digest(community: [u8;32], owner: [u8;32], slot: Obligation) -> [
     let start: [u8;8]=(slot.admitted_at as Field).to_be_bytes();
     let end: [u8;8]=(slot.expires_at as Field).to_be_bytes();
     for i in 0..8 {bytes[272+i]=start[i];bytes[280+i]=end[i];}
-    digest(bytes)
+    digest(compact::message(bytes))
 }
 
 pub fn verify_contact(community: [u8;32], owner: [u8;32], slot: Obligation, peer: Enrollment, signature: [u8;64]) {
@@ -118,7 +119,7 @@ pub fn certificate_digest(community: [u8;32], owner: [u8;32], state: [u8;32], sc
     for i in 0..4 {for j in 0..32 {bytes[23+i*32+j]=values[i][j];}}
     let v: [u8;8]=(version as Field).to_be_bytes();let t: [u8;8]=(at as Field).to_be_bytes();
     for i in 0..8 {bytes[151+i]=v[i];bytes[159+i]=t[i];}
-    digest(bytes)
+    digest(compact::message(bytes))
 }
 
 pub fn limbs(bytes: [u8; 32]) -> [Field; 2] {
@@ -286,12 +287,12 @@ pub fn verify_acknowledgment(community: [u8; 32], owner: [u8; 32], slot: Obligat
     assert((acknowledgment.issued_at >= receipt.issued_at) & (acknowledgment.issued_at <= now));
     assert((sender.start <= acknowledgment.issued_at) & (acknowledgment.issued_at < sender.end));
     let receipt_prefix: [u8; 34] = [99,109,115,103,46,97,99,99,111,117,110,116,105,110,103,45,114,101,99,101,105,112,116,45,100,105,103,101,115,116,46,118,49,0];
-    let answer = receipt_bytes(community, owner, slot.peer, slot, recipient.delegation_digest, receipt);
-    let mut answer_bytes = [0; 455];
+    let answer = compact::message(receipt_bytes(community, owner, slot.peer, slot, recipient.delegation_digest, receipt));
+    let mut answer_bytes = [0; 146];
     for i in 0..34 { answer_bytes[i] = receipt_prefix[i]; }
-    for i in 0..357 { answer_bytes[34+i] = answer[i]; }
-    for i in 0..64 { answer_bytes[391+i] = receipt.signature[i]; }
-    let answer_digest = digest(answer_bytes);
+    for i in 0..48 { answer_bytes[34+i] = answer[i]; }
+    for i in 0..64 { answer_bytes[82+i] = receipt.signature[i]; }
+    let answer_digest = compact::compact_hash(answer_bytes);
     let ack_prefix: [u8; 23] = [99,109,115,103,46,97,99,99,111,117,110,116,105,110,103,45,97,99,107,46,118,49,0];
     let mut bytes = [0; 255];
     for i in 0..23 { bytes[i] = ack_prefix[i]; }
@@ -302,7 +303,7 @@ pub fn verify_acknowledgment(community: [u8; 32], owner: [u8; 32], slot: Obligat
     let mut x = [0; 32]; let mut y = [0; 32];
     for i in 0..32 { x[i] = sender.key[i]; y[i] = sender.key[32+i]; }
     low_s(acknowledgment.signature);
-    assert(std::ecdsa_secp256r1::verify_signature(x, y, acknowledgment.signature, digest(bytes)));
+    assert(std::ecdsa_secp256r1::verify_signature(x, y, acknowledgment.signature, digest(compact::message(bytes))));
 }
 
 pub fn verify_resolution(community: [u8; 32], owner: [u8; 32], slot: Obligation,
@@ -317,5 +318,5 @@ pub fn resolution_claim(community: [u8;32], owner: [u8;32], slot: Obligation,
     assert((signer.start <= receipt.issued_at) & (receipt.issued_at < signer.end));
     let responder = if slot.role == 0 { slot.peer } else { owner };
     let other = if slot.role == 0 { owner } else { slot.peer };
-    digest(receipt_bytes(community,responder,other,slot,signer.delegation_digest,receipt))
+    digest(compact::message(receipt_bytes(community,responder,other,slot,signer.delegation_digest,receipt)))
 }
