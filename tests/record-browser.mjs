@@ -21,6 +21,7 @@ async function build() {
   return built;
 }
 export async function measureRecordBrowser(artifacts,witness) {
+  const loaded=await artifacts.loadSetup(false);
   const root=await build(),scratch=await mkdtemp(join(tmpdir(),'record-browser-'));
   const binaries={};
   for(const name of ['barretenberg','barretenberg-threads']){
@@ -42,10 +43,11 @@ export async function measureRecordBrowser(artifacts,witness) {
           addEventListener('message',event=>{if(event.origin===${JSON.stringify(vault)}&&event.source===document.getElementById('vault').contentWindow)window.result=event.data;});</script>`);return;
       }
       if(req.url==='/input'){
-        res.end(JSON.stringify({artifacts:{circuit:artifacts.circuit,manifest:artifacts.manifest,limits:artifacts.limits,verificationKey:Array.from(artifacts.verificationKey)},
+        res.end(JSON.stringify({artifacts:{circuit:artifacts.circuit,circuitKind:artifacts.circuitKind,manifest:artifacts.manifest,limits:artifacts.limits,verificationKey:Array.from(artifacts.verificationKey)},
           witness,threads:mode==='single'?1:undefined,expectedThreads:mode==='multi'?2:1}));return;
       }
-      if(req.url==='/setup/g1.dat'||req.url==='/setup/g2.dat'){res.end(artifacts.setup[req.url.slice(7)]);return;}
+      if(req.url==='/setup/g2.dat'){res.end(loaded.setup['g2.dat']);return;}
+      if(req.url===`/setup/g1-${loaded.numPoints}.dat`){res.end(loaded.setup['g1.dat']);return;}
       if(req.url==='/barretenberg.wasm'||req.url==='/barretenberg-threads.wasm'){
         res.end(binaries[req.url]);return;
       }

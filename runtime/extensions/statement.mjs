@@ -1,4 +1,6 @@
 import {POLICY_WIRE,validateStatement} from '../accounting/statement.mjs';
+import {statePolicyDigest} from '../accounting/hashes.mjs';
+import {updateCircuit} from '@corbet-labs/czkp/update';
 import {recordEpochPublicInputs} from '@corbet-labs/czkp/record';
 export const exact=(value,keys)=>!!value&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
 export const equal=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((v,i)=>v===b[i]);
@@ -7,10 +9,10 @@ export function policyInput(p) {
   if(!exact(p,['revision','publicRecordQuorum','changeTokenCost','depositDelaySeconds','minimumDepositBatch']))throw new Error('Extension policy shape');
   return {revision:p.revision,quorum:p.publicRecordQuorum,change_cost:p.changeTokenCost,delay:p.depositDelaySeconds,batch:p.minimumDepositBatch};
 }
-export function updateInput(account,policy,previousInbox,inbox,consume,binding) {
+export async function updateInput(account,policy,previousInbox,inbox,consume,binding) {
   const s=account;
   return {extension:policyInput(policy),previous_inbox:previousInbox,inbox,consume_only:consume,change_binding:binding,
-    community:s.community,owner:s.owner,policy_digest:s.policyDigest,enrollment_root:s.enrollmentRoot,now:s.now,valid_until:s.validUntil,genesis:s.genesis,
+    community:s.community,owner:s.owner,policy_digest:s.policyDigest,state_policy:Array.from(await statePolicyDigest(Uint8Array.from(s.community),s.policy)),enrollment_root:s.enrollmentRoot,now:s.now,valid_until:s.validUntil,genesis:s.genesis,
     previous_version:s.previousVersion,next_version:s.nextVersion,previous_state:s.previousState,next_state:s.nextState,settlement_marker:s.settlementMarker,
     ...Object.fromEntries(POLICY_WIRE.map(([k,wire])=>[wire,s.policy[k]]))};
 }
@@ -30,14 +32,14 @@ export async function expectedProofs(statement,bundle,manifest) {
       if(!exact(step,['state','inbox','proof']))throw new Error('Proof step shape');
       if(last) {
         if(!equal(root,u.inbox.root)||!equal(step.inbox,u.inbox.root)||!equal(step.state,s.nextState))throw new Error('Incomplete inbox or state chain');
-        result.push({kind:'update',proof:step.proof,input:updateInput({...s,previousState:state},p,root,root,false,change?u.effect.binding:zero())});
+        result.push({kind:'update',proof:step.proof,input:await updateInput({...s,previousState:state},p,root,root,false,change?u.effect.binding:zero())});
       } else {
         if(s.genesis||equal(root,step.inbox))throw new Error('Invalid ingestion step');
-        result.push({kind:'update',proof:step.proof,input:updateInput({...s,previousState:state,nextState:step.state,nextVersion:s.previousVersion,settlementMarker:zero()},p,root,step.inbox,true,zero())});
+        result.push({kind:'update',proof:step.proof,input:await updateInput({...s,previousState:state,nextState:step.state,nextVersion:s.previousVersion,settlementMarker:zero()},p,root,step.inbox,true,zero())});
         state=step.state;root=step.inbox;
       }
     }
-    return result;
+    return result.map(step=>({...step,kind:updateCircuit(step.input)}));
   }
   if(bundle.proofs.length!==1||!exact(bundle.proofs[0],['proof']))throw new Error('Anonymous proof shape');
   const proof=bundle.proofs[0].proof;

@@ -13,6 +13,7 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const planBytes = await readFile(planPath);
 if (planBytes.length > 65536) throw new Error('Source plan byte bound');
 const plan = JSON.parse(planBytes);
+const updateClasses = ['update_genesis','update_consume','update_change','update_settlement','update_regular'];
 const kinds = ['update', 'record_epoch', 'wave', 'outcome', 'deposit', 'record'];
 if (plan.schema !== 1 || !Array.isArray(plan.sources) || !plan.sources.length || plan.sources.length > 16) {
   throw new Error('Source plan schema');
@@ -48,12 +49,13 @@ try {
       || !Array.isArray(source.absent) || source.absent.some(kind => !kinds.includes(kind))) {
       throw new Error('Source identity');
     }
+    if(source.updateClasses!==undefined&&(!Array.isArray(source.updateClasses)||source.updateClasses.some(k=>!updateClasses.includes(k))||new Set(source.updateClasses).size!==source.updateClasses.length))throw new Error('Update class list');
     names.add(source.variant);
     const directory = resolve(source.root, 'circuits/extensions');
     const sourceFingerprint = await fingerprint(directory);
     const circuits = {};
     const started = performance.now();
-    for (const kind of kinds) {
+    for (const kind of [...kinds,...(source.updateClasses??[])]) {
       let present;
       try { present = (await stat(resolve(directory, kind, 'Nargo.toml'))).isFile(); }
       catch (error) { if (error.code !== 'ENOENT') throw error; present = false; }
@@ -72,7 +74,7 @@ try {
     await writeFile(path, bytes, { flag: 'wx' });
     const identity = { variant: source.variant, sourceCommit: source.sourceCommit,
       sourceArchiveSha256: source.sourceArchiveSha256, dependencyLockSha256: receipt.dependencyLockSha256,
-      absent: source.absent };
+      absent: source.absent,updateClasses:source.updateClasses??[] };
     profilePlan.bundles.push({ ...identity, path, sha256: sha(bytes) });
     receipt.sources.push({ ...identity, circuitSourceFingerprint: sourceFingerprint,
       bundleSha256: sha(bytes), compileMs: performance.now() - started, artifactBytes: bytes.length });

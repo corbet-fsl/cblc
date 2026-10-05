@@ -1,11 +1,17 @@
 import {Barretenberg} from '@aztec/bb.js';
 import {createProver} from '@corbet-labs/czkp/prove';
+import {loadCircuitSetup} from '@corbet-labs/czkp/setup';
 import {witnessInputs,publicInputs} from '@corbet-labs/czkp/abi';
 
 async function main() {
   const input=await (await fetch('/input',{cache:'no-store'})).json();
   const artifacts={...input.artifacts,verificationKey:Uint8Array.from(input.artifacts.verificationKey),setup:{}};
-  for(const file of ['g1.dat','g2.dat'])artifacts.setup[file]=new Uint8Array(await (await fetch('/setup/'+file)).arrayBuffer());
+  artifacts.loadSetup=verificationOnly=>loadCircuitSetup(artifacts.manifest,artifacts.circuitKind,async(name,max)=>{
+    const response=await fetch('/setup/'+name,{cache:'no-store'});
+    if(!response.ok)throw new Error('Setup fetch');
+    const parts=[];let size=0;for await(const chunk of response.body){size+=chunk.length;if(size>max)throw new Error('Setup size');parts.push(chunk);}
+    const bytes=new Uint8Array(size);let at=0;for(const part of parts){bytes.set(part,at);at+=part.length;}return bytes;
+  },verificationOnly);
   let actualThreads;
   const prover=await createProver({artifacts,threads:input.threads,browserFactory:options=>{
     actualThreads=options.threads;

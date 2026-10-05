@@ -14,6 +14,7 @@ if (process.argv.length !== 4 || !isAbsolute(planPath ?? '') || !isAbsolute(outp
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const digest = /^[a-f0-9]{64}$/;
 const revision = /^[a-f0-9]{40}$/;
+const updateClasses = ['update_genesis','update_consume','update_change','update_settlement','update_regular'];
 const kinds = ['update', 'record_epoch', 'wave', 'outcome', 'deposit', 'record'];
 const planBytes = await readFile(planPath);
 if (planBytes.length > 65536) throw new Error('Plan byte bound');
@@ -34,12 +35,13 @@ try {
       || !Array.isArray(bundle.absent) || bundle.absent.some(kind => !kinds.includes(kind))) {
       throw new Error('Profile bundle identity');
     }
+    if(bundle.updateClasses!==undefined&&(!Array.isArray(bundle.updateClasses)||bundle.updateClasses.some(k=>!updateClasses.includes(k))||new Set(bundle.updateClasses).size!==bundle.updateClasses.length))throw new Error('Update class list');
     names.add(bundle.variant);
     if ((await stat(bundle.path)).size > 128 * 1024 * 1024) throw new Error('Bundle byte bound');
     const bytes = await readFile(bundle.path);
     if (sha(bytes) !== bundle.sha256) throw new Error('Compiled bundle authentication');
     const circuits = JSON.parse(bytes);
-    for (const relation of kinds) {
+    for (const relation of [...kinds,...(bundle.updateClasses??[])]) {
       const row = { variant: bundle.variant, sourceCommit: bundle.sourceCommit,
         sourceArchiveSha256: bundle.sourceArchiveSha256, dependencyLockSha256: bundle.dependencyLockSha256,
         bundleSha256: bundle.sha256, relation };

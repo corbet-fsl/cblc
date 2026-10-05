@@ -2,6 +2,7 @@
 // integration, v1 migration or production enablement is implied.
 pub mod indexed;
 pub mod epoch;
+pub mod update;
 use sha2lib::digest;
 use p2hash::poseidon2::Poseidon2;
 
@@ -93,9 +94,13 @@ pub fn contact_digest(community: [u8;32], owner: [u8;32], slot: Obligation) -> [
 }
 
 pub fn verify_contact(community: [u8;32], owner: [u8;32], slot: Obligation, peer: Enrollment, signature: [u8;64]) {
+    verify_p256(peer.key,signature,contact_claim(community,owner,slot,peer));
+}
+
+pub fn contact_claim(community: [u8;32], owner: [u8;32], slot: Obligation, peer: Enrollment) -> [u8;32] {
     assert(enrollment_leaf(community,slot.peer,peer)==slot.peer_authority);
     assert((peer.start<=slot.admitted_at)&(slot.admitted_at<peer.end));
-    verify_p256(peer.key,signature,contact_digest(community,owner,slot));
+    contact_digest(community,owner,slot)
 }
 
 pub fn verify_p256(key: [u8;64], signature: [u8;64], message: [u8;32]) {
@@ -301,14 +306,15 @@ pub fn verify_acknowledgment(community: [u8; 32], owner: [u8; 32], slot: Obligat
 
 pub fn verify_resolution(community: [u8; 32], owner: [u8; 32], slot: Obligation,
     signer: Enrollment, receipt: Resolution, now: u64) {
+    verify_p256(signer.key,receipt.signature,resolution_claim(community,owner,slot,signer,receipt,now));
+}
+
+pub fn resolution_claim(community: [u8;32], owner: [u8;32], slot: Obligation,
+    signer: Enrollment, receipt: Resolution, now: u64) -> [u8;32] {
     assert((receipt.kind == 1) | (receipt.kind == 2));
     assert((receipt.issued_at >= slot.admitted_at) & (receipt.issued_at <= now));
     assert((signer.start <= receipt.issued_at) & (receipt.issued_at < signer.end));
     let responder = if slot.role == 0 { slot.peer } else { owner };
     let other = if slot.role == 0 { owner } else { slot.peer };
-    let mut x = [0; 32]; let mut y = [0; 32];
-    for i in 0..32 { x[i] = signer.key[i]; y[i] = signer.key[32+i]; }
-    low_s(receipt.signature);
-    assert(std::ecdsa_secp256r1::verify_signature(x, y, receipt.signature,
-        digest(receipt_bytes(community, responder, other, slot, signer.delegation_digest, receipt))));
+    digest(receipt_bytes(community,responder,other,slot,signer.delegation_digest,receipt))
 }

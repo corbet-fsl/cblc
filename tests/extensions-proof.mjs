@@ -8,6 +8,8 @@ import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {cpus,totalmem} from 'node:os';
+import {gunzipSync} from 'node:zlib';
+import {setupPoints,SRS_CHUNK_POINTS} from '@corbet-labs/czkp/setup';
 import {Barretenberg,BackendType,UltraHonkBackend} from '@aztec/bb.js';
 import {Noir} from '@noir-lang/noir_js';
 import {OPTIONS,hex,be,canonicalSignature,zeros} from '@corbet-labs/czkp/encoding';
@@ -15,6 +17,8 @@ import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
 import {recordEpochPublicInputs,recordPresentationBytes,verifyRecordPresentation} from '@corbet-labs/czkp/record';
 import {createProver} from '@corbet-labs/czkp/prove';
 import {verifyPublicCertificates} from '@corbet-labs/czkp/public-checks';
+import {verifyPublicPolicy} from '@corbet-labs/czkp/public-policy';
+import {updateCircuit,UPDATE_CIRCUITS} from '@corbet-labs/czkp/update';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
@@ -42,14 +46,26 @@ for(const f of lock.files){
   setup[f.name]=data;await writeFile(resolve(directory,'setup',f.name),data);
 }
 const keyApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
-const keys={};
+const keys={},circuitSetup={},setupPrefixes={};
 try{await keyApi.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2Point:setup['g2.dat']});
-  for(const kind of ['update','deposit','record','record_epoch','wave','outcome'])keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
+  for(const kind of Object.keys(programs)){
+    const stats=await keyApi.circuitStats({circuit:{name:kind,bytecode:new Uint8Array(gunzipSync(Buffer.from(programs[kind].bytecode,'base64'))),verificationKey:new Uint8Array()},
+      includeGatesPerOpcode:false,settings:{ipaAccumulation:false,oracleHashType:'poseidon2',disableZk:false,optimizedSolidityVerifier:false}});
+    const numPoints=setupPoints(stats.numGatesDyadic);
+    assert(numPoints<=lock.numPoints,'Pinned setup insufficient for circuit');
+    circuitSetup[kind]={numGates:stats.numGates,numGatesDyadic:stats.numGatesDyadic,numPoints};
+    for(const count of [SRS_CHUNK_POINTS,numPoints]){
+      const name=`g1-${count}.dat`,data=setup['g1.dat'].subarray(0,count*32);
+      setupPrefixes[name]={name,bytes:data.length,sha256:sha(data).toString('hex')};
+      await writeFile(resolve(directory,'setup',name),data);
+    }
+    keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
+  }
 }finally{await keyApi.destroy();}
 const keyBytes=Buffer.from(JSON.stringify(keys));await writeFile(resolve(directory,'keys.json'),keyBytes);
 const issuer=createECDH('prime256v1');issuer.setPrivateKey(Buffer.alloc(32,3));
 const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-beta.26',backend:'5.0.0',verifierTarget:OPTIONS.verifierTarget,
-  circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files,issuerKey:toArray(issuer.getPublicKey().subarray(1))};
+  circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files,circuitSetup,setupPrefixes,issuerKey:toArray(issuer.getPublicKey().subarray(1))};
 const manifestBytes=Buffer.from(JSON.stringify(manifest));await writeFile(resolve(directory,'manifest.json'),manifestBytes);
 const configPath=resolve(directory,'config.json');await writeFile(configPath,JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
 const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
@@ -72,8 +88,26 @@ async function checkPublicCertificate(kind,input){
     await assert.rejects(verifyPublicCertificates(programs[kind],publicInputs(programs[kind],bad)),key);
   }
 }
+const checkedClasses=new Set();
+const updateProgram=input=>programs[updateCircuit(input)];
+async function checkUpdateClass(input){
+  const selected=updateCircuit(input),program=programs[selected];
+  await verifyPublicPolicy(program,publicInputs(program,input));
+  if(checkedClasses.has(selected))return;
+  // A valid witness must fail every other class, even though all ABIs match.
+  for(const kind of UPDATE_CIRCUITS.filter(kind=>kind!==selected)){
+    await assert.rejects(new Noir(programs[kind]).execute(witnessInputs(programs[kind],input)),`${selected} as ${kind}`);
+  }
+  for(const name of ['policy_digest','state_policy','initial_credit','policy_revision','abandon_after']){
+    const bad=structuredClone(input);
+    if(bad[name] instanceof Uint8Array||Array.isArray(bad[name]))bad[name][0]^=1;else bad[name]=BigInt(bad[name])+1n;
+    await assert.rejects(verifyPublicPolicy(program,publicInputs(program,bad)),name);
+  }
+  checkedClasses.add(selected);
+}
 let activeProver;
 async function proof(kind,input,label,measure=false){
+  if(kind==='update'){await checkUpdateClass(input);kind=updateCircuit(input);}
   if(recordDiagnostic&&kind!=='record_epoch')measure=false;
   const selected=artifacts.artifacts(kind),witness=witnessInputs(selected.circuit,input),expected=publicInputs(selected.circuit,input);
   let chosen;
@@ -179,7 +213,7 @@ try{
   for(const [i,c] of [first,noise].entries()){
     const candidate=await members[1].punish(c.incoming,now++,c.senderSignature);
     const malformed=structuredClone(candidate.input);malformed.old.available=BigInt(malformed.old.available)+1n;
-    await assert.rejects(new Noir(programs.update).execute(witnessInputs(programs.update,malformed)));
+    await assert.rejects(new Noir(updateProgram(malformed)).execute(witnessInputs(updateProgram(malformed),malformed)));
     members[1]=(await submit(8,[candidate],'punishment',i===0)).next;
     assert.equal(members[1].opening.reserved,BigInt(1-i));
     burns.push({member:members[1],delivery:candidate.delivery});
@@ -320,7 +354,7 @@ try{
   const binding=await call({op:'binding',member:7});
   const change=await members[0].changeToken(binding,now++);
   const badOwner=structuredClone(change.input);badOwner.owner=members[2].owner.member;
-  await assert.rejects(new Noir(programs.update).execute(witnessInputs(programs.update,badOwner)));
+  await assert.rejects(new Noir(updateProgram(badOwner)).execute(witnessInputs(updateProgram(badOwner),badOwner)));
   const spent=await submit(7,[change],'change-token');members[0]=spent.next;
   await call({op:'pins',member:7});
   await call(spent.request,false); // Same predecessor/marker cannot authorize a new request.
@@ -437,7 +471,7 @@ try{
   members[0]=(await submit(7,[established],'established-punishment')).next;
   assert.equal(members[0].opening.debt,1n);
   const blocked=await members[0].reserve({peerIndex:2,role:0,nonce:bytes(221),group:bytes(222),contactPolicy:bytes(223),now}).catch(()=>null);
-  if(blocked)await assert.rejects(new Noir(programs.update).execute(witnessInputs(programs.update,blocked.input)));
+  if(blocked)await assert.rejects(new Noir(updateProgram(blocked.input)).execute(witnessInputs(updateProgram(blocked.input),blocked.input)));
   now=Math.ceil((now+10)/10)*10;
   const establishedDeposit=await anonymous(await members[0].deposit(established.delivery,members[0].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'established-deposit');
   await call({op:'deposit',batch:[{deposit:establishedDeposit.statement.deposit,proof:establishedDeposit.proof},batch[1]],now});
@@ -509,6 +543,7 @@ try{
   await writeFile(resolve(directory,'public-wave-trace.json'),JSON.stringify(publicWaveTrace));
   }
   await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify(recordEpochProofs));
+  if(!recordDiagnostic)assert.deepEqual([...checkedClasses].sort(),[...UPDATE_CIRCUITS].sort());
   console.log(recordDiagnostic?'Diagnostic exact and late-ingestion record proofs passed; full extension suite not selected':'Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
   await writeFile(resolve(directory,'results.json'),JSON.stringify({validationScope:recordDiagnostic?'g2-record-diagnostic':'full-extension',benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
   // Only fictional public requests/proofs cross this fixture pipe. Replaying
