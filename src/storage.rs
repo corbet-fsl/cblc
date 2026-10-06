@@ -13,6 +13,24 @@ impl<T: cssr::Storage> AccountStorage for T {
 }
 pub struct Transaction<'a>(Box<dyn cssr::Transaction + 'a>);
 impl Transaction<'_> {
+    pub(crate) fn current_range<T: DeserializeOwned>(
+        &mut self,
+        start: &[u8],
+        end: &[u8],
+        limit: u32,
+    ) -> Result<Vec<(Vec<u8>, T)>, Error> {
+        self.0
+            .current_range(start, end, limit)
+            .map_err(|_| Error::Storage)?
+            .into_iter()
+            .map(|(key, value)| {
+                Ok((
+                    key,
+                    serde_json::from_slice(&value).map_err(|_| Error::Storage)?,
+                ))
+            })
+            .collect()
+    }
     pub fn get<T: DeserializeOwned>(&mut self, key: &[u8]) -> Result<Option<T>, Error> {
         self.0
             .get(key)

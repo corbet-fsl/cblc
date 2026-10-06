@@ -894,7 +894,7 @@ fn admission_rejects_legacy_root_ids_and_mismatched_pseudonyms() {
     let valid = f.grant(7, &f.device);
     cblc::admission::verify_admission(&valid, &f.trust, 120).unwrap();
     let mut old = valid.clone();
-    old.version = 1;
+    old.version = 2;
     assert_eq!(
         cblc::admission::admission_bytes(&old),
         Err(Error::Admission)

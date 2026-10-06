@@ -7,32 +7,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Mandatory platform policy; no implicit quorum or economic defaults.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExtensionPolicy {
-    pub revision: u64,
-    pub public_record_quorum: u32,
-    pub change_token_cost: u32,
-    pub deposit_delay_seconds: u64,
-    pub minimum_deposit_batch: u8,
-}
-impl ExtensionPolicy {
-    pub fn validate(&self) -> Result<(), Error> {
-        if self.revision == 0
-            || self.revision > czkp::MAX_INTEGER
-            || self.public_record_quorum == 0
-            || self.change_token_cost == 0
-            || self.deposit_delay_seconds == 0
-            || self.deposit_delay_seconds > czkp::MAX_INTEGER
-            || !(2..=64).contains(&self.minimum_deposit_batch)
-        {
-            return Err(Error::InvalidInput);
-        }
-        Ok(())
-    }
-}
+/// Canonical policy parameters shared with the member Wallet.
+pub use cwlt::wave::ExtensionPolicy;
 /// Settlement frontier, not a balance or an outcome counter.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -55,6 +31,60 @@ pub struct PendingObligation {
 pub struct StateCertificate {
     pub accepted_at: u64,
     pub signature: Vec<u8>,
+}
+/// Private ancestry witness returned only on the authenticated account response.
+/// It must never be projected into a listing or contact's public record inputs.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EpochAncestryCertificate {
+    /// Hash of the issuer's community identifier.
+    pub community: [u8; 32],
+    /// Private community-scoped account owner.
+    pub owner: [u8; 32],
+    /// Published epoch number.
+    pub epoch: u64,
+    /// Original published epoch root.
+    pub root: [u8; 32],
+    /// Commitment to the original blinded owner frontier leaf.
+    pub frozen_leaf: [u8; 32],
+    /// Newly accepted private state commitment.
+    pub state: [u8; 32],
+    /// Newly accepted private version.
+    pub version: u64,
+    /// Original circuit and verification-key digests.
+    pub proof_scope: AccountProofScope,
+    /// Original acceptance time, unchanged by an exact retry.
+    pub issued_at: u64,
+    /// Canonical low-S P-256 signature, exactly 64 bytes.
+    pub signature: Vec<u8>,
+    /// Same private signed-leaf packet used by frozen and descendant records.
+    pub record: czkp::record::SignedLeaf,
+}
+impl EpochAncestryCertificate {
+    /// Original fixed-width issuer transcript; no JSON is signed.
+    pub fn body(&self) -> cssr::certificate::EpochAncestry {
+        cssr::certificate::EpochAncestry {
+            community: self.community,
+            owner: self.owner,
+            epoch: self.epoch,
+            root: self.root,
+            frozen_leaf: self.frozen_leaf,
+            state: self.state,
+            version: self.version,
+            circuit_digest: self.proof_scope.circuit_digest,
+            verifying_key_digest: self.proof_scope.verifying_key_digest,
+            issued_at: self.issued_at,
+        }
+    }
+}
+/// Coherent result of one committed extended update, including its original
+/// optional ancestry certificate. Exact retries never acquire a later epoch.
+pub struct ExtendedAcceptance {
+    /// Signed acceptance committed by the original ledger.
+    pub acceptance: crate::accounting::AccountAcceptance,
+    /// Original certificate, present only when issued in that acceptance's CAS.
+    pub ancestry: Option<EpochAncestryCertificate>,
 }
 /// The public effect to prove in addition to all ordinary account constraints.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,22 +118,28 @@ pub struct Deposit {
     pub authorization_nullifier: [u8; 32],
     pub obligation: [u8; 32],
 }
-/// Every visibility/contact decision carries an action-specific, fresh record proof.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-pub enum RecordUse {
-    FirstContact,
-    ForumListing,
+pub use czkp::record::{Context as RecordContext, Use as RecordUse};
+
+/// One relying-party decision. Keep this value with the outstanding request;
+/// do not reconstruct it from member input. Successful verification consumes it.
+/// No persistent request or member-activity log is created.
+pub struct RecordChallenge {
+    pub(crate) owner: [u8; 32],
+    pub(crate) context: RecordContext,
+    pub(crate) consumed: bool,
 }
-/// A challenge supplied by the relying service for exactly one decision context.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RecordContext {
-    pub purpose: RecordUse,
-    pub challenge: [u8; 32],
-    pub expires_at: u64,
+impl RecordChallenge {
+    /// Bind a freshly issued random challenge to its expected owner and action.
+    pub fn new(owner: [u8; 32], context: RecordContext) -> Result<Self, Error> {
+        if owner == [0; 32] || context.challenge == [0; 32] || context.expires_at == 0 {
+            return Err(Error::InvalidInput);
+        }
+        Ok(Self {
+            owner,
+            context,
+            consumed: false,
+        })
+    }
 }
 /// Relative public values only: 10,000 basis points in accepted/declined/punished order.
 /// The proof establishes the hidden total reaches the configured quorum.
@@ -137,6 +173,10 @@ pub enum ExtensionStatement {
         policy: ExtensionPolicy,
         record: PublicRecord,
     },
+    RecordEpoch {
+        policy: ExtensionPolicy,
+        record: czkp::record::Record,
+    },
 }
 pub(crate) mod sealed {
     pub trait Sealed {}
@@ -162,8 +202,7 @@ pub struct ExtensionActivation {
 pub(crate) struct Extensions {
     #[cfg(feature = "publication")]
     pub artifact_config: std::path::PathBuf,
-    #[cfg(feature = "publication")]
-    pub artifact_binding: crate::publication::binding::Binding,
+    pub artifact_binding: crate::verification::binding::Binding,
     pub policy: ExtensionPolicy,
     pub verifier: Box<dyn ExtensionVerifier>,
     pub config: Vec<u8>,

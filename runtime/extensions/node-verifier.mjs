@@ -11,10 +11,19 @@ export async function verify(record,artifacts) {
       ||typeof record.proof!=='string'||record.proof.length>8*1024*1024)throw new Error('Proof scope/bound');
   const bundle=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(unhex(record.proof)));
   const expected=await expectedProofs(record.statement,bundle,artifacts.manifest);
-  const selected=artifacts.artifacts(expected[0].kind);
-  const verifier=await createVerifier({artifacts:selected,publicInputs:input=>publicInputs(selected.circuit,input)});
-  try {for(const step of expected)await verifier.verify({statement:step.input,proof:step.proof,proofScope:artifacts.scope});}
-  finally{await verifier.destroy();}
+  // The issuer selects every VK from each step's public class, including consume
+  // prefixes followed by a final public update. A prover never supplies the class.
+  let active;
+  try {
+    for(const step of expected){
+      if(active?.kind!==step.kind){
+        if(active)await active.verifier.destroy();active=undefined;
+        const selected=artifacts.artifacts(step.kind);
+        active={kind:step.kind,verifier:await createVerifier({artifacts:selected,publicInputs:input=>publicInputs(selected.circuit,input)})};
+      }
+      await active.verifier.verify({statement:step.input,proof:step.proof,proofScope:artifacts.scope});
+    }
+  }finally{if(active)await active.verifier.destroy();}
   return {verified:true,proofScope:artifacts.scope};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {

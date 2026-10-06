@@ -38,14 +38,16 @@ fn policy() -> AccountLedgerPolicy {
     }
 }
 fn open<V: AccountProofVerifier>(path: &Path, fixture: &Fixture, verifier: V) -> AccountLedger<V> {
-    AccountLedger::open(
+    let ledger = AccountLedger::open(
         path,
         fixture.trust.clone(),
         policy(),
         verifier,
         SigningKey::from_bytes(&[9; 32]),
     )
-    .unwrap()
+    .unwrap();
+    assert_eq!(ledger.community(), fixture.trust.community_id);
+    ledger
 }
 fn genesis(fixture: &Fixture) -> AccountRequest {
     proofs::request(0, 10, fixture)
@@ -61,6 +63,7 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
         100_000,
     )
     .unwrap();
+    assert_eq!(service.community(), f.trust.community_id);
     service
         .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
@@ -75,6 +78,22 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
         );
     }
     assert_eq!(service.handle_json(&vec![0; 100_001]), Err(Error::Capacity));
+    let mut oversized = genesis(&f);
+    oversized.proof = vec![0; 100_001];
+    let typed = AccountServiceRequest::Apply {
+        grant: f.grant(7, &f.device),
+        authorization: f.authorize(7, &f.device),
+        request: Box::new(oversized),
+    };
+    assert!(matches!(
+        service.handle(typed.clone()),
+        Err(Error::Capacity)
+    ));
+    assert!(matches!(
+        service.handle_for_member(&[7; 48], typed),
+        Err(Error::Capacity)
+    ));
+
     let good = serde_json::json!({"action":"apply","grant":f.grant(7,&f.device),"authorization":f.authorize(7,&f.device),"request":genesis(&f)});
     assert!(good["grant"].get("issuerKeyId").is_some());
     let response = service

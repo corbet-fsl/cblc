@@ -172,7 +172,17 @@ fn valid_signatures_cannot_cross_trust_or_device_scopes() {
         match field {
             0 => trust.community_id = "another.community".into(),
             1 => trust.policy_digest = common::encoded(90),
-            _ => trust.issuer_public_key = f.device.verifying_key().to_bytes(),
+            _ => {
+                trust.policy_keys = csgn::Signer::new(
+                    "community.example",
+                    csgn::SecretKey::from_seed(&mut [2; 32]),
+                    0,
+                    100_000,
+                )
+                .unwrap()
+                .key_ring()
+                .clone()
+            }
         }
         assert_eq!(verify_admission(&grant, &trust, 120), Err(Error::Admission));
     }

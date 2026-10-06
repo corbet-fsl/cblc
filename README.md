@@ -17,6 +17,56 @@ Only the latest acceptance survives; superseded requests cannot be recovered.
 No balances, counterparts, private receipts, login dates or request logs are stored.
 The synchronous API belongs on a blocking thread outside Tokio.
 
+## Epoch ancestry issuance
+
+The issuer-side minimum-frontier certificate uses the original RustCrypto P-256
+issuer through `cssr`, with the separate `cblc.epoch-ancestry.v1` transcript. It
+binds the community, owner, epoch root, exact blinded frozen leaf, newly accepted
+state/version, both proof-scope digests and acceptance time. These are private
+holder witnesses, never public record or listing fields.
+
+`freeze_record_epoch` prepares a read-only candidate; it no longer installs a
+durable freeze by itself. `publish_record_epoch` prepares the common HPKE object
+outside the write transaction, then checks the complete current snapshot and
+atomically installs the snapshot, object and each current frontier's lineage.
+A racing update or deposit invalidates the candidate publication. Member updates
+continue using the preceding published epoch. Repeated publication returns the
+original persisted object, including its original randomness.
+
+`apply_extended_certified` verifies the real update, rechecks the linear CAS,
+consumes the entire pending obligation chain, and issues/retains the optional
+certificate in that same transaction. The current frontier carries its original
+frozen leaf and inclusion path; a numeric version comparison grants no ancestry.
+The latest acceptance retains only its original certificate. An exact retry
+cannot acquire a certificate for a newer epoch, and a failed commit exposes none.
+Authorized waiting-period tuning preserves the original epoch and its
+certificates: only a strictly newer tuning revision may change that one setting;
+community, authority, proof scope and every other policy field remain bound.
+`AccountService::ApplyExtended` uses this port and returns `ancestry` alongside
+the existing acceptance and deposit certificate. Direct issuer-less
+`apply_extended` calls must migrate to the certified port once the owner has an
+active epoch; they fail with `UnsupportedCapability` before changing state.
+The database configuration format is now v5. Existing v4 databases, including
+snapshots created without the atomic anchor/lineage installation, fail to open
+with `PolicyMismatch`; this development format has no automatic migration.
+
+The original `record_epoch` relation now has private exact-state and descended
+branches, using the existing Noir P-256/low-S and SHA-256 implementations. The
+extension compiler, artifact selector and public proof worker include it; Wallet
+constructs its private witnesses through the shared `czkp/record` codec. Neither
+version, state, inbox, certificate, blinding, path nor index is a public input.
+The fixture constructs exact, late-ingestion and minimum-frontier proofs and
+retains only their public statements/proofs, with native/Wasm measurements.
+
+This source remains uncompiled and unqualified. The service does not expose a
+record-epoch authorization operation. Original signed Policy/Beacon/Charter
+authentication, latest-epoch/time enforcement and production member custody
+integration remain required before activation; successful mathematical proof
+verification alone grants no listing or contact authority. Punishment and the
+public record remain required features. The real issuer fixture also includes
+publication/update interleavings, commit failure and exact retry assertions;
+their source is not a claim that the new scenarios have passed CI.
+
 ## Dependency survey
 
 Surveyed crates.io and GitHub on 2026-09-30:
@@ -38,7 +88,7 @@ GitHub Actions runs fmt, clippy with warnings denied, Rust integration tests and
 JavaScript contract tests. The legacy circuits and browser experiments remain
 validation tooling, excluded from the server API. Real proof acceptance and
 storage tests have distinct evidence; historical reports are not new CI results.
-The three extension circuits prove punishment, inbox ingestion, change spends
+The extension circuits prove punishment, inbox ingestion, change spends
 and quorum records. Member witness construction lives in
 [cwlt](https://github.com/corbet-foss/cwlt), with a native/wasm Rust planner and
 an adapter to the existing Noir/Barretenberg stack. Activation requires a real
@@ -109,3 +159,11 @@ unmaintained parser remain open. The optional Turso test requires both credentia
 Dependency updates follow main and are tested against one CI-resolved lockfile.
 Line and branch coverage target 100%; failures remain blocking. See
 [the coverage contract](docs/COVERAGE.md) for measurement and exclusions.
+
+The counterpart `wave` and `outcome` relations reuse the full extension-state opening,
+indexed obligation membership and original issuer certificate. Their public proof
+fixtures are replayed against the current native Wallet verifier, independently of
+the issuer trace. The outcome relation binds the exact original signed receipt and,
+for Answer, the sender acknowledgment; cancellation and a fixed-date sender refund
+cannot impersonate a recipient Close. These member proofs do not establish
+latest-record currentness; the required epoch relation remains unqualified.

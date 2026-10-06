@@ -28,6 +28,7 @@ use std::path::Path;
 
 mod extensions;
 mod obligations;
+pub mod record_epoch;
 mod rotation;
 use rotation::check_root;
 pub use rotation::{RootRotation, root_rotation_bytes};
@@ -95,6 +96,7 @@ struct Frontier {
     version: u64,
     state: [u8; 32],
     latest_request: [u8; 32],
+    record_ancestry: Option<record_epoch::Lineage>,
 }
 fn clock_floor(tx: &mut Transaction<'_>) -> Result<u64, Error> {
     tx.get(b"clock")?.ok_or(Error::Storage)
@@ -179,6 +181,11 @@ fn check_pending(
 }
 
 impl<V: AccountProofVerifier> AccountLedger<V> {
+    /// Immutable community bound to the ledger's admission trust and storage.
+    pub fn community(&self) -> &str {
+        &self.trust.community_id
+    }
+
     pub fn open(
         path: impl AsRef<Path>,
         trust: AdmissionTrust,
@@ -296,7 +303,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         request: &AccountRequest,
         clock: impl Fn() -> u64,
     ) -> Result<AccountAcceptance, Error> {
-        self.apply_inner(grant, authorization, request, None, clock)
+        self.apply_inner(grant, authorization, request, None, None, clock)
+            .map(|result| result.acceptance)
     }
 
     fn apply_inner(
@@ -305,8 +313,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         authorization: &DeviceAuthorization,
         request: &AccountRequest,
         update: Option<&ExtendedUpdate>,
+        issuer: Option<&cssr::certificate::CertificateIssuer>,
         clock: impl Fn() -> u64,
-    ) -> Result<AccountAcceptance, Error> {
+    ) -> Result<crate::extensions::ExtendedAcceptance, Error> {
         let extension = match update {
             Some(update) => Some((
                 self.extensions
@@ -318,6 +327,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         };
         let expected_scope =
             extension.map_or_else(|| self.proof_scope.clone(), |(e, _)| e.verifier.scope());
+        if let Some(issuer) = issuer
+            && extension
+                .is_none_or(|(e, _)| e.artifact_binding.certificate_key != issuer.public_key())
+        {
+            return Err(Error::PolicyMismatch);
+        }
         if request.proof.len() > self.policy.max_proof_bytes {
             return Err(Error::InvalidInput);
         }
@@ -364,8 +379,17 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::Replay);
             }
             advance_clock(&mut transaction, now)?;
+            let ancestry = record_epoch::recover(
+                &mut transaction,
+                &result,
+                issuer,
+                &self.operator.verifying_key().to_bytes(),
+            )?;
             transaction.commit()?;
-            return Ok(result);
+            return Ok(crate::extensions::ExtendedAcceptance {
+                acceptance: result,
+                ancestry,
+            });
         }
         check_config(&mut transaction, &self.config)?;
         // statement_bytes already checks the digest of this exact policy and
@@ -382,6 +406,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             now,
             extension,
         )?;
+        if extension.is_some() && issuer.is_none() {
+            record_epoch::require_issuer(&mut transaction, &statement.owner, now)?;
+        }
         // Release every SQLite lock before invoking an external or slow
         // verifier. Other owners and competing devices can commit meanwhile.
         transaction.rollback()?;
@@ -425,8 +452,17 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::Replay);
             }
             advance_clock(&mut transaction, completed)?;
+            let ancestry = record_epoch::recover(
+                &mut transaction,
+                &result,
+                issuer,
+                &self.operator.verifying_key().to_bytes(),
+            )?;
             transaction.commit()?;
-            return Ok(result);
+            return Ok(crate::extensions::ExtendedAcceptance {
+                acceptance: result,
+                ancestry,
+            });
         }
         check_config(&mut transaction, &self.config)?;
         // The request and this handle's policy cannot change across verification.
@@ -440,6 +476,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             completed,
             extension,
         )?;
+        if extension.is_some() && issuer.is_none() {
+            record_epoch::require_issuer(&mut transaction, &statement.owner, completed)?;
+        }
         let mut acceptance = AccountAcceptance {
             statement: statement.clone(),
             request_id: request.request_id,
@@ -460,9 +499,40 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 &true,
             )?;
         }
-        let root_revision = transaction
-            .get::<Frontier>(&key(1, &[&statement.owner]))?
-            .map_or(0, |prior| prior.root_revision);
+        let prior = transaction.get::<Frontier>(&key(1, &[&statement.owner]))?;
+        let root_revision = prior.as_ref().map_or(0, |prior| prior.root_revision);
+        // check_pending matched this exact predecessor after proof verification.
+        // Only the freeze can attach a lineage; every accepted CAS carries it.
+        let mut lineage = prior.and_then(|prior| prior.record_ancestry);
+        if let Some((_, update)) = extension {
+            let reached = extensions::consume(
+                &mut transaction,
+                &statement.owner,
+                update,
+                lineage.as_ref().map(|lineage| lineage.required_inbox()),
+            )?;
+            if let Some(lineage) = &mut lineage {
+                lineage.consumed |= reached;
+                if !lineage.consumed {
+                    return Err(Error::Storage);
+                }
+            }
+        }
+        let ancestry = if let (Some(issuer), Some((extensions, _)), Some(lineage)) =
+            (issuer, extension, lineage.as_ref())
+        {
+            record_epoch::certify(
+                &mut transaction,
+                &acceptance,
+                lineage,
+                &self.config,
+                extensions,
+                issuer,
+                &cssr::certificate::RecordIssuer::new(&self.operator.to_bytes()),
+            )?
+        } else {
+            None
+        };
         transaction.put(
             &key(1, &[&statement.owner]),
             &Frontier {
@@ -471,16 +541,18 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 version: statement.next_version,
                 state: statement.next_state,
                 latest_request: request.request_id,
+                record_ancestry: lineage,
             },
         )?;
-        if let Some((_, update)) = extension {
-            extensions::consume(&mut transaction, &statement.owner, update)?;
-        }
         // Replace the latest signed acceptance; no historical request table is retained.
         transaction.put(&key(2, &[&statement.owner]), &acceptance)?;
+        record_epoch::retain(&mut transaction, &statement.owner, ancestry.as_ref())?;
         advance_clock(&mut transaction, completed)?;
         transaction.commit()?;
-        Ok(acceptance)
+        Ok(crate::extensions::ExtendedAcceptance {
+            acceptance,
+            ancestry,
+        })
     }
 
     /// Authenticated recovery for either a specific request or the latest

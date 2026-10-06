@@ -141,6 +141,17 @@ manifest binding is captured after real activation and must still match the
 configured files, proof scope and certificate issuer at publication. Current
 ledger and extension database configuration are checked transactionally.
 
+An optional `recordEpoch` embeds only the canonical public descriptor of the
+owner's durable common ciphertext publication. Projection reads the stored
+publication and immutable anchor in that same checked transaction, verifies their
+agreement, configuration, community, policy epoch, proof scope, object digest and
+length, and refuses incomplete or inconsistent storage. No caller can supply a
+replacement descriptor. Legacy absence grants no record authority. Decoding and
+`validate_at` retain their existing public-policy meaning: record capability
+expiry, the authenticated Rulebook period, latest Charter, relying purpose and
+post-await checks remain separately required. This field adds no signer, download
+route, member acceptance, private holder integration or feed lifetime change.
+
 Consumers authenticate original signed bytes with their independently configured
 Charter/Policy ring and monotonic publication floors through Beacon, then call
 `validate_at(expected_community, now)` for economic-policy validity. A ring carried
@@ -148,8 +159,8 @@ by a response is never publication authority. The existing verifier configuratio
 uses the authenticated manifest hash and scope; its worker authenticates the
 entire circuit/key groups and setup files before real proof verification.
 
-This document contains no member, account version, inbox observation or record
-certificate. It authenticates material, never current membership or the absence
+This document contains no member, account version, inbox observation or private
+record certificate. It authenticates material, never current membership or the absence
 of later obligations. It cannot construct a current-record, reservation, release
 or punishment capability. G2 local currentness and G5 transport privacy still
 require their independent decided constructions and review.

@@ -1,12 +1,12 @@
 //! Authenticated public policy and proof-artifact bindings. This is not a
 //! member-currentness, reservation, release or punishment capability.
+pub(crate) use crate::verification::binding;
 use crate::{
     Error, accounting::AccountProofScope, accounting_ledger::AccountLedgerPolicy,
     extensions::ExtensionPolicy,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-pub(crate) mod binding;
 
 /// Strict payload purpose inside the existing SettingsSnapshot envelope kind.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,9 +34,32 @@ pub struct PublicVerifierMaterial {
     pub account_response_key: [u8; 32],
     /// Uncompressed affine coordinates, matching the existing manifest encoding.
     pub certificate_key: Vec<u8>,
+    /// Portable member verifier parameters, projected by the accounting owner.
+    /// Legacy documents remain readable but cannot authorize extension Waves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wave_verifier: Option<cwlt::wave::WavePolicy>,
+    /// Public descriptor of the owner's durable common ciphertext publication.
+    /// Absence grants no record authority. Consumers independently require the
+    /// current Charter, configured period and record-specific time/context checks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub record_epoch: Option<czkp::record::Epoch>,
 }
 
 impl PublicVerifierMaterial {
+    /// One canonical projection used in the signed owner document.
+    pub fn wave_policy(&self) -> Result<cwlt::wave::WavePolicy, Error> {
+        let community = Sha256::digest(self.community.as_bytes()).into();
+        Ok(cwlt::wave::WavePolicy {
+            community,
+            extension: self.extension_policy.clone(),
+            proof_scope: self.proof_scope.clone(),
+            certificate_key: self.certificate_key.clone(),
+            manifest_sha256: self.manifest_sha256,
+            state_policy: self.policy.account.state_digest(&community)?,
+            valid_from: self.policy.account.policy_valid_from,
+            valid_until: self.policy.account.policy_valid_until,
+        })
+    }
     /// Check public policy validity after authenticating the document through
     /// the independently configured publication ring. No member fact is returned.
     pub fn validate_at(&self, issuer: &str, now: u64) -> Result<(), Error> {
@@ -67,7 +90,26 @@ impl PublicVerifierMaterial {
         if self.policy.account.digest(&community)? != self.policy_digest {
             return Err(Error::PolicyMismatch);
         }
-        self.extension_policy.validate()
+        self.extension_policy.validate()?;
+        if let Some(wave) = &self.wave_verifier {
+            if *wave != self.wave_policy()? {
+                return Err(Error::PolicyMismatch);
+            }
+            wave.validate()?;
+        }
+        if let Some(record) = &self.record_epoch {
+            // Structural encoding only: the duration encoded in a descriptor
+            // cannot replace the relying owner's authenticated Rulebook period.
+            let period = record
+                .expires_at
+                .checked_sub(record.starts_at)
+                .ok_or(Error::InvalidInput)?;
+            record.validate(&community, period)?;
+            if record.policy_epoch != self.policy_epoch || record.proof_scope != self.proof_scope {
+                return Err(Error::PolicyMismatch);
+            }
+        }
+        Ok(())
     }
 }
 

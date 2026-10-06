@@ -34,7 +34,7 @@ fn corrupt_overlong_obligation_chain_is_bounded_and_rollback_preserves_entries()
         Err(Error::Capacity)
     );
     assert_eq!(
-        consume(&mut transaction, &owner, &update),
+        consume(&mut transaction, &owner, &update, None),
         Err(Error::Capacity)
     );
     transaction.rollback().unwrap();

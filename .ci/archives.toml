@@ -1,0 +1,87 @@
+schema = 1
+
+# The v0.1 manual workflow receives its reviewed codec candidate explicitly from
+# the task namespace. g2-candidates.py binds its exact commit and source digest.
+
+[archives.g2_cssr]
+revision = "868d0c6441f062d7be4fb17af8c966e2fa3034f0"
+archive_variable = "G2_CSSR_SOURCE_ARCHIVE"
+digest_variable = "G2_CSSR_SOURCE_SHA256"
+
+[archives.g2_cvfy]
+revision = "30a78099a27581ee16ed17a589e64d089a839182"
+archive_variable = "G2_CVFY_SOURCE_ARCHIVE"
+digest_variable = "G2_CVFY_SOURCE_SHA256"
+
+[archives.g2_cwlt]
+revision = "2797a7f45f84975eeb2106302cfba1750bb4e048"
+archive_variable = "G2_CWLT_SOURCE_ARCHIVE"
+digest_variable = "G2_CWLT_SOURCE_SHA256"
+
+# Original authenticated Balance publication API required by Wallet compilation.
+[archives.g2_cbcn]
+revision = "22f3179cd661f46e6d77fda197b171f6c83c637c"
+archive_variable = "G2_CBCN_SOURCE_ARCHIVE"
+digest_variable = "G2_CBCN_SOURCE_SHA256"
+
+# Original passport declaration only; forbidden in selected build graphs.
+[archives.g2_ckmg]
+revision = "6910adaa591c1f2e9f2b51da8e2ac2a5716cbaca"
+archive_variable = "G2_CKMG_SOURCE_ARCHIVE"
+digest_variable = "G2_CKMG_SOURCE_SHA256"
+
+# Compatible browser bridge declaration only; forbidden in selected builds.
+[archives.g2_cpsd]
+revision = "24a61c9500b4141b10abc1650c55767b4be9a9ef"
+archive_variable = "G2_CPSD_SOURCE_ARCHIVE"
+digest_variable = "G2_CPSD_SOURCE_SHA256"
+
+[archives.g2_cvlt]
+revision = "75480d872dc2a595b4a160aa7375107fb400d470"
+archive_variable = "G2_CVLT_SOURCE_ARCHIVE"
+digest_variable = "G2_CVLT_SOURCE_SHA256"
+
+[archives.g2_cwst]
+revision = "de04691c4c654ddbc5f0cd985e342606059b98ba"
+archive_variable = "G2_CWST_SOURCE_ARCHIVE"
+digest_variable = "G2_CWST_SOURCE_SHA256"
+
+[archives.b0_main]
+revision = "b7449bdd32e884cfe29eff3bdbf787577bdda545"
+archive_variable = "B0_MAIN_SOURCE_ARCHIVE"
+digest_variable = "B0_MAIN_SOURCE_SHA256"
+
+[archives.b0_precache]
+revision = "1e096241b2d293f2e85c9456fa96c2d2d17d8abf"
+archive_variable = "B0_PRECACHE_SOURCE_ARCHIVE"
+digest_variable = "B0_PRECACHE_SOURCE_SHA256"
+
+[archives.b0_cached]
+revision = "3b2ced7fb3057ea917bb391ec86023e596666924"
+archive_variable = "B0_CACHED_SOURCE_ARCHIVE"
+digest_variable = "B0_CACHED_SOURCE_SHA256"
+
+[archives.b0_m1]
+revision = "2892b662712ed3e092c01efbd98367aa3cdc2c6a"
+archive_variable = "B0_M1_SOURCE_ARCHIVE"
+digest_variable = "B0_M1_SOURCE_SHA256"
+
+[archives.b0_m4]
+revision = "394bc1367f5ec85b68b9fd1791d1c7fcd642c9a7"
+archive_variable = "B0_M4_SOURCE_ARCHIVE"
+digest_variable = "B0_M4_SOURCE_SHA256"
+
+[archives.b0_m5]
+revision = "07992ca33e605186a3a050dad39df9e61e35fb46"
+archive_variable = "B0_M5_SOURCE_ARCHIVE"
+digest_variable = "B0_M5_SOURCE_SHA256"
+
+[archives.b0_d2]
+revision = "d74c6e6bed7d952e752b84c09e85c294216a2ee0"
+archive_variable = "B0_D2_SOURCE_ARCHIVE"
+digest_variable = "B0_D2_SOURCE_SHA256"
+
+[archives.b0_d3]
+revision = "c46abc5d88d7ffe8ebe002565f010795be045313"
+archive_variable = "B0_D3_SOURCE_ARCHIVE"
+digest_variable = "B0_D3_SOURCE_SHA256"

@@ -33,6 +33,11 @@ impl AccountProofVerifier for ProcessAccountVerifier {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum AccountServiceRequest {
+    RegisterRecordRecipient {
+        grant: AdmissionGrant,
+        authorization: DeviceAuthorization,
+        request: crate::accounting_ledger::record_epoch::RecipientRequest,
+    },
     Apply {
         grant: AdmissionGrant,
         authorization: DeviceAuthorization,
@@ -65,11 +70,16 @@ pub enum AccountServiceRequest {
     deny_unknown_fields
 )]
 pub enum AccountServiceResponse {
+    /// Completion of the actual durable registration; never record authority.
+    RecordRecipient {
+        recipient_key: [u8; 32],
+    },
     Apply(AccountAcceptance),
     Status(AccountStatusResponse),
     ApplyExtended {
         acceptance: AccountAcceptance,
         certificate: crate::extensions::StateCertificate,
+        ancestry: Option<Box<crate::extensions::EpochAncestryCertificate>>,
     },
     Obligations(crate::obligations::ObligationsResponse),
 }
@@ -104,6 +114,11 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
     pub fn with_extension_issuer(mut self, issuer: cssr::certificate::CertificateIssuer) -> Self {
         self.extension_issuer = Some(issuer);
         self
+    }
+
+    /// Immutable ledger scope for binding this service in the community host.
+    pub fn community(&self) -> &str {
+        self.ledger.community()
     }
 
     /// Project the actual ledger and certificate issuer for Policy/Beacon.
@@ -149,7 +164,8 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
         request: AccountServiceRequest,
     ) -> Result<AccountServiceResponse, Error> {
         let grant = match &request {
-            AccountServiceRequest::Apply { grant, .. }
+            AccountServiceRequest::RegisterRecordRecipient { grant, .. }
+            | AccountServiceRequest::Apply { grant, .. }
             | AccountServiceRequest::ApplyExtended { grant, .. }
             | AccountServiceRequest::Obligations { grant, .. }
             | AccountServiceRequest::Status { grant, .. } => grant,
@@ -164,10 +180,42 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
         &mut self,
         request: AccountServiceRequest,
     ) -> Result<AccountServiceResponse, Error> {
+        // Typed callers obey the same bound as HTTP callers. Count directly into
+        // a bounded sink: do not allocate a second proof-sized request buffer.
+        struct Bounded(usize);
+        impl std::io::Write for Bounded {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0 = self
+                    .0
+                    .checked_sub(bytes.len())
+                    .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::FileTooLarge))?;
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        serde_json::to_writer(Bounded(self.max_request_bytes), &request)
+            .map_err(|_| Error::Capacity)?;
         // Observe another administrator's durable tuning before new requests.
         // The ledger still rechecks configuration at commit; racing changes fail closed.
         self.ledger.reload_policy()?;
         match request {
+            AccountServiceRequest::RegisterRecordRecipient {
+                grant,
+                authorization,
+                request,
+            } => {
+                self.ledger.register_record_recipient(
+                    &grant,
+                    &authorization,
+                    &request,
+                    &self.clock,
+                )?;
+                Ok(AccountServiceResponse::RecordRecipient {
+                    recipient_key: request.recipient_key,
+                })
+            }
             AccountServiceRequest::Apply {
                 grant,
                 authorization,
@@ -186,17 +234,20 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                     .extension_issuer
                     .as_ref()
                     .ok_or(Error::UnsupportedCapability)?;
-                let acceptance = self.ledger.apply_extended(
+                let result = self.ledger.apply_extended_certified(
                     &grant,
                     &authorization,
                     &request,
                     &update,
+                    issuer,
                     &self.clock,
                 )?;
+                let acceptance = result.acceptance;
                 let certificate = self.ledger.certify_extended(&acceptance, issuer)?;
                 Ok(AccountServiceResponse::ApplyExtended {
                     acceptance,
                     certificate,
+                    ancestry: result.ancestry.map(Box::new),
                 })
             }
             AccountServiceRequest::Obligations {
@@ -222,6 +273,17 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
     pub fn policy(&mut self) -> Result<(AccountPolicy, WaitingPeriodTuning), Error> {
         let tuning = self.ledger.reload_policy()?;
         Ok((self.ledger.account_policy().clone(), tuning))
+    }
+
+    /// Scheduled common publication, not a member request or activity check.
+    pub fn publish_record_epoch(
+        &mut self,
+        policy_epoch: u64,
+        period_seconds: u64,
+    ) -> Result<crate::accounting_ledger::record_epoch::RecordEpochPublication, Error> {
+        self.ledger.reload_policy()?;
+        self.ledger
+            .publish_record_epoch(policy_epoch, period_seconds, &self.clock)
     }
 
     /// Trusted local administration, absent from AccountServiceRequest.

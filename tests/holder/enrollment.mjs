@@ -21,8 +21,8 @@ export function checkEnrollmentShape(entry) {
   if (!entry.member.some(Boolean) || !entry.delegationDigest.some(Boolean)
       || typeof entry.start !== 'bigint' || typeof entry.end !== 'bigint'
       || entry.start <= 0n || entry.end <= entry.start || entry.end > SAFE
-      || typeof entry.index !== 'bigint' || typeof entry.leaf !== 'bigint' || !Array.isArray(entry.path) || entry.path.length !== 32) fail();
-  integer(entry.index, 32);
+      || typeof entry.index !== 'bigint' || typeof entry.leaf !== 'bigint' || !Array.isArray(entry.path) || entry.path.length !== 20) fail();
+  integer(entry.index, 20);
   for (const sibling of entry.path) { if (typeof sibling !== 'bigint') fail(); fieldBytes(sibling); }
 }
 export function copyEnrollmentCheckpoint(value) {

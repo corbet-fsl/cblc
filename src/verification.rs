@@ -5,6 +5,8 @@ use crate::{
     extensions::{ExtensionStatement, ExtensionVerifier},
 };
 use std::{num::NonZeroUsize, time::Duration};
+#[path = "publication/binding.rs"]
+pub(crate) mod binding;
 
 /// Explicit host resource policy, independent of economic proof policy.
 #[derive(Clone, Copy)]
@@ -50,7 +52,6 @@ impl Budget {
 /// Two independently bounded process pools. Anonymous deposits and record checks
 /// cannot occupy the pool reserved for authenticated account updates.
 pub struct ProcessExtensionVerifier {
-    #[cfg(feature = "publication")]
     pub(crate) artifact_config: std::path::PathBuf,
     updates: cvfy::ProcessVerifier,
     anonymous: cvfy::ProcessVerifier,
@@ -71,7 +72,6 @@ impl ProcessExtensionVerifier {
             return Err(Error::PolicyMismatch);
         }
         Ok(Self {
-            #[cfg(feature = "publication")]
             artifact_config: updates.artifact_config.clone(),
             updates: cvfy::ProcessVerifier::new(updates)?,
             anonymous: cvfy::ProcessVerifier::new(anonymous)?,

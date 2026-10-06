@@ -64,7 +64,7 @@ function wireEnrollment(value) {
 }
 function readEnrollment(value) {
   exact(value, ENROLLMENT);
-  if (!Array.isArray(value.path) || value.path.length !== 32) fail();
+  if (!Array.isArray(value.path) || value.path.length !== 20) fail();
   const entry = { member: readBytes(value.member), key: readBytes(value.key, 64), secretHash: readBytes(value.secretHash),
     start: readTime(value.start), end: readTime(value.end), delegationDigest: readBytes(value.delegationDigest),
     index: decimal(value.index, 32), leaf: decimal(value.leaf), path: value.path.map(n => decimal(n)) };

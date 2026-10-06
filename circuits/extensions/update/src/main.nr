@@ -77,9 +77,9 @@ fn main(
         let epoch = now / rate_window;
         assert((old.admission_epoch <= epoch) & (old.admissions <= maximum_admissions));
         assert(old.available as u128 + old.reserved <= capacity as u128);
-        assert((old.outgoing_count >= 1) & (old.outgoing_count <= 4294967296));
-        assert((old.incoming_count >= 1) & (old.incoming_count <= 4294967296));
-        assert((old.pair_count >= 1) & (old.pair_count <= 4294967296));
+        assert((old.outgoing_count >= 1) & (old.outgoing_count <= 1048576));
+        assert((old.incoming_count >= 1) & (old.incoming_count <= 1048576));
+        assert((old.pair_count >= 1) & (old.pair_count <= 1048576));
         assert((action >= 1) & (action <= 11)); // reserve, activate, settle, cancel, expire, refill
         let amount = if slot.role == 0 { outgoing_reservation } else { incoming_reservation };
         if (action != 6) & (action != 9) & (action != 11) {

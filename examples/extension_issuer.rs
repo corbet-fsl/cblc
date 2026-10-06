@@ -1,6 +1,15 @@
 //! CI-only interactive issuer fixture. All inputs are public statements/proofs.
+//! Its fictional member's opened HPKE witness is returned only for ephemeral
+//! member proving; the driver explicitly excludes that reply from all artifacts.
+#[path = "../tests/holder/ancestry.rs"]
+mod ancestry;
 #[path = "../tests/common/mod.rs"]
 mod common;
+#[cfg(feature = "publication")]
+#[path = "../tests/holder/epoch_publication.rs"]
+mod epoch_publication;
+#[path = "../tests/holder/epoch_replay.rs"]
+mod epoch_replay;
 use cblc::{
     Error,
     accounting::*,
@@ -54,6 +63,14 @@ fn config(scope: AccountProofScope) -> cvfy::ProcessVerifierConfig {
     }
 }
 fn main() {
+    let arguments: Vec<_> = std::env::args().collect();
+    let mut replay = match arguments.as_slice() {
+        [_, _] => None,
+        [_, _, mode, path, digest] if mode == "--replay-public-authority" => Some(
+            epoch_replay::Replay::load(std::path::Path::new(path), digest),
+        ),
+        _ => panic!("Unknown issuer fixture mode"),
+    };
     let fixture = common::Fixture::new();
     let directory = tempfile::tempdir().unwrap();
     let mut ledger: Option<AccountLedger<RejectLegacy>> = None;
@@ -61,10 +78,48 @@ fn main() {
     let mut sequence = 0_u8;
     let mut policy = None;
     let mut scope = None;
+    let control = ancestry::Control::default();
+    let mut record_publication = None;
+    let mut latest = std::collections::BTreeMap::new();
+    let mut record_challenges = std::collections::BTreeMap::new();
+    let companion = std::sync::Arc::new(std::sync::Mutex::new(None::<AccountLedger<RejectLegacy>>));
     for line in io::stdin().lock().lines() {
-        let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        let line = line.unwrap();
+        let v: Value = serde_json::from_str(&line).unwrap();
+        let operation = v["op"].as_str().unwrap();
+        if let Some(replay) = &replay {
+            replay.before(operation);
+        }
+        // Both consumers must see the original authenticated public epoch pair.
+        // The guard restores the replay ledger's own pair before any reply.
+        let restore = if matches!(operation, "checkEpochRecord" | "publication") {
+            replay
+                .as_mut()
+                .map(|replay| replay.install(&line, &directory.path().join("issuer.db")))
+        } else {
+            None
+        };
         let result = (|| -> Result<Value, Error> {
             match v["op"].as_str().unwrap() {
+                "capturePublicEpoch" => {
+                    assert!(replay.is_none());
+                    #[cfg(feature = "publication")]
+                    ledger.as_mut().unwrap().public_verifier_material(
+                        1,
+                        1,
+                        &cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                    )?;
+                    Ok(json!(epoch_replay::capture(
+                        &directory.path().join("issuer.db")
+                    )))
+                }
+                "replayPublicEpoch" => {
+                    replay
+                        .as_mut()
+                        .unwrap()
+                        .select(v["index"].as_u64().unwrap().try_into().unwrap());
+                    Ok(json!(true))
+                }
                 "init" => {
                     let proof_scope: AccountProofScope =
                         serde_json::from_value(v["scope"].clone()).unwrap();
@@ -80,10 +135,17 @@ fn main() {
                         config(proof_scope.clone()),
                         config(proof_scope.clone()),
                     )?;
-                    let mut opened = AccountLedger::open(
-                        directory.path().join("issuer.db"),
+                    let mut opened = AccountLedger::with_store(
+                        ancestry::FaultStore {
+                            inner: cssr::LibsqlStore::local(
+                                directory.path().join("issuer.db"),
+                                "community.example",
+                            )
+                            .unwrap(),
+                            control: control.clone(),
+                        },
                         fixture.trust.clone(),
-                        settings,
+                        settings.clone(),
                         RejectLegacy,
                         SigningKey::from_bytes(&[9; 32]),
                     )?
@@ -106,6 +168,37 @@ fn main() {
                     )?;
                     opened
                         .admit_checkpoint(0, serde_json::from_value(v["root"].clone()).unwrap())?;
+                    #[cfg(feature = "publication")]
+                    epoch_publication::legacy(&mut opened);
+                    *companion.lock().unwrap() = Some(
+                        AccountLedger::open(
+                            directory.path().join("issuer.db"),
+                            fixture.trust.clone(),
+                            settings,
+                            RejectLegacy,
+                            SigningKey::from_bytes(&[9; 32]),
+                        )?
+                        .with_extensions(
+                            extension.clone(),
+                            ProcessExtensionVerifier::new(
+                                config(proof_scope.clone()),
+                                config(proof_scope.clone()),
+                            )?,
+                            ExtensionLimits {
+                                global_burst: 1000,
+                                subject_burst: 500,
+                                replenish: Duration::from_secs(1),
+                                maximum_keys: NonZeroUsize::new(32).unwrap(),
+                            },
+                            ExtensionActivation {
+                                account: serde_json::from_value(v["activation"]["account"].clone())
+                                    .unwrap(),
+                                proof: HEXLOWER
+                                    .decode(v["activation"]["proof"].as_str().unwrap().as_bytes())
+                                    .unwrap(),
+                            },
+                        )?,
+                    );
                     ledger = Some(opened);
                     policy = Some(extension);
                     scope = Some(proof_scope);
@@ -137,31 +230,178 @@ fn main() {
                             .to_bytes(),
                     );
                     let now = request.issued_at;
-                    let mut service =
-                        AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?
-                            .with_extension_issuer(
-                                cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                    control.lock().unwrap().fail_acceptance =
+                        v["failCommit"].as_bool().unwrap_or(false);
+                    if v["racePublication"].as_bool() == Some(true) {
+                        let other = companion.clone();
+                        let request = request.clone();
+                        let update = update.clone();
+                        let grant = fixture.grant(member, &fixture.device);
+                        let authorization = fixture.authorize(member, &fixture.device);
+                        control.lock().unwrap().before_transaction = Some((
+                            1,
+                            Box::new(move || {
+                                // Runs after snapshot/encryption and before publication
+                                // rechecks, through a separate real SQLite connection.
+                                other
+                                    .lock()
+                                    .unwrap()
+                                    .as_mut()
+                                    .unwrap()
+                                    .apply_extended_certified(
+                                        &grant,
+                                        &authorization,
+                                        &request,
+                                        &update,
+                                        &cssr::certificate::CertificateIssuer::new(&[3; 32])
+                                            .unwrap(),
+                                        || now,
+                                    )
+                                    .unwrap();
+                            }),
+                        ));
+                        assert!(matches!(
+                            ledger
+                                .as_mut()
+                                .unwrap()
+                                .publish_record_epoch(1, 100, || now),
+                            Err(Error::Replay)
+                        ));
+                        assert!(control.lock().unwrap().before_transaction.is_none());
+                    }
+                    let raced_epoch = std::sync::Arc::new(std::sync::Mutex::new(None));
+                    if let Some(kind) = v["raceAcceptance"].as_str() {
+                        let other = companion.clone();
+                        let mut competitor = request.clone();
+                        if kind == "stale" {
+                            competitor.request_id[0] ^= 128;
+                            competitor.signature = B64.encode(
+                                &fixture
+                                    .device
+                                    .sign(&account_request_bytes(&competitor)?)
+                                    .to_bytes(),
                             );
+                        }
+                        let update = update.clone();
+                        let grant = fixture.grant(member, &fixture.device);
+                        let authorization = fixture.authorize(member, &fixture.device);
+                        let published = record_publication.clone().unwrap();
+                        control.lock().unwrap().before_transaction = Some((
+                            2,
+                            Box::new(move || {
+                                let result = other
+                                    .lock()
+                                    .unwrap()
+                                    .as_mut()
+                                    .unwrap()
+                                    .apply_extended_certified(
+                                        &grant,
+                                        &authorization,
+                                        &competitor,
+                                        &update,
+                                        &cssr::certificate::CertificateIssuer::new(&[3; 32])
+                                            .unwrap(),
+                                        || now,
+                                    )
+                                    .unwrap();
+                                ancestry::check_certificate(
+                                    &published,
+                                    member,
+                                    &result.acceptance,
+                                    result.ancestry.as_ref().unwrap(),
+                                );
+                            }),
+                        ));
+                    }
+                    if v["raceEpoch"].as_bool() == Some(true) {
+                        let other = companion.clone();
+                        let result = raced_epoch.clone();
+                        control.lock().unwrap().before_transaction = Some((
+                            2,
+                            Box::new(move || {
+                                *result.lock().unwrap() = Some(
+                                    other
+                                        .lock()
+                                        .unwrap()
+                                        .as_mut()
+                                        .unwrap()
+                                        .publish_record_epoch(1, 100, || now)
+                                        .unwrap(),
+                                );
+                            }),
+                        ));
+                    }
+                    if v["refuseUncertified"].as_bool() == Some(true) {
+                        assert!(matches!(
+                            ledger.as_mut().unwrap().apply_extended(
+                                &fixture.grant(member, &fixture.device),
+                                &fixture.authorize(member, &fixture.device),
+                                &request,
+                                &update,
+                                || now,
+                            ),
+                            Err(Error::UnsupportedCapability)
+                        ));
+                    }
                     let operation = AccountServiceRequest::ApplyExtended {
                         grant: fixture.grant(member, &fixture.device),
                         authorization: fixture.authorize(member, &fixture.device),
                         request: Box::new(request.clone()),
                         update: update.clone(),
                     };
+                    if v["probeAncestry"].as_bool() == Some(true) {
+                        let mut store = cssr::LibsqlStore::local(
+                            directory.path().join("issuer.db"),
+                            "community.example",
+                        )
+                        .unwrap();
+                        ancestry::refuse_corrupt_bindings(
+                            ledger.as_mut().unwrap(),
+                            &mut store,
+                            &operation,
+                        );
+                    }
+                    let mut service =
+                        AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?
+                            .with_extension_issuer(
+                                cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                            );
                     assert!(
                         service
                             .handle_for_member(&[member ^ 1; 48], operation.clone())
                             .is_err()
                     );
-                    let response = service.handle_for_member(&[member; 48], operation);
+                    let response = service.handle_for_member(&[member; 48], operation.clone());
                     ledger = Some(service.into_ledger());
+                    if v["raceAcceptance"].is_string() {
+                        assert!(control.lock().unwrap().before_transaction.is_none());
+                    }
+                    if let Some(publication) = raced_epoch.lock().unwrap().take() {
+                        record_publication = Some(publication);
+                    }
+                    if v["failCommit"].as_bool() == Some(true) {
+                        assert!(control.lock().unwrap().failed_with_certificate);
+                    }
                     let AccountServiceResponse::ApplyExtended {
                         acceptance: accepted,
                         certificate,
+                        ancestry: ancestry_certificate,
                     } = response?
                     else {
                         return Err(Error::InvalidInput);
                     };
+                    if let Some(expected) = v["expectAncestry"].as_bool() {
+                        assert_eq!(ancestry_certificate.is_some(), expected);
+                    }
+                    if let Some(certificate) = &ancestry_certificate {
+                        ancestry::check_certificate(
+                            record_publication.as_ref().unwrap(),
+                            member,
+                            &accepted,
+                            certificate,
+                        );
+                    }
+                    latest.insert(member, (operation, ancestry_certificate));
                     if matches!(update.effect, Effect::Change { .. }) {
                         tokens.insert(
                             member,
@@ -173,6 +413,120 @@ fn main() {
                         );
                     }
                     Ok(json!(certificate))
+                }
+                "retry" => {
+                    let member = v["member"].as_u64().unwrap() as u8;
+                    let now = v["now"].as_u64().unwrap();
+                    let (operation, original) = latest.get(&member).unwrap();
+                    let mut service =
+                        AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?
+                            .with_extension_issuer(
+                                cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                            );
+                    let response = service.handle_for_member(&[member; 48], operation.clone());
+                    ledger = Some(service.into_ledger());
+                    let AccountServiceResponse::ApplyExtended { ancestry, .. } = response? else {
+                        return Err(Error::InvalidInput);
+                    };
+                    assert!(ancestry == *original);
+                    Ok(json!(true))
+                }
+                "recordRecipient" => {
+                    let member = v["member"].as_u64().unwrap() as u8;
+                    let now = v["now"].as_u64().unwrap();
+                    let mut request = record_epoch::RecipientRequest {
+                        community: sha2::Sha256::digest(fixture.trust.community_id.as_bytes())
+                            .into(),
+                        owner: B64
+                            .decode(common::member_id(member).as_bytes())
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                        recipient_key: ancestry::recipient_key(member),
+                        chat_public_key: B64.encode(&fixture.device.verifying_key().to_bytes()),
+                        issued_at: now,
+                        expires_at: now + 1,
+                        signature: String::new(),
+                    };
+                    request.signature = B64.encode(
+                        &fixture
+                            .device
+                            .sign(&record_epoch::recipient_bytes(&request)?)
+                            .to_bytes(),
+                    );
+                    ledger.as_mut().unwrap().register_record_recipient(
+                        &fixture.grant(member, &fixture.device),
+                        &fixture.authorize(member, &fixture.device),
+                        &request,
+                        || now,
+                    )?;
+                    Ok(json!(true))
+                }
+                "recordEpoch" => {
+                    let now = v["now"].as_u64().unwrap();
+                    ledger.as_mut().unwrap().reload_policy()?;
+                    control.lock().unwrap().fail_publication =
+                        v["failCommit"].as_bool().unwrap_or(false);
+                    let published =
+                        ledger
+                            .as_mut()
+                            .unwrap()
+                            .publish_record_epoch(1, 100, || now)?;
+                    if let Some(old) = &record_publication {
+                        let old: &record_epoch::RecordEpochPublication = old;
+                        if old.descriptor().epoch == published.descriptor().epoch {
+                            assert!(old.descriptor() == published.descriptor());
+                            assert_eq!(old.common_object(), published.common_object());
+                        }
+                    }
+                    #[cfg(feature = "publication")]
+                    epoch_publication::published(
+                        ledger.as_mut().unwrap(),
+                        &mut cssr::LibsqlStore::local(
+                            directory.path().join("issuer.db"),
+                            "community.example",
+                        )
+                        .unwrap(),
+                        &published,
+                    );
+                    record_publication = Some(published);
+                    Ok(json!(true))
+                }
+                "tuneWaiting" => {
+                    let now = v["now"].as_u64().unwrap();
+                    // Independent real administrative writer; the member
+                    // service must observe it through its ordinary reload.
+                    let result = companion
+                        .lock()
+                        .unwrap()
+                        .as_mut()
+                        .unwrap()
+                        .update_waiting_period(0, v["seconds"].as_u64().unwrap(), || now)?;
+                    Ok(json!(result))
+                }
+                "recordEpochRollback" => {
+                    let now = v["now"].as_u64().unwrap();
+                    let tick = std::cell::Cell::new(0);
+                    let result = ledger.as_mut().unwrap().publish_record_epoch(1, 100, || {
+                        let step = tick.replace(tick.get() + 1);
+                        if step == 1 { now + 1 } else { now }
+                    });
+                    assert!(
+                        matches!(result, Err(Error::ClockRollback)),
+                        "Expected clock rollback, got {:?}",
+                        result.as_ref().err()
+                    );
+                    Ok(json!(true))
+                }
+                "recordWitness" => {
+                    let member = v["member"].as_u64().unwrap() as u8;
+                    let published = record_publication.as_ref().unwrap();
+                    let (leaf, index, path, certificate) =
+                        ancestry::open_witness(published, member);
+                    Ok(
+                        json!({"epoch":published.descriptor(),"leaf":leaf,"index":index,"path":path,"certificate":certificate,
+                        "ancestry":latest.get(&member).unwrap().1}),
+                    )
                 }
                 "deposit" => {
                     let batch: Vec<(Deposit, Vec<u8>)> = v["batch"]
@@ -336,6 +690,55 @@ fn main() {
                     );
                     Ok(json!({"root":response.inbox,"entries":response.entries}))
                 }
+                #[cfg(feature = "publication")]
+                "publication" => {
+                    let material = ledger.as_mut().unwrap().public_verifier_material(
+                        1,
+                        1,
+                        &cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                    )?;
+                    let mut signer = csgn::Signer::new(
+                        "community.example",
+                        csgn::SecretKey::from_seed(&mut [1; 32]),
+                        0,
+                        100_000,
+                    )
+                    .unwrap();
+                    let signed = signer
+                        .sign(
+                            csgn::Kind::SettingsSnapshot,
+                            &serde_json::to_vec(&material).unwrap(),
+                            100,
+                            900,
+                        )
+                        .unwrap();
+                    Ok(json!({"signed":signed,"configuredFixtureRing":signer.key_ring().to_cbor()}))
+                }
+                "issueRecordChallenge" => {
+                    let owner = serde_json::from_value(v["owner"].clone()).unwrap();
+                    let context: cblc::extensions::RecordContext =
+                        serde_json::from_value(v["context"].clone()).unwrap();
+                    let id = context.challenge;
+                    if record_challenges.contains_key(&id) {
+                        return Err(cblc::Error::Replay);
+                    }
+                    record_challenges
+                        .insert(id, cblc::extensions::RecordChallenge::new(owner, context)?);
+                    Ok(json!(true))
+                }
+                "checkEpochRecord" => {
+                    let presentation: czkp::record::Presentation =
+                        serde_json::from_value(v["presentation"].clone()).unwrap();
+                    let id: [u8; 32] = serde_json::from_value(v["challenge"].clone()).unwrap();
+                    let challenge = record_challenges
+                        .get_mut(&id)
+                        .ok_or(cblc::Error::Admission)?;
+                    Ok(json!(ledger.as_mut().unwrap().check_epoch_record(
+                        challenge,
+                        &presentation,
+                        || v["now"].as_u64().unwrap()
+                    )?))
+                }
                 "record" => {
                     let record: PublicRecord = serde_json::from_value(v["record"].clone()).unwrap();
                     let proof = HEXLOWER
@@ -481,6 +884,7 @@ fn main() {
                 _ => Err(Error::InvalidInput),
             }
         })();
+        drop(restore);
         println!(
             "{}",
             match result {
@@ -489,5 +893,8 @@ fn main() {
             }
         );
         io::stdout().flush().unwrap();
+    }
+    if let Some(replay) = &replay {
+        replay.complete();
     }
 }

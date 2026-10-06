@@ -334,12 +334,7 @@ fn main() {
                 .sign(&cblc::obligations::request_bytes(&request).unwrap())
                 .to_bytes(),
         );
-        grant.signature = B64.encode(
-            &fixture
-                .issuer
-                .sign(&cblc::admission::admission_bytes(&grant).unwrap())
-                .to_bytes(),
-        );
+        fixture.resign_grant(&mut grant);
         authority.signature = B64.encode(
             &SigningKey::from_bytes(&[7; 32])
                 .sign(&cblc::admission::device_authorization_bytes(&authority).unwrap())
