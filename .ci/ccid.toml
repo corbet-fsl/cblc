@@ -1,0 +1,32 @@
+schema = 1
+project = "cblc"
+
+# All Linux verification gates from .github/workflows/ci.yml (jobs check,
+# audit, dependency-policy, coverage) are ported into .ci/verify.sh in CI
+# ordering. kind="cargo" is not used: gates need --locked/--all-features/
+# --test/--no-fail-fast/-- --test-threads selection, cargo fmt failure capture
+# ("> formatting.patch"), npm flags, node proof/extension pipelines, wasm-pack
+# web build, metadata redirects, jq extraction of instrumented example paths,
+# and a nightly coverage toolchain that the cargo kind cannot express.
+# The advisory DB gate lives in [checks.advisories] and runs fresh on every
+# invocation, never from cache.
+
+[checks.verify]
+kind = "commands"
+commands = [["bash", ".ci/verify.sh"]]
+cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["node", "--version"], ["python3", "--version"], ["wasm-pack", "--version"], ["jq", "--version"], ["clang", "--version"], ["pkg-config", "--version"]]
+cache_env = ["LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
+cache_outputs = ["coverage.json", "coverage.lcov", "coverage.txt", "dependency-metadata.json", "instrumented-build.json"]
+
+[checks.advisories]
+kind = "commands"
+commands = [["cargo", "deny", "--locked", "check", "advisories", "licenses"]]
+
+[render]
+tool_revision = "81ebac8e86e20bc93b69d5e912bbcb0c0d036d58"
+
+[jobs.verify]
+scheduler = "crow"
+checks = ["verify", "advisories"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
