@@ -48,7 +48,7 @@ const configPath=resolve(directory,'config.json');await writeFile(configPath,JSO
 const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
 const hashApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const hashes=extensionHashes(hashApi);
-const child=spawn(resolve('target/debug/examples/extension_issuer'),[configPath],{stdio:['pipe','pipe','inherit']});
+const child=spawn(resolve(process.env.CBLC_EXTENSION_ISSUER??'target/debug/examples/extension_issuer'),[configPath],{stdio:['pipe','pipe','inherit']});
 let pending;const lines=createInterface({input:child.stdout});
 lines.on('line',line=>{const waiter=pending;pending=undefined;if(!waiter)throw new Error('Unexpected issuer reply');waiter.resolve(JSON.parse(line));});
 child.on('exit',code=>{if(pending)pending.reject(new Error(`Issuer exited ${code}`));});

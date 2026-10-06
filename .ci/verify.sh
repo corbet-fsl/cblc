@@ -53,14 +53,14 @@ mkdir -p .extension-test
 git rev-parse HEAD > .extension-test/source.txt
 sha256sum package-lock.json >> .extension-test/source.txt
 CBLC_LAST_GATE="proof"
-node tests/extensions-proof.mjs
 # The ci-job exports a persistent CARGO_TARGET_DIR (absolute); resolve it once
-# so the replay uses the actual `cargo build` output dir. Gate unchanged.
+# so the proof and replay use the actual `cargo build` output dir. Gate unchanged.
 cblc_target_dir="${CARGO_TARGET_DIR:-target}"
 case "$cblc_target_dir" in
   /*) cblc_issuer="$cblc_target_dir/debug/examples/extension_issuer" ;;
   *) cblc_issuer="$PWD/$cblc_target_dir/debug/examples/extension_issuer" ;;
 esac
+CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mjs
 CBLC_LAST_GATE="replay"
 CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/replay-extensions.mjs
 CBLC_LAST_GATE="adversaries"
@@ -95,6 +95,15 @@ export RUSTUP_TOOLCHAIN=nightly
 "$NIGHTLY_CARGO" llvm-cov --version
 # Measure real native round trips and failure paths.
 set -euo pipefail
+# Bug 2 isolation: coverage data must not reuse the shared cargo target
+# across jobs (stale checkout paths fail the next gate); scope the
+# coverage target to this job only. Native gates keep the shared warm
+# target; outer traps and services are untouched.
+(
+coverage_target="$(mktemp -d)"
+case "$coverage_target" in ""|"$PWD"/*) echo 'unsafe coverage target' >&2; exit 2;; esac
+trap 'rm -rf -- "$coverage_target"' EXIT
+export CARGO_TARGET_DIR="$coverage_target"
 source <("$NIGHTLY_CARGO" llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
 "$NIGHTLY_CARGO" llvm-cov clean --workspace
 CBLC_LAST_GATE="nightly-tests"
@@ -119,6 +128,7 @@ source <("$NIGHTLY_CARGO" llvm-cov show-env --sh --branch --no-cfg-coverage --no
 # Retain independent annotated source inventory (CI: if always()).
 source <("$NIGHTLY_CARGO" llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
 "$NIGHTLY_CARGO" llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --text --output-path coverage.txt
+)
 # Require complete source line and branch coverage.
 CBLC_LAST_GATE="coverage-check"
 python3 .github/test-source-coverage.py
