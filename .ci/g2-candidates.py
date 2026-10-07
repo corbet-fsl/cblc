@@ -34,7 +34,7 @@ def digest(path):
 
 
 def patch_bytes(label):
-    return '\n'.join(f'[patch."https://github.com/corbet-foss/{name}"]\n'
+    return '\n'.join(f'[patch."https://git.corbet.ch/corbet-foss/{name}"]\n'
                      f'{name} = {{ path = {json.dumps(str(target))} }}\n'
                      for name, (_, _, target) in SOURCES.items()
                      if name in PATCH_SETS[label]).encode()
@@ -123,8 +123,8 @@ def manifests():
     return {str(p.relative_to(ROOT)): digest(p) for p in paths}
 
 
-FIRST_PARTY = re.compile(r'git\+https://github\.com/(corbet-foss|corbet-labs|corbet-libs|cmtymeet)/')
-MAIN_SOURCE = re.compile(r'git\+https://github\.com/(corbet-foss|corbet-labs|corbet-libs|cmtymeet)/'
+FIRST_PARTY = re.compile(r'git\+https://git\.corbet\.ch/(corbet-foss|corbet-labs|corbet-libs|cmtymeet)/')
+MAIN_SOURCE = re.compile(r'git\+https://git\.corbet\.ch/(corbet-foss|corbet-labs|corbet-libs|cmtymeet)/'
                          r'([A-Za-z0-9][A-Za-z0-9_.-]*)\?branch=main#([0-9a-f]{40})')
 
 
@@ -152,7 +152,7 @@ def retained_observation(closure):
         raise ValueError('Retained consumer set changed')
     codec_changes = []
     for current, previous in zip(closure['consumers'][1:], historical['consumers'][1:], strict=True):
-        if previous['url'] == 'https://github.com/corbet-foss/czkp':
+        if previous['url'] == 'https://git.corbet.ch/corbet-foss/czkp':
             expected = dict(previous, commit=SOURCES['czkp'][0],
                             tree='0c39b5271719f49f0284554487ed17baaf4226e7',
                             source_sha256=os.environ['G2_CODEC_SOURCE_SHA256'])
@@ -421,7 +421,7 @@ def unpack():
         package = tomllib.loads((target / 'Cargo.toml').read_text())['package']
         if package['name'] != name or list(target.rglob('node_modules')):
             raise ValueError('Candidate owner differs or contains nested dependency installation')
-        records.append({'owner': name, 'repository': f'https://github.com/corbet-foss/{name}.git',
+        records.append({'owner': name, 'repository': f'https://git.corbet.ch/corbet-foss/{name}.git',
                         'commit': oid, 'sha256': expected, 'path': str(target),
                         'identity': 'explicit diagnostic candidate, not observed main',
                         'resolution_only': name in RESOLUTION_ONLY, 'qualified_by_diagnostic': False})

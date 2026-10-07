@@ -102,7 +102,7 @@ steps:
         esac
         : "$${DEPENDENCY_SOURCE_ARCHIVE:?}" "$${DEPENDENCY_SOURCE_SHA256:?}"
         exec python3 - "$$DEPENDENCY_SOURCE_ARCHIVE" "$$DEPENDENCY_SOURCE_SHA256" \
-          "$$SOURCE_ARCHIVE" "$$SOURCE_SHA256" "$$CI_COMMIT_SHA" "https://github.com/corbet-libs/cblc" \
+          "$$SOURCE_ARCHIVE" "$$SOURCE_SHA256" "$$CI_COMMIT_SHA" "https://git.corbet.ch/corbet-libs/cblc" \
           "$${TMPDIR:-/tmp}" "$$CI_TOOL_BINARY" "$$CHECKS" <<'PY'
         import hashlib, pathlib, re, sys, tarfile
         archive, digest, source, source_digest, commit, repository, scratch, binary, checks = sys.argv[1:]
