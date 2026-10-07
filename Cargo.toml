@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.88"
 description = "Balance library: accounts, events and policies for zero-knowledge accounting, managed by cvld"
 license = "FSL-1.1-ALv2"
-repository = "https://github.com/corbet-libs/cblc"
+repository = "https://git.corbet.ch/corbet-libs/cblc"
 readme = "README.md"
 publish = false
 include = ["Cargo.toml", "src/**", "docs/**", "README.md", "LICENSE.md"]
@@ -23,17 +23,17 @@ schema = ["dep:utoipa", "dep:schemars", "czkp/schema"]
 publication = ["dep:cbcn", "dep:csgn"]
 
 [dependencies]
-cbcn = { git = "https://github.com/corbet-foss/cbcn", branch = "main", optional = true }
-csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", default-features = false, optional = true }
+cbcn = { git = "https://git.corbet.ch/corbet-foss/cbcn", branch = "main", optional = true }
+csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false, optional = true }
 utoipa = { version = "6", optional = true }
 schemars = { version = "1", optional = true }
-cthl = { git = "https://github.com/corbet-foss/cthl", branch = "main" }
-cpns = { git = "https://github.com/corbet-foss/cpns", branch = "main", default-features = false }
+cthl = { git = "https://git.corbet.ch/corbet-foss/cthl", branch = "main" }
+cpns = { git = "https://git.corbet.ch/corbet-foss/cpns", branch = "main", default-features = false }
 futures = "0.3"
-czkp = { git = "https://github.com/corbet-foss/czkp", branch = "main" }
-cvfy = { git = "https://github.com/corbet-foss/cvfy", branch = "main" }
-cssr = { git = "https://github.com/corbet-foss/cssr", branch = "main" }
-crlt = { git = "https://github.com/corbet-foss/crlt", branch = "main" }
+czkp = { git = "https://git.corbet.ch/corbet-foss/czkp", branch = "main" }
+cvfy = { git = "https://git.corbet.ch/corbet-foss/cvfy", branch = "main" }
+cssr = { git = "https://git.corbet.ch/corbet-foss/cssr", branch = "main" }
+crlt = { git = "https://git.corbet.ch/corbet-foss/crlt", branch = "main" }
 data-encoding = "2.9"
 ed25519-dalek = "2.2"
 serde = { version = "1", features = ["derive"] }
@@ -41,6 +41,6 @@ serde_json = "1"
 sha2 = "0.10"
 
 [dev-dependencies]
-csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
+csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
 jsonschema = { version = "0.58", default-features = false }
 tempfile = "3"
