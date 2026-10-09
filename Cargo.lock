@@ -214,7 +214,7 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://github.com/corbet-foss/cbcn?branch=main#8f67fb43038bd2ca3acfddc40a9026f8f0f01182"
+source = "git+https://github.com/corbet-foss/cbcn?branch=main#1174138ab68933e6b24d67250d966e3eb27da465"
 dependencies = [
  "csgn",
  "serde",
@@ -387,7 +387,7 @@ dependencies = [
 [[package]]
 name = "cpns"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cpns?branch=main#71145788c12f25a5f6c89437e9e217dea4480a4b"
+source = "git+https://github.com/corbet-foss/cpns?branch=main#5924a8a71cc77de86b90e33bb9bfc949e1b49fd4"
 dependencies = [
  "getrandom 0.4.3",
  "sha2 0.11.0",
@@ -416,7 +416,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crlt?branch=main#9569c591f35f028fbf802a02fc23c6cf5a35bdf6"
+source = "git+https://github.com/corbet-foss/crlt?branch=main#65f4c8f20e5ff097d913e79aa7b69af826d88956"
 dependencies = [
  "deadpool",
  "libsql",
@@ -469,7 +469,7 @@ dependencies = [
 [[package]]
 name = "csgn"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/csgn?branch=main#fac7f49eeb4e4bb9b72de640b46e55d8fe99119c"
+source = "git+https://github.com/corbet-foss/csgn?branch=main#3037cfba1c0d5762af1cc69c0db58302019f3a91"
 dependencies = [
  "ciborium-ll",
  "coset",
@@ -482,7 +482,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cssr?branch=main#c489601d07d18d4b34e249f40137c01baf535bd8"
+source = "git+https://github.com/corbet-foss/cssr?branch=main#45ecc809f2b33fb0836b375065497be0259a8e62"
 dependencies = [
  "crlt",
  "p256",
@@ -493,7 +493,7 @@ dependencies = [
 [[package]]
 name = "cthl"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cthl?branch=main#4b4d5ff5308619e79341b308e8ee306f53a75edb"
+source = "git+https://github.com/corbet-foss/cthl?branch=main#0d76a57704cf343f731f430a382847c660c8d805"
 dependencies = [
  "governor",
 ]
@@ -544,7 +544,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/cvfy?branch=main#b5749ac38ea444d963bf0d979523c04839e4ceeb"
+source = "git+https://github.com/corbet-foss/cvfy?branch=main#24fec9f6a267ec039a0db1d26e473dee9470c118"
 dependencies = [
  "czkp",
  "data-encoding",
@@ -555,7 +555,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/czkp?branch=main#f7547de05c0c38f96c0622ca2eea0419e977fe4a"
+source = "git+https://github.com/corbet-foss/czkp?branch=main#ab4f965c92905f22bdaa960a0317f9b417e6bc6c"
 dependencies = [
  "data-encoding",
  "ed25519-dalek 3.0.0",
