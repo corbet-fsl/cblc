@@ -66,7 +66,6 @@ if ! "$proof_cache_hit"; then
   mkdir -p "$CBLC_PROOF_DIRECTORY"
   node tests/real-proof.mjs | tee -a "$proof_fixture_evidence"
 fi
-cargo test --locked --all-features --no-fail-fast -- --test-threads=2 | tee -a "$proof_fixture_evidence"
 # Compilation is cheap compared with proof generation and remains measured on
 # cache hits. Never overwrite the pinned circuits inside a restored fixture.
 (
@@ -96,6 +95,10 @@ if ! "$proof_cache_hit"; then
   sha256sum package-lock.json >> .extension-test/source.txt
   CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mjs | tee -a "$proof_fixture_evidence"
 fi
+CBLC_LAST_GATE="native-tests"
+# Native constructors authenticate extension artifacts at construction time.
+# Both account and extension fixtures must exist before the integration suite.
+cargo test --locked --all-features --no-fail-fast -- --test-threads=2 | tee -a "$proof_fixture_evidence"
 CBLC_LAST_GATE="replay"
 node .ci/replay-account-proofs.ts
 CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/replay-extensions.mjs | tee -a "$proof_fixture_evidence"
