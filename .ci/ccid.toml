@@ -46,3 +46,15 @@ scheduler = "crow"
 checks = ["resolve-npm"]
 workflow = "npm-resolution"
 command = ["bash", ".ci/run-cached.sh"]
+
+[checks.resolve-dependencies]
+kind = "commands"
+commands = [["bash", ".ci/resolve-dependencies.sh"]]
+cache = false
+cache_outputs = ["Cargo.lock", "package-lock.json"]
+
+[jobs.resolve-dependencies]
+scheduler = "crow"
+checks = ["resolve-dependencies"]
+workflow = "dependency-resolution"
+command = ["bash", ".ci/run-cached.sh"]

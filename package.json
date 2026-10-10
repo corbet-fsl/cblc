@@ -7,37 +7,14 @@
     "experiments/private-accounting"
   ],
   "dependencies": {
-    "@corbet-labs/czkp": "github:corbet-foss/czkp#main",
-    "@corbet-labs/cwlt": "github:corbet-foss/cwlt#main"
+    "@corbet-labs/czkp": "git+https://git.corbet.ch/corbet-foss/czkp.git#main",
+    "@corbet-labs/cwlt": "git+https://git.corbet.ch/corbet-foss/cwlt.git#main"
   },
   "scripts": {
     "test": "node --test tests/holder/test/*.test.mjs tests/runtime/*.test.ts",
-    "coverage:runtime:report": "c8 report"
+    "coverage:runtime:report": "c8 report --config .c8rc.json"
   },
   "devDependencies": {
     "c8": "^12.0.0"
-  },
-  "c8": {
-    "all": true,
-    "src": [
-      "runtime"
-    ],
-    "include": [
-      "runtime/**/*.mjs",
-      "runtime/**/*.ts"
-    ],
-    "exclude": [],
-    "extension": [
-      ".mjs",
-      ".ts"
-    ],
-    "reporter": [
-      "text",
-      "json",
-      "json-summary",
-      "lcov"
-    ],
-    "reports-dir": "runtime-coverage",
-    "temp-directory": ".runtime-v8"
   }
 }

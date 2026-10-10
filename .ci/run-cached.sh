@@ -7,8 +7,8 @@ exec 2>&1
 : "${CI_COMMIT_SHA:?Missing verified source revision}"
 : "${CI_REPOSITORY_URL:?Missing canonical repository identity}"
 : "${CHECKS:?Missing declared check selection}"
-if [ "$CHECKS" != "verify,advisories" ] && [ "$CHECKS" != "resolve-npm" ]; then
-  echo "CHECKS must be verify,advisories or the explicit resolve-npm job, got: $CHECKS" >&2
+if [ "$CHECKS" != "verify,advisories" ] && [ "$CHECKS" != "resolve-npm" ] && [ "$CHECKS" != "resolve-dependencies" ]; then
+  echo "CHECKS must be verify,advisories or an explicit dependency-resolution job, got: $CHECKS" >&2
   exit 2
 fi
 cache_root=${CI_CACHE_ROOT:-${CARGO_HOME:-}}
@@ -76,7 +76,23 @@ rustup run nightly cargo llvm-cov --version
 # libsql-ffi runs bindgen at build time; execute BOTH checks inside the pinned
 # shell (NAR-pinned revision in check-shell.nix).
 # Re-prepend the verified ccid directory inside the shell so `ccid` on PATH stays exact.
-if [ "$CHECKS" = "resolve-npm" ]; then
-  exec "$CCID_BIN" check --repo "$PWD" --check resolve-npm
+if [ "$CHECKS" = "resolve-npm" ] || [ "$CHECKS" = "resolve-dependencies" ]; then
+  exec "$CCID_BIN" check --repo "$PWD" --check "$CHECKS"
 fi
+# Keep completed evidence even when a gate fails; the disposable source checkout
+# is not durable artifact storage. Copy only the fixed public coverage reports.
+retain_coverage() {
+  local status=$?
+  trap - EXIT
+  for report in coverage.json coverage.lcov coverage.txt \
+    runtime-coverage/coverage-final.json runtime-coverage/coverage-summary.json \
+    runtime-coverage/lcov.info runtime-coverage/v8.json.tar.gz; do
+    if [[ -f "$report" && ! -L "$report" ]]; then
+      mkdir -p "$(dirname "$ARTIFACT_ROOT/$CI_COMMIT_SHA/$report")" || status=1
+      cp -- "$report" "$ARTIFACT_ROOT/$CI_COMMIT_SHA/$report" || status=1
+    fi
+  done
+  exit "$status"
+}
+trap retain_coverage EXIT
 nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; "$CCID_BIN" cached --repo "$PWD" --check verify; test -s ".ccid/results/verify.jsonl"; exec "$CCID_BIN" check --repo "$PWD" --check advisories'

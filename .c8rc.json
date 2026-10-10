@@ -1,0 +1,23 @@
+{
+  "all": true,
+  "src": [
+    "runtime"
+  ],
+  "include": [
+    "runtime/**/*.mjs",
+    "runtime/**/*.ts"
+  ],
+  "exclude": [],
+  "extension": [
+    ".mjs",
+    ".ts"
+  ],
+  "reporter": [
+    "text",
+    "json",
+    "json-summary",
+    "lcov"
+  ],
+  "reports-dir": "runtime-coverage",
+  "temp-directory": ".runtime-v8"
+}

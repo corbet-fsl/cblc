@@ -17,10 +17,12 @@ any genuinely unreachable defensive branch precisely before excluding it. Native
 coverage does not establish browser execution; keep the actual wasm vectors.
 
 First-party dependencies follow main. Their resolved full revisions remain in
-Cargo.lock, with exactly one source per first-party crate. Dependabot maintains
-committed snapshots; CI refreshes once per run and retains the tested snapshot.
-Auto-merge requires protected main and successful substantive checks on the
-exact current Dependabot head. It never executes PR code with write permissions.
+Cargo.lock, with exactly one source per first-party crate. Verification consumes
+the retained, committed lock snapshot with `--locked`; it does not refresh
+dependencies. An explicit dependency refresh is a separate operation: retain
+and commit the resolved snapshot, then validate that exact snapshot. A passing
+verification run establishes compatibility of the recorded revisions, not a
+new dependency-resolution or freshness claim.
 
 Coverage includes the instrumented real issuer driven by the successful public
 extension proof trace. Only fictional statements/proofs and responses are
@@ -120,7 +122,7 @@ precede its statement's validated proof horizon, already bounded by MAX_INTEGER;
 request expiry is similarly bounded by that horizon and the matched policy.
 Both ledger preflight and final transactions call check_root before check_pending,
 without intervening writes, so a second root comparison is redundant. The sealed
-ProcessExtensionVerifier constructor rejects zero scopes before activation.
+NativeExtensionVerifier constructor rejects zero scopes before activation.
 Finally, deposit commit calls check_deposit immediately before reading/incrementing
 the same count in the same transaction; that call already refuses counts >=64.
 These duplicate conditions are removed without exclusions. Actual scope, policy,
@@ -147,11 +149,13 @@ it never supplies a successful proof verdict. No new production exclusion exists
 
 ## Runtime language inventory
 
-The Rust percentage above measures only `src/**/*.rs`. The shipped Node workers,
-artifact loading and public-statement adapters in `runtime/` are separately
+The Rust percentage above is a historical pre-migration measurement of
+`src/**/*.rs`. Native backend migration adds new Rust code which must pass the
+same complete source coverage gate before a new percentage is claimed. Legacy
+SDK fixture workers and helpers in `runtime/` are separately
 measured with [Node V8 instrumentation](https://nodejs.org/api/cli.html#node_v8_coveragedir)
-and maintained [c8](https://github.com/bcoe/c8). Existing unit tests, real-proof
-Rust tests and current issuer replays run with explicit test-only instrumentation.
+and maintained [c8](https://github.com/bcoe/c8). Fixture unit tests and SDK cross-checks run with explicit test-only
+instrumentation. Production Rust verification does not invoke these helpers.
 `c8 --all` includes every `.mjs`/`.ts` runtime file, including completely unloaded
 files, without source exclusions. The job retains V8 data, detailed JSON, summary
 and LCOV. This initial measurement does not imply that JavaScript reaches the
@@ -164,7 +168,7 @@ line/branch instrumentation is configured, so these tests do not establish a
 circuit coverage percentage or cryptographic completeness. Explicit unsupported
 accounting integrations remain refusals regardless of Rust coverage.
 
-Both workers use one fixed-allocation public artifact reader. Tests race actual
+Both legacy fixture workers use one fixed-allocation public artifact reader. Tests race actual
 filesystem growth/truncation immediately after fstat, verify the sentinel bound
 and closed handles, and reject oversized files/directories. This closes the
 extension reader's prior stat/readFile allocation race without changing proof

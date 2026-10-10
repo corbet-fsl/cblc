@@ -24,15 +24,21 @@ node --version | grep -q '^v24\.' || { echo 'CI requires Node major 24' >&2; exi
 command -v jq >/dev/null || { echo 'missing jq' >&2; exit 2; }
 command -v wasm-pack >/dev/null || { echo 'missing wasm-pack' >&2; exit 2; }
 python3 -B .ci/test-proof-cache.py
+python3 -B .ci/test-native-sdk.py
+python3 -B .ci/check-native-sdk.py
 # Wasm target on stable is guaranteed by run-cached.sh (helper readiness +
 # exclusive provisioning); no toolchain mutation here under the shared lock.
 rustc --version
 cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }
 cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo build --locked --example czkp_bb_worker
+cblc_target_dir="${CARGO_TARGET_DIR:-target}"
+export CBLC_BB="$(realpath "$cblc_target_dir/debug/examples/czkp_bb_worker")"
+test -x "$CBLC_BB"
 cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint
 npm ci --ignore-scripts --no-audit --no-fund
-# V8 instrumentation is explicit test-only host state. The worker inherits it,
-# so existing real native tests/replays measure the shipped JS/TS verifier too.
+# V8 instrumentation measures legacy SDK fixture helpers only.
+# Authoritative backend coverage comes from the native Rust adapters below.
 test ! -e .runtime-v8 || { echo 'Stale runtime coverage directory' >&2; exit 2; }
 mkdir .runtime-v8
 export NODE_V8_COVERAGE="$PWD/.runtime-v8"
@@ -56,9 +62,17 @@ if ! "$proof_cache_hit"; then
   node tests/real-proof.mjs | tee -a "$proof_fixture_evidence"
 fi
 cargo test --locked --all-features --no-fail-fast -- --test-threads=2 | tee -a "$proof_fixture_evidence"
-if ! "$proof_cache_hit"; then
+# Compilation is cheap compared with proof generation and remains measured on
+# cache hits. Never overwrite the pinned circuits inside a restored fixture.
+(
+  export CBLC_EXTENSION_DIRECTORY="$PWD/.extension-test"
+  if "$proof_cache_hit"; then
+    compile_directory="$(mktemp -d)"
+    trap 'rm -rf -- "$compile_directory"' EXIT
+    export CBLC_EXTENSION_DIRECTORY="$compile_directory"
+  fi
   node runtime/extensions/compile.mjs
-fi
+)
 CBLC_LAST_GATE="wasm-pack-build"
 wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
 CBLC_LAST_GATE="issuer-build"
@@ -127,6 +141,9 @@ export CARGO_TARGET_DIR="$coverage_target"
 source <("$NIGHTLY_CARGO" llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
 "$NIGHTLY_CARGO" llvm-cov clean --workspace
 CBLC_LAST_GATE="nightly-tests"
+"$NIGHTLY_CARGO" build --locked --example czkp_bb_worker
+export CBLC_BB="$CARGO_TARGET_DIR/debug/examples/czkp_bb_worker"
+test -x "$CBLC_BB"
 "$NIGHTLY_CARGO" test --locked --workspace --all-features -- --test-threads=2
 node .ci/replay-account-proofs.ts
 CBLC_LAST_GATE="instrumented-build"
@@ -158,5 +175,7 @@ python3 .github/check-source-coverage.py coverage.lcov coverage.json coverage.tx
 
 CBLC_LAST_GATE="runtime-coverage-report"
 unset NODE_V8_COVERAGE
-npm run coverage:runtime:report
+runtime_coverage_status=0
+npm run coverage:runtime:report || runtime_coverage_status=$?
 tar -czf runtime-coverage/v8.json.tar.gz -C .runtime-v8 .
+exit "$runtime_coverage_status"

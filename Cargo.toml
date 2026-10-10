@@ -40,6 +40,7 @@ serde_json = "1"
 sha2 = "0.10"
 
 [dev-dependencies]
+czkp = { git = "https://git.corbet.ch/corbet-foss/czkp", branch = "main", features = ["native-worker"] }
 crlt = { git = "https://git.corbet.ch/corbet-foss/crlt", branch = "main" }
 csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
 jsonschema = { version = "0.58", default-features = false }

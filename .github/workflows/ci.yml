@@ -239,6 +239,7 @@ jobs:
         source <(cargo llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
         cargo llvm-cov clean --workspace
         cargo test --locked --workspace --all-features -- --test-threads=2
+        node .ci/replay-account-proofs.ts
         cargo build --locked --all-features --example extension_issuer --example extension_adversaries --message-format=json > instrumented-build.json
         CBLC_EXTENSION_ISSUER="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "extension_issuer" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one issuer executable") end' instrumented-build.json)"
         export CBLC_EXTENSION_ISSUER
@@ -246,6 +247,11 @@ jobs:
         node tests/replay-extensions.mjs
         adversaries="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "extension_adversaries" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one adversary executable") end' instrumented-build.json)"
         "$adversaries"
+    - name: Measure the real compiler without changing retained proof artifacts
+      run: |
+        compile_directory="$(mktemp -d)"
+        trap 'rm -rf -- "$compile_directory"' EXIT
+        CBLC_EXTENSION_DIRECTORY="$compile_directory" node runtime/extensions/compile.mjs
     - name: Retain raw coverage even when a real execution fails
       if: always()
       run: |
@@ -265,10 +271,12 @@ jobs:
       run: |
         python3 .github/test-source-coverage.py
         python3 .github/check-source-coverage.py coverage.lcov coverage.json coverage.txt
-    - name: Measure all owned JavaScript and TypeScript runtime paths
+    - name: Measure legacy SDK fixture helper paths
       run: |
-        env -u NODE_V8_COVERAGE npm run coverage:runtime:report
+        runtime_coverage_status=0
+        env -u NODE_V8_COVERAGE npm run coverage:runtime:report || runtime_coverage_status=$?
         tar -czf runtime-coverage/v8.json.tar.gz -C .runtime-v8 .
+        exit "$runtime_coverage_status"
     - uses: actions/upload-artifact@v4
       if: always()
       with:
