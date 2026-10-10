@@ -148,10 +148,15 @@ fn main() {
                     let AccountServiceResponse::ApplyExtended {
                         acceptance: accepted,
                         certificate,
+                        ancestry,
                     } = response?
                     else {
                         return Err(Error::InvalidInput);
                     };
+                    assert!(
+                        ancestry.is_none(),
+                        "the original three-circuit fixture has no epoch"
+                    );
                     if matches!(update.effect, Effect::Change { .. }) {
                         tokens.insert(
                             member,

@@ -71,6 +71,8 @@ pub enum AccountServiceResponse {
     ApplyExtended {
         acceptance: AccountAcceptance,
         certificate: crate::extensions::StateCertificate,
+        /// Original ancestry issued only in this acceptance's verified CAS.
+        ancestry: Option<Box<crate::extensions::EpochAncestryCertificate>>,
     },
     Obligations(crate::obligations::ObligationsResponse),
 }
@@ -187,17 +189,20 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                     .extension_issuer
                     .as_ref()
                     .ok_or(Error::UnsupportedCapability)?;
-                let acceptance = self.ledger.apply_extended(
+                let result = self.ledger.apply_extended_certified(
                     &grant,
                     &authorization,
                     &request,
                     &update,
+                    issuer,
                     &self.clock,
                 )?;
+                let acceptance = result.acceptance;
                 let certificate = self.ledger.certify_extended(&acceptance, issuer)?;
                 Ok(AccountServiceResponse::ApplyExtended {
                     acceptance,
                     certificate,
+                    ancestry: result.ancestry.map(Box::new),
                 })
             }
             AccountServiceRequest::Obligations {
