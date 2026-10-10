@@ -6,25 +6,46 @@ import re
 import subprocess
 
 
-SOURCE = Path("src/storage.rs")
 CONTROLS = (
     (
-        "live_commit_deadline_refuses_expiry_and_clock_rollback_before_memory_swap",
+        "src/storage.rs",
+        "storage::tests::live_commit_deadline_refuses_expiry_and_clock_rollback_before_memory_swap",
+        "tests/internal/storage.rs",
         b"if now >= self.expires_at {",
         b"if now > self.expires_at {",
         "exclusive expiry",
     ),
     (
-        "return_clock_cannot_move_behind_the_atomic_decision_observation",
+        "src/storage.rs",
+        "storage::tests::return_clock_cannot_move_behind_the_atomic_decision_observation",
+        "tests/internal/storage.rs",
         b"self.observed.set(now);",
         b"self.observed.set(self.observed.get());",
         "highest observed time",
     ),
     (
-        "late_successful_commit_is_expired_fresh_authority_and_keeps_committed_state",
+        "src/storage.rs",
+        "storage::tests::late_successful_commit_is_expired_fresh_authority_and_keeps_committed_state",
+        "tests/internal/storage.rs",
         b"self.0.commit_before(deadline)?;\n        deadline.check()?;",
         b"self.0.commit_before(deadline)?;",
         "fresh return check",
+    ),
+    (
+        "src/storage.rs",
+        "storage::tests::live_commit_deadline_refuses_expiry_and_clock_rollback_before_memory_swap",
+        "tests/internal/storage.rs",
+        b"now.to_string().into_bytes()",
+        b"{ let _ = now; b\"0\".to_vec() }",
+        "persisted logical commit observation",
+    ),
+    (
+        "src/accounting_ledger.rs",
+        "accounting_ledger::clock_tests::observations_survive_new_calls_and_invalid_samples_cannot_lower_or_poison_them",
+        "tests/internal/ledger_clock.rs",
+        b"observed.fetch_max(now, Ordering::AcqRel)",
+        b"observed.load(Ordering::Acquire)",
+        "observations retained across calls",
     ),
 )
 
@@ -54,14 +75,15 @@ def require_baseline(test):
         raise SystemExit(f"Deadline control needs a passing exact baseline: {test}")
 
 
-def require_assertion(test, label):
+def require_assertion(test, label, test_source="tests/internal/storage.rs"):
     status, output = run(test)
     # A build failure, zero selected tests, panic in a dependency or unrelated
     # failing test is not evidence that the deadline assertion detects a defect.
     if (status != 101 or not named_result(output, test, "FAILED")
             or "test result: FAILED. 0 passed; 1 failed; 0 ignored;" not in output
             or not re.search(r"thread '" + re.escape(test)
-                             + r"'(?: \([0-9]+\))? panicked at (?:src/\.\./)?tests/internal/storage\.rs:[0-9]+:[0-9]+:",
+                             + r"'(?: \([0-9]+\))? panicked at (?:src/\.\./)?"
+                             + re.escape(test_source) + r":[0-9]+:[0-9]+:",
                              output)
             or "assertion `left == right` failed" not in output
             or "error[E" in output or "could not compile" in output):
@@ -71,22 +93,26 @@ def require_assertion(test, label):
 
 
 def main():
-    original = SOURCE.read_bytes()
+    originals = {Path(source): Path(source).read_bytes()
+                 for source, *_ in CONTROLS}
     try:
-        for name, before, after, label in CONTROLS:
+        for source, test, test_source, before, after, label in CONTROLS:
+            path = Path(source)
+            original = originals[path]
             if original.count(before) != 1:
                 raise SystemExit(f"Atomic deadline control source drift: {label}")
-            test = f"storage::tests::{name}"
             require_baseline(test)
-            SOURCE.write_bytes(original.replace(before, after))
+            path.write_bytes(original.replace(before, after))
             try:
-                require_assertion(test, label)
+                require_assertion(test, label, test_source)
             finally:
-                SOURCE.write_bytes(original)
+                path.write_bytes(original)
     finally:
-        SOURCE.write_bytes(original)
-    if SOURCE.read_bytes() != original:
-        raise SystemExit("Atomic deadline source restoration failed")
+        for path, original in originals.items():
+            path.write_bytes(original)
+    for path, original in originals.items():
+        if path.read_bytes() != original:
+            raise SystemExit(f"Atomic deadline source restoration failed: {path}")
 
 
 if __name__ == "__main__":

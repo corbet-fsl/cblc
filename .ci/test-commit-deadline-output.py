@@ -53,6 +53,16 @@ class DeadlineOutputTests(unittest.TestCase):
             with self.subTest(status=status, output=output), self.assertRaises(SystemExit):
                 self.check_output(status, output)
 
+    def test_each_control_requires_its_own_exact_source_file(self):
+        ledger_source = "tests/internal/ledger_clock.rs"
+        with patch.object(control, "run", return_value=(101, CAPTURED)), \
+                contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            control.require_assertion(NAME, "output parser fixture", ledger_source)
+        output = CAPTURED.replace("tests/internal/storage.rs", ledger_source)
+        with patch.object(control, "run", return_value=(101, output)), \
+                contextlib.redirect_stdout(io.StringIO()):
+            control.require_assertion(NAME, "output parser fixture", ledger_source)
+
 
 if __name__ == "__main__":
     unittest.main()

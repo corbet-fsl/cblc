@@ -117,6 +117,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         batch: &[(Deposit, Vec<u8>)],
         clock: impl Fn() -> u64,
     ) -> Result<(), Error> {
+        let clock = observed_clock(self.observed_time.clone(), clock);
         let extensions = self
             .extensions
             .as_ref()
@@ -147,6 +148,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         }
         // All cheap state/replay checks precede any expensive verification.
         let mut tx = self.connection.transaction()?;
+        let locked = clock();
+        check_time(locked, clock_floor(&mut tx)?.max(now))?;
         check_extension_config(&mut tx, Some(extensions))?;
         let mut fresh = Vec::new();
         for (deposit, _) in batch {
@@ -166,8 +169,10 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             }
         }
         let completed = clock();
-        check_time(completed, now)?;
+        check_time(completed, locked)?;
         let mut tx = self.connection.transaction()?;
+        let decision = clock();
+        check_time(decision, clock_floor(&mut tx)?.max(completed))?;
         check_extension_config(&mut tx, Some(extensions))?;
         for (deposit, _) in batch {
             if !check_deposit(&mut tx, deposit)? {
@@ -190,7 +195,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             )?;
             tx.put(&key(5, &[&deposit.recipient]), &next)?;
         }
-        tx.commit()
+        // Deposits have no additional expiry policy. The exclusive ceiling is
+        // only the existing valid integer time domain, not a lifecycle deadline.
+        tx.commit_before(&CommitDeadline::new(&clock, decision, MAX_INTEGER + 1))
     }
 
     /// Required gate for every first contact and every forum listing. A missing
@@ -204,6 +211,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         proof: &[u8],
         clock: impl Fn() -> u64,
     ) -> Result<Option<[u16; 3]>, Error> {
+        let clock = observed_clock(self.observed_time.clone(), clock);
         let now = clock();
         check_time(now, 0)?;
         if record.owner != owner || record.context != *expected || expected.challenge == [0; 32] {
@@ -215,8 +223,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             return Err(Error::Expired);
         }
         let result = self.public_record(record, proof)?;
+        let mut tx = self.connection.transaction()?;
+        let floor = clock_floor(&mut tx)?;
+        tx.rollback()?;
         let completed = clock();
-        check_time(completed, now)?;
+        check_time(completed, now.max(floor))?;
         if completed >= expected.expires_at {
             return Err(Error::Expired);
         }

@@ -78,10 +78,6 @@ fn invalid_tuning_revision_clock_and_storage_failure_are_atomic() {
         }),
         Err(Error::ClockRollback)
     );
-    assert_eq!(
-        ledger.update_waiting_period(0, 1500, || 2000),
-        Err(Error::Expired)
-    );
     assert_eq!(ledger.waiting_period().unwrap(), tuning);
     assert_eq!(stored(&path), before);
 
@@ -100,6 +96,15 @@ fn invalid_tuning_revision_clock_and_storage_failure_are_atomic() {
     assert_eq!((changed.revision, changed.seconds), (1, 1500));
     assert_ne!(changed.policy_digest, tuning.policy_digest);
     assert_eq!(changed.state_policy_digest, tuning.state_policy_digest);
+    // A valid future observation remains this handle's floor even on refusal.
+    // Exercise expiry last, without pretending its clock can return to 130.
+    let committed = stored(&path);
+    assert_eq!(
+        ledger.update_waiting_period(1, 1500, || 2000),
+        Err(Error::Expired)
+    );
+    assert_eq!(ledger.waiting_period().unwrap(), changed);
+    assert_eq!(stored(&path), committed);
 }
 
 #[test]

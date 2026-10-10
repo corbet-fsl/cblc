@@ -17,10 +17,11 @@ pub trait AtomicTransaction {
     fn put(&mut self, key: &[u8], value: &[u8]) -> Result<(), Error>;
     fn delete(&mut self, key: &[u8]) -> Result<(), Error>;
     fn commit(self: Box<Self>) -> Result<(), Error>;
-    /// Check the live deadline after blocking work, at the logical commit
-    /// decision while the write lock is still held. A failed check must discard
-    /// staged changes. There is no default implementation: each host must place
-    /// the check at its own atomic boundary. Physical durability may finish later.
+    /// Obtain `deadline.commit_record()` after blocking business work, at the
+    /// logical commit decision while the write lock is held. Include that clock
+    /// record in the same atomic commit; failed checks discard staged changes.
+    /// There is no default: each host owns this boundary. Physical persistence
+    /// of the chosen state and clock record may finish after that decision.
     fn commit_before(self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error>;
     fn rollback(self: Box<Self>) -> Result<(), Error>;
 }
@@ -55,6 +56,17 @@ impl<'a> CommitDeadline<'a> {
         self.observed.set(now);
         Ok(now)
     }
+
+    /// Select the logical commit time and its required opaque storage record.
+    /// The host must stage this record under the same exclusive ownership and
+    /// commit it atomically with the already validated business state. Do no
+    /// further business work after this decision; only its physical persistence
+    /// and completion remain. The record preserves the actual observation for
+    /// another ledger handle or a restart, rather than an earlier sampled time.
+    pub fn commit_record(&self) -> Result<(&'static [u8], Vec<u8>), Error> {
+        let now = self.check()?;
+        Ok((b"clock", now.to_string().into_bytes()))
+    }
 }
 
 // Explicitly permit the upstream RAM implementation. Database implementations
@@ -79,10 +91,11 @@ impl AtomicTransaction for MemoryTransaction<'_> {
     fn commit(self: Box<Self>) -> Result<(), Error> {
         self.0.commit().or(Err(Error::Storage))
     }
-    fn commit_before(self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
+    fn commit_before(mut self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
         // cssr's RAM transaction already owns its exclusive mutex. Commit swaps
         // staged records under that same guard without acquiring another lock.
-        deadline.check()?;
+        let (key, value) = deadline.commit_record()?;
+        self.0.put(key, &value).or(Err(Error::Storage))?;
         self.0.commit().or(Err(Error::Storage))
     }
     fn rollback(self: Box<Self>) -> Result<(), Error> {

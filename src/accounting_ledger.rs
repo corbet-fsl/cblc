@@ -24,6 +24,14 @@ use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
+
+#[cfg(test)]
+#[path = "../tests/internal/ledger_clock.rs"]
+mod clock_tests;
 
 mod extensions;
 mod obligations;
@@ -78,6 +86,23 @@ pub struct AccountLedger<V: AccountProofVerifier> {
     verifier: V,
     operator: SigningKey,
     extensions: Option<Extensions>,
+    observed_time: Arc<AtomicU64>,
+}
+
+// Every valid observation, including a late return or a refused operation,
+// remains a lower bound for this handle. The host coordinates clocks across
+// handles/restarts; the actual atomic commit time also lives in host storage.
+fn observed_clock(observed: Arc<AtomicU64>, clock: impl Fn() -> u64) -> impl Fn() -> u64 {
+    move || {
+        let now = clock();
+        if now == 0 || now > MAX_INTEGER {
+            return 0;
+        }
+        if now < observed.fetch_max(now, Ordering::AcqRel) {
+            return 0;
+        }
+        now
+    }
 }
 
 fn check_time(now: u64, floor: u64) -> Result<(), Error> {
@@ -97,9 +122,6 @@ struct Frontier {
 }
 fn clock_floor(tx: &mut Transaction<'_>) -> Result<u64, Error> {
     tx.get(b"clock")?.ok_or(Error::Storage)
-}
-fn advance_clock(tx: &mut Transaction<'_>, now: u64) -> Result<(), Error> {
-    tx.put(b"clock", &now)
 }
 fn cached(
     tx: &mut Transaction<'_>,
@@ -246,6 +268,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             verifier,
             operator,
             extensions: None,
+            observed_time: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -295,6 +318,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         update: Option<&ExtendedUpdate>,
         clock: impl Fn() -> u64,
     ) -> Result<AccountAcceptance, Error> {
+        let clock = observed_clock(self.observed_time.clone(), clock);
         let extension = match update {
             Some(update) => Some((
                 self.extensions
@@ -351,7 +375,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             if result.request_digest != request_digest {
                 return Err(Error::Replay);
             }
-            advance_clock(&mut transaction, now)?;
             transaction.commit_before(&CommitDeadline::new(
                 &clock,
                 now,
@@ -416,7 +439,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             if result.request_digest != request_digest {
                 return Err(Error::Replay);
             }
-            advance_clock(&mut transaction, completed)?;
             transaction.commit_before(&CommitDeadline::new(
                 &clock,
                 completed,
@@ -474,7 +496,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         }
         // Replace the latest signed acceptance; no historical request table is retained.
         transaction.put(&key(2, &[&statement.owner]), &acceptance)?;
-        advance_clock(&mut transaction, completed)?;
         // Both operands are bounded by MAX_INTEGER, so the next slot boundary
         // is below 2 * MAX_INTEGER and cannot overflow u64.
         let checkpoint_end = (statement.now / self.policy.checkpoint_period_seconds + 1)
@@ -499,6 +520,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         request: &AccountStatusRequest,
         clock: impl Fn() -> u64,
     ) -> Result<AccountStatusResponse, Error> {
+        let clock = observed_clock(self.observed_time.clone(), clock);
         let bytes = account_status_bytes(request)?;
         if request.community != self.community
             || decode::<32>(&grant.member_id)? != request.owner
@@ -558,7 +580,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 .sign(&account_status_response_bytes(&response)?)
                 .to_bytes(),
         );
-        advance_clock(&mut transaction, now)?;
         transaction.commit_before(&CommitDeadline::new(
             &clock,
             now,

@@ -86,6 +86,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         seconds: u64,
         clock: impl Fn() -> u64,
     ) -> Result<WaitingPeriodTuning, Error> {
+        let clock = observed_clock(self.observed_time.clone(), clock);
         if expected_revision != self.tuning_revision {
             return Err(Error::PolicyMismatch);
         }
@@ -115,7 +116,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         }
         policy.account.reservation_deadline(now)?;
         transaction.put(b"config", &config)?;
-        advance_clock(&mut transaction, now)?;
         // reservation_deadline(now) above proved this subtraction is positive.
         // Recheck the actual atomic decision after all host writes complete.
         transaction.commit_before(&CommitDeadline::new(

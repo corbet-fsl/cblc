@@ -9,10 +9,14 @@ byte-keyed `get`, `put`, `delete`, consuming `commit` and `rollback`.
 Fresh time-bounded operations also require the mandatory
 `AtomicTransaction::commit_before(&CommitDeadline)` port. The deadline contains
 the live trusted clock, a monotonic lower bound and exclusive expiry. The host
-calls `deadline.check()` after blocking reads/writes, immediately at its logical
-commit decision while the same write mutex/transaction lock is held. Checking
-once before lock acquisition or using a saved timestamp is insufficient. The
-RAM adapter checks under the upstream mutex before swapping staged records.
+calls `deadline.commit_record()` after blocking business reads/writes, immediately
+at its logical commit decision while the same write mutex/transaction lock is
+held. It stages the returned key/value as part of that same atomic commit.
+Checking once before lock acquisition or storing an earlier timestamp is
+insufficient. No further business decisions or writes follow this selection;
+only persistence of the selected state and its clock record remains. The RAM
+adapter records that live observation under the upstream mutex before swapping
+staged records.
 The SQL adapter in tests checks at the serialized commit decision under its
 existing write lock; this is test-owned host code, never library SQL.
 
@@ -23,7 +27,17 @@ may already be committed and is not described as rolled back. Reconcile using
 the original request ID or a newly authenticated status query. Exact historical
 retry does not mint fresh credit and retains its separate authorization checks.
 The deadline tracks successive observations, so a backward clock during commit
-also refuses the returned result. Host errors remain potentially uncertain.
+also refuses the returned result. The handle retains the highest valid clock
+sample across calls, including refused requests and post-return observations.
+Reloading policy does not reset this RAM fence. Host errors remain potentially
+uncertain.
+
+The persisted community clock floor records the actual logical commit decision,
+so another handle or a restart rejects time before that committed observation.
+Later return samples and read-only/refused observations stay in the observing
+handle's RAM; they cannot be added retroactively to a completed transaction.
+The host must coordinate trusted monotonic time across handles and restarts.
+The library does not claim a global durable record of every observed instant.
 
 The same distinction applies to trusted waiting-period tuning. A late commit
 may store the new revision while the handle retains its old local snapshot.

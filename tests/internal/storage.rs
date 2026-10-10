@@ -72,6 +72,41 @@ fn upstream_failures_cannot_become_success_or_expose_details() {
     ));
 }
 
+// Preserve the real staged RAM writes but refuse at the upstream commit edge.
+struct CommitFailure<'a>(Box<dyn cssr::Transaction + 'a>);
+impl cssr::Transaction for CommitFailure<'_> {
+    fn get(&mut self, key: &[u8]) -> cssr::Result<Option<Vec<u8>>> {
+        self.0.get(key)
+    }
+    fn put(&mut self, key: &[u8], value: &[u8]) -> cssr::Result<()> {
+        self.0.put(key, value)
+    }
+    fn delete(&mut self, key: &[u8]) -> cssr::Result<()> {
+        self.0.delete(key)
+    }
+    fn commit(self: Box<Self>) -> cssr::Result<()> {
+        Err(cssr::Error)
+    }
+    fn rollback(self: Box<Self>) -> cssr::Result<()> {
+        self.0.rollback()
+    }
+}
+
+#[test]
+fn failed_upstream_commit_discards_its_staged_clock_record_and_state() {
+    let mut store = MemoryStore::default();
+    let inner = cssr::Storage::transaction(&mut store).unwrap();
+    let mut tx = Transaction::new(Box::new(MemoryTransaction(Box::new(CommitFailure(inner)))));
+    tx.put(b"state", &1u64).unwrap();
+    assert_eq!(
+        tx.commit_before(&CommitDeadline::new(&|| 19, 10, 20)),
+        Err(Error::Storage)
+    );
+    let mut tx = store.transaction().unwrap();
+    assert_eq!(tx.get::<u64>(b"state").unwrap(), None);
+    assert_eq!(tx.get::<u64>(b"clock").unwrap(), None);
+}
+
 #[test]
 fn live_commit_deadline_refuses_expiry_and_clock_rollback_before_memory_swap() {
     let mut store = MemoryStore::default();
@@ -96,6 +131,7 @@ fn live_commit_deadline_refuses_expiry_and_clock_rollback_before_memory_swap() {
         .unwrap();
     let mut tx = store.transaction().unwrap();
     assert_eq!(tx.get::<u64>(b"state").unwrap(), Some(2));
+    assert_eq!(tx.get::<u64>(b"clock").unwrap(), Some(19));
 }
 
 #[test]
@@ -115,6 +151,7 @@ fn late_successful_commit_is_expired_fresh_authority_and_keeps_committed_state()
     );
     let mut tx = store.transaction().unwrap();
     assert_eq!(tx.get::<u64>(b"request").unwrap(), Some(7));
+    assert_eq!(tx.get::<u64>(b"clock").unwrap(), Some(19));
 }
 
 #[test]
@@ -134,4 +171,5 @@ fn return_clock_cannot_move_behind_the_atomic_decision_observation() {
     );
     let mut tx = store.transaction().unwrap();
     assert_eq!(tx.get::<u64>(b"request").unwrap(), Some(8));
+    assert_eq!(tx.get::<u64>(b"clock").unwrap(), Some(19));
 }

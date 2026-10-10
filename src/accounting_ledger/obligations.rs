@@ -10,6 +10,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         clock: impl Fn() -> u64,
         read: impl FnOnce(&mut Transaction<'_>, &SigningKey, u64) -> Result<T, Error>,
     ) -> Result<T, Error> {
+        let clock = observed_clock(self.observed_time.clone(), clock);
         let bytes = crate::obligations::request_bytes(request)?;
         if request.community != self.community
             || decode::<32>(&grant.member_id)? != request.owner

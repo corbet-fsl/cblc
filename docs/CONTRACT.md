@@ -33,11 +33,15 @@ retry. See [STORAGE.md](STORAGE.md). Async services use a blocking executor.
 Fresh account transitions pass a live `CommitDeadline` to the mandatory host
 `commit_before` operation, bounded by request/authority expiry and the common
 checkpoint slot. The host checks under its transaction lock at the logical
-commit decision after all blocking work; cblc checks again after return.
+commit decision after all blocking business work and atomically records that
+observation with the state; cblc checks again after return.
 Successful but late commits remain committed and reconcile by exact identity;
 they return no fresh acceptance. Status and authenticated reads likewise refuse
 responses whose authorization expires while host work is in progress. Physical
 durability latency is not claimed to be the logical decision timestamp.
+Each handle retains later observations in RAM across calls and policy reloads.
+Other handles and restarts share the persisted commit floor; the host coordinates
+monotonic clocks for observations that occurred after commit or without a write.
 
 Reciprocity v2 preserves reservations in both directions, prepared/active
 separation, Answer refunds, recipient Close, fixed original outgoing deadlines,
