@@ -1,6 +1,8 @@
 //! CI-only interactive issuer fixture. All inputs are public statements/proofs.
 #[path = "../tests/common/mod.rs"]
 mod common;
+#[path = "../tests/holder/record-epoch-issuer.rs"]
+mod records;
 use cblc::{
     Error,
     accounting::*,
@@ -39,6 +41,11 @@ impl AccountProofVerifier for RejectLegacy {
 }
 
 fn main() {
+    let record_epochs = match std::env::args().nth(2).as_deref() {
+        None => false,
+        Some("--record-epoch") => true,
+        Some(_) => panic!("unsupported fixture selector"),
+    };
     let fixture = common::Fixture::new();
     let directory = tempfile::tempdir().unwrap();
     let mut ledger: Option<AccountLedger<RejectLegacy>> = None;
@@ -46,6 +53,7 @@ fn main() {
     let mut sequence = 0_u8;
     let mut policy = None;
     let mut scope = None;
+    let mut records = records::Records::default();
     for line in io::stdin().lock().lines() {
         let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
         let result = (|| -> Result<Value, Error> {
@@ -153,10 +161,14 @@ fn main() {
                     else {
                         return Err(Error::InvalidInput);
                     };
-                    assert!(
-                        ancestry.is_none(),
-                        "the original three-circuit fixture has no epoch"
-                    );
+                    if record_epochs {
+                        records.accepted(member, &accepted, ancestry.as_deref());
+                    } else {
+                        assert!(
+                            ancestry.is_none(),
+                            "the original three-circuit fixture has no epoch"
+                        );
+                    }
                     if matches!(update.effect, Effect::Change { .. }) {
                         tokens.insert(
                             member,
@@ -168,6 +180,15 @@ fn main() {
                         );
                     }
                     Ok(json!(certificate))
+                }
+                "recordRecipient"
+                | "recordEpoch"
+                | "recordWitness"
+                | "issueRecordChallenge"
+                | "checkEpochRecord"
+                    if record_epochs =>
+                {
+                    records.handle(&v, &fixture, &mut ledger)
                 }
                 "deposit" => {
                     let batch: Vec<(Deposit, Vec<u8>)> = v["batch"]

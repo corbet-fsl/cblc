@@ -16,9 +16,12 @@ import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,rec
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
+import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';
 const recordEpochArtifacts=process.argv.length===3&&process.argv[2]==='--record-epoch-artifacts';
-if(process.argv.length!==2&&!recordEpochArtifacts)throw new Error('Unknown extension fixture selector');
-if(recordEpochArtifacts&&(!process.env.CBLC_EXTENSION_DIRECTORY||resolve(process.env.CBLC_EXTENSION_DIRECTORY)===resolve('.extension-test')))
+const recordEpochProofs=process.argv.length===3&&process.argv[2]==='--record-epoch-proofs';
+const recordEpochEnabled=recordEpochArtifacts||recordEpochProofs;
+if(process.argv.length!==2&&!recordEpochEnabled)throw new Error('Unknown extension fixture selector');
+if(recordEpochEnabled&&(!process.env.CBLC_EXTENSION_DIRECTORY||resolve(process.env.CBLC_EXTENSION_DIRECTORY)===resolve('.extension-test')))
   throw new Error('Separate record epoch artifact directory required');
 let transition;
 if(!recordEpochArtifacts) {
@@ -31,9 +34,9 @@ const sha=b=>createHash('sha256').update(b).digest();
 const bytes=n=>new Uint8Array(32).fill(n);
 const toArray=Array.from.bind(Array);
 const programs=JSON.parse(await readFile(resolve(directory,'circuits.json')));
-if(Object.hasOwn(programs,'record_epoch')!==recordEpochArtifacts)throw new Error('Matching record epoch compile and fixture selectors required');
-const kinds=recordEpochArtifacts?['update','deposit','record','record_epoch']:['update','deposit','record'];
-if(recordEpochArtifacts) {
+if(Object.hasOwn(programs,'record_epoch')!==recordEpochEnabled)throw new Error('Matching record epoch compile and fixture selectors required');
+const kinds=recordEpochEnabled?['update','deposit','record','record_epoch']:['update','deposit','record'];
+if(recordEpochEnabled) {
   // Count the actual compiled public ABI, never a claimed proof or zero witness.
   const width=type=>{
     if(['field','integer','boolean'].includes(type.kind))return 1;
@@ -84,13 +87,13 @@ if(recordEpochArtifacts) {
 }
 const hashApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const hashes=extensionHashes(hashApi);
-const child=spawn(resolve(process.env.CBLC_EXTENSION_ISSUER??'target/debug/examples/extension_issuer'),[configPath],{stdio:['pipe','pipe','inherit']});
+const child=spawn(resolve(process.env.CBLC_EXTENSION_ISSUER??'target/debug/examples/extension_issuer'),[configPath,...(recordEpochProofs?['--record-epoch']:[])],{stdio:['pipe','pipe','inherit']});
 let pending;const lines=createInterface({input:child.stdout});
 lines.on('line',line=>{const waiter=pending;pending=undefined;if(!waiter)throw new Error('Unexpected issuer reply');waiter.resolve(JSON.parse(line));});
 child.on('exit',code=>{if(pending)pending.reject(new Error(`Issuer exited ${code}`));});
-async function call(request,expected=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
-  assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);publicCases.push({operation:request.op,ok:result.ok,error:result.error});
-  publicTrace.push({request:structuredClone(request),response:result});return result.value;}
+async function call(request,expected=true,retain=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
+  assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);if(retain){publicCases.push({operation:request.op,ok:result.ok,error:result.error});
+  publicTrace.push({request:structuredClone(request),response:result});}return result.value;}
 let activeProver;
 async function proof(kind,input,label,measure=false){
   const selected=artifacts.artifacts(kind),witness=witnessInputs(selected.circuit,input),expected=publicInputs(selected.circuit,input);
@@ -171,6 +174,10 @@ try{
   await call(badActivation,false);
   await call(initialize);
   for(let i=0;i<4;i++)members[i]=(await submit(7+i,[genesis[i]],'genesis')).next;
+  if(recordEpochProofs) {
+    const record=await exactRecordEpoch({members,call,proof,artifacts,issuerKey:manifest.issuerKey,now});
+    await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify([record]));
+  } else {
   const record=async(index,label,measure=false)=>anonymous(members[index].record({purpose:'forumListing',challenge:toArray(bytes(now%255)),expiresAt:now+90}),label,measure);
   const stale=await record(0,'record-below-quorum');
   assert.equal(await call({op:'record',record:stale.statement.record,proof:stale.proof,now}),null);
@@ -305,6 +312,7 @@ try{
   assert.equal(members[2].opening.accepted,0n);assert.equal(members[2].opening.punished,2n);
   await assert.rejects(members[2].expire(reordered.outgoing,now));
   console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
+  }
   await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
   // Only fictional public requests/proofs cross this fixture pipe. Replaying
   // them measures issuer coverage without generating another set of proofs.
