@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# .ci/verify.sh for corbet-libs/cblc — ports ALL Linux verification gates from
-# .github/workflows/ci.yml (jobs check, audit, dependency-policy, coverage) in full
-# ordering, environment, and flags, except the advisory DB gate which lives in
-# the separate fresh [checks.advisories] (`cargo deny check advisories licenses`).
+# Authoritative Linux verification for the declared Forgejo/Crow jobs.
+# The historical GitHub workflow is a manual retirement notice only.
+# The advisory DB gate lives in the separate fresh [checks.advisories]
+# (`cargo deny check advisories licenses`).
 set -euo pipefail
 # Merge stderr into stdout so the captured Crow log shows gate diagnostics.
 exec 2>&1
@@ -19,7 +19,7 @@ export CBLC_PROOF_DIRECTORY="${CBLC_PROOF_DIRECTORY:-$PWD/.proof-test}"
 export CBLC_LEDGER_FIXTURES="${CBLC_LEDGER_FIXTURES:-1}"
 
 # --- check job (stable) ---
-# Node major must match source CI (node-version 24); fail clearly otherwise.
+# Legacy SDK fixture tools require Node major 24; fail clearly otherwise.
 node --version | grep -q '^v24\.' || { echo 'CI requires Node major 24' >&2; exit 2; }
 command -v jq >/dev/null || { echo 'missing jq' >&2; exit 2; }
 command -v wasm-pack >/dev/null || { echo 'missing wasm-pack' >&2; exit 2; }
@@ -44,7 +44,7 @@ test ! -e .runtime-v8 || { echo 'Stale runtime coverage directory' >&2; exit 2; 
 mkdir .runtime-v8
 export NODE_V8_COVERAGE="$PWD/.runtime-v8"
 npm test
-# As in source CI, reuse only complete fictional public proof fixtures. The
+# Reuse only complete fictional public proof fixtures. The
 # stronger local key also binds all Rust code/locks and this cache machinery.
 # Cache entries contain no verification verdict: every current replay remains.
 test "$CBLC_PROOF_DIRECTORY" = "$PWD/.proof-test" || { echo 'Proof cache requires the job-local fixture directory' >&2; exit 2; }
@@ -101,7 +101,7 @@ if ! "$proof_cache_hit"; then
   python3 .ci/proof-cache.py publish --cache "$proof_fixture_cache" --evidence "$proof_fixture_evidence" --generation-commit "$CI_COMMIT_SHA"
 fi
 
-# --- audit job, deterministic part only (stable; CI needs: resolve, check) ---
+# --- deterministic audit over the committed dependency resolution ---
 # The advisory DB gate (`cargo deny check advisories licenses`) is NOT run
 # here; it lives in the separate fresh [checks.advisories] so the RustSec DB
 # is always re-queried and never restored from cache.
@@ -109,15 +109,13 @@ CBLC_LAST_GATE="audit-metadata"
 cargo metadata --locked --format-version 1 > dependency-metadata.json
 node .github/check-advisory-exposure.mjs
 
-# --- dependency-policy job (stable; CI needs: resolve) ---
+# --- policy checks over the committed dependency resolution ---
 CBLC_LAST_GATE="dependency-policy"
 python3 .github/check-first-party.py
 
-# --- coverage job (nightly only; CI needs: resolve, check; reuses the
-# .proof-test and .extension-test produced above in place of CI's
-# proof-fixtures and extension-public-proofs artifacts) ---
+# --- coverage (nightly, reuses the fully checked public proof fixtures) ---
 npm ci --ignore-scripts --no-audit --no-fund
-# Select nightly exactly as CI's nightly job does; every bare cargo/rustc
+# Select nightly explicitly; every bare cargo/rustc
 # below resolves nightly via RUSTC/CARGO/PATH/RUSTUP_TOOLCHAIN.
 rustup run nightly rustc --version
 NIGHTLY_RUSTC="$(rustup which --toolchain nightly rustc)"
@@ -157,16 +155,17 @@ node tests/replay-extensions.mjs
 adversaries="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "extension_adversaries" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one adversary executable") end' instrumented-build.json)"
 CBLC_LAST_GATE="nightly-adversaries"
 "$adversaries"
-# The environment above remains active in this shell. Unlike separate GitHub
-# Actions steps, reports must not source show-env again: cargo-llvm-cov can
+# The environment above remains active in this shell. Reports must not source
+# show-env again: cargo-llvm-cov can
 # record its own compiler wrapper as the predecessor and recursively invoke it.
 # Only report/clean are supported inside the environment produced by show-env.
-# Retain raw coverage even when a real execution fails (CI: if always()).
+# Export completed execution evidence; the outer EXIT hook retains completed
+# reports even when a later report or coverage gate fails.
 CBLC_LAST_GATE="coverage-report"
 "$NIGHTLY_CARGO" llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --json --output-path coverage.json
-# Retain source coverage diagnostics from the same execution (CI: if always()).
+# Retain source coverage diagnostics from the same completed execution.
 "$NIGHTLY_CARGO" llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --lcov --output-path coverage.lcov
-# Retain independent annotated source inventory (CI: if always()).
+# Retain independent annotated source inventory from that execution.
 "$NIGHTLY_CARGO" llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --text --output-path coverage.txt
 )
 # Require complete source line and branch coverage.
