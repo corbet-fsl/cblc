@@ -26,6 +26,13 @@ The current cssr dependency has no memory-only Cargo feature, so its database
 dependencies remain transitive build dependencies. No cssr database API is called
 by cblc production code. A future upstream feature can trim that build graph.
 
+The publication boundary reads explicitly configured public proof-artifact
+metadata from caller-supplied filesystem paths, with a 64 KiB bound per metadata
+file. It checks the manifest digest and configured circuit/key identities; the
+real verifier authenticates the complete proof artifacts. This read-only public
+configuration access creates no file cache and never persists member inputs,
+proof bytes, provider results or accounting state.
+
 All policy amounts, periods, circuits, verifier configuration, operator signing
 keys and trust roots are explicit caller inputs. No environment credential
 lookup, commercial API, pricing endpoint or automatic provider fallback exists.
