@@ -1,4 +1,6 @@
 //! Native adapter configuration and refusal paths; no accepting verifier.
+// This target reuses only the artifact and proof-record subset of the fixtures.
+#[allow(dead_code)]
 mod common;
 use cblc::{
     Error,

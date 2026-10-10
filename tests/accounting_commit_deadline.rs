@@ -49,12 +49,8 @@ struct HostTransaction<'a> {
 }
 impl HostTransaction<'_> {
     fn pause_at(&mut self, point: StopAt) -> Result<(), Error> {
-        if self
-            .pauses
-            .front()
-            .is_some_and(|pause| pause.point == point)
-        {
-            self.pauses.pop_front().unwrap().wait()?;
+        if let Some(pause) = self.pauses.pop_front_if(|pause| pause.point == point) {
+            pause.wait()?;
         }
         Ok(())
     }
@@ -88,11 +84,8 @@ impl AtomicTransaction for HostTransaction<'_> {
         deadline.check()?;
         let Self { inner, pauses } = *self;
         inner.commit().map_err(|_| Error::Storage)?;
-        if pauses
-            .front()
-            .is_some_and(|pause| pause.point == StopAt::Committed)
-        {
-            pauses.pop_front().unwrap().wait()?;
+        if let Some(pause) = pauses.pop_front_if(|pause| pause.point == StopAt::Committed) {
+            pause.wait()?;
         }
         Ok(())
     }
