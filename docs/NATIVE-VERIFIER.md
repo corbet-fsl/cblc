@@ -79,3 +79,13 @@ production backend or frontend API. The real account and extension fixtures
 must pass through the native Rust adapters in both ordinary and instrumented
 tests. Pure field-order and malformed-artifact tests complement those real
 proof checks; synthetic metadata is never described as a verified proof.
+
+CI selects one coherent historical fixture SDK (Barretenberg5.0.0 and
+Noir1.0.0-beta.26) explicitly in the private validation package. It asserts the
+actual resolved versions at the generator, maintained prover, holder and fixture
+adapter import locations. This creates real reference proofs for cross-version
+native verification; those JavaScript packages are not Rust production
+dependencies. The maintained native verifier uses the current compatible Rust
+SDK range, resolved here to5.2.1. Each CI consumer uses the committed fixture
+lock unchanged, recording its source and digest rather than refreshing different
+SDKs behind unchanged artifact metadata.

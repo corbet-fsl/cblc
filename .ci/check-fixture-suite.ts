@@ -6,8 +6,12 @@ import {dirname, join} from 'node:path';
 
 const require = createRequire(import.meta.url);
 const suite = JSON.parse(readFileSync(new URL('../runtime/accounting/package.json', import.meta.url), 'utf8'));
+for (const origin of [import.meta.url,
+  require.resolve('@corbet-labs/czkp/prove'),
+  require.resolve('@corbet-labs/cwlt/extensions'),
+  new URL('../runtime/accounting/package.json', import.meta.url)]) {
 for (const name of ['@aztec/bb.js', '@noir-lang/noir_js']) {
-  let directory = dirname(require.resolve(name));
+  let directory = dirname(createRequire(origin).resolve(name));
   let found = false;
   for (;;) {
     const path = join(directory, 'package.json');
@@ -25,4 +29,5 @@ for (const name of ['@aztec/bb.js', '@noir-lang/noir_js']) {
     directory = parent;
   }
   assert.ok(found, `Missing installed package identity: ${name}`);
+}
 }
