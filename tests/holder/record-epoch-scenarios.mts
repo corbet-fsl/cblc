@@ -22,6 +22,9 @@ export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,n
   const context={purpose:'forumListing',challenge:Array(32).fill(193),expiresAt:Math.min(now+50,witness.epoch.expiresAt)};
   const presentation=bind(context);
   await verifyRecordPresentation(presentation,context,witness.epoch,candidate.statement.record.owner,now);
+  // The same genuine cached proof also crosses the storage-free relying owner
+  // through actual issuer material and a configured, signed Balance publication.
+  assert.equal(await call({op:'verifyPublishedRecord',presentation,now}),true);
   await call({op:'issueRecordChallenge',owner:presentation.record.owner,context});
   const check=(value,expected=false,at=now)=>call({op:'checkEpochRecord',challenge:context.challenge,presentation:value,now:at},expected);
   for(const mutate of [

@@ -30,6 +30,16 @@ round trip. These source paths and loader tests do not establish native R2 proof
 qualification. Both selectors require the separate directory; the default fixture
 retains the existing three-circuit journey.
 
+The matching `tests/extensions-proof.mts --record-epoch-proofs` mode reuses those
+four artifacts for real service publication, a holder R2 proof and the native
+relying verifier. Build its existing issuer example with
+`cargo build --example extension_issuer --features publication`; the default
+example build omits that feature and refuses the relying-verifier operation.
+This mode requires the same separate `CBLC_EXTENSION_DIRECTORY` and the existing
+native verifier configuration. The new R2 driver and relying-verifier scenarios
+have received source review only and have not been executed; native R2
+qualification and application challenge-consumption integration remain pending.
+
 A host-pinned manifest
 authenticates the circuit/key groups, issuer public key, toolchain and setup files.
 Acceptances pin the circuit/key group digests. setup-lock.json pins the upstream

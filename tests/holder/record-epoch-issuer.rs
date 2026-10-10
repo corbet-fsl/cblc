@@ -17,6 +17,10 @@ use serde_json::{Value, json};
 use sha2::Digest;
 use std::collections::BTreeMap;
 
+#[cfg(feature = "publication")]
+#[path = "record-epoch-relying.rs"]
+mod relying;
+
 type Kem = hpke::kem::X25519HkdfSha256;
 type Kdf = hpke::kdf::HkdfSha256;
 type Aead = hpke::aead::ChaCha20Poly1305;
@@ -176,6 +180,16 @@ impl Records {
         ledger: &mut Option<AccountLedger<V>>,
     ) -> Result<Value, Error> {
         match v["op"].as_str().unwrap() {
+            "verifyPublishedRecord" => {
+                #[cfg(feature = "publication")]
+                {
+                    relying::check(v, fixture, ledger.as_mut().unwrap())
+                }
+                #[cfg(not(feature = "publication"))]
+                {
+                    Err(Error::UnsupportedCapability)
+                }
+            }
             "recordRecipient" => {
                 let member = v["member"].as_u64().unwrap() as u8;
                 let now = v["now"].as_u64().unwrap();

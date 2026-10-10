@@ -20,5 +20,8 @@ pub mod obligations;
 #[cfg(feature = "publication")]
 pub mod publication;
 
+#[cfg(feature = "publication")]
+pub mod record_verifier;
+
 #[cfg(feature = "schema")]
 mod schema;

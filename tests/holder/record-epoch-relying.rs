@@ -1,0 +1,115 @@
+//! Actual native relying verification using the issuer's installed public material.
+//! No proof result or sealed publication is fabricated by this fixture.
+use super::*;
+use cbcn::balance::Balance;
+use cblc::{
+    extensions::RecordUse,
+    record_verifier::{CharterBounds, RecordVerifier},
+    verification::{ExtensionLimits, NativeExtensionVerifier},
+};
+use csgn::{Kind, SecretKey, Signer};
+use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
+
+pub fn check<V: AccountProofVerifier>(
+    input: &Value,
+    fixture: &crate::common::Fixture,
+    ledger: &mut AccountLedger<V>,
+) -> Result<Value, Error> {
+    let now = input["now"].as_u64().unwrap();
+    let presentation: czkp::record::Presentation =
+        serde_json::from_value(input["presentation"].clone()).unwrap();
+    let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
+    // These publication settings and the expected principal/context belong to
+    // this host fixture; none are selected by the submitted record descriptor.
+    let material = ledger.public_verifier_material(1, 1, &issuer)?;
+    let bounds = CharterBounds {
+        policy_epoch: 1,
+        valid_until: 500,
+    };
+    let owner: [u8; 32] = sha2::Sha256::digest([7; 48]).into();
+    let expected = RecordContext {
+        purpose: RecordUse::ForumListing,
+        challenge: [193; 32],
+        expires_at: (now + 50).min(200),
+    };
+    let mut signer = Signer::new(
+        &fixture.trust.community_id,
+        SecretKey::from_seed(&mut [31; 32]),
+        1,
+        2000,
+    )
+    .unwrap();
+    let signed = signer
+        .sign(
+            Kind::SettingsSnapshot,
+            &serde_json::to_vec(&material).unwrap(),
+            now,
+            900,
+        )
+        .unwrap();
+    let balance = Balance::verify(signer.key_ring(), &signed, 1, 1, now).unwrap();
+    let config = PathBuf::from(std::env::args().nth(1).unwrap());
+    let artifacts = crate::common::native::extension_config(&config)?;
+    let options = crate::common::native::options(1024 * 1024);
+    let native = NativeExtensionVerifier::new(options.clone(), options, artifacts)?;
+    let mut verifier = RecordVerifier::new(
+        fixture.trust.community_id.clone(),
+        100,
+        native,
+        ExtensionLimits {
+            global_burst: 1000,
+            subject_burst: 500,
+            replenish: Duration::from_secs(1),
+            maximum_keys: NonZeroUsize::new(32).unwrap(),
+        },
+    )?;
+    let verified = verifier.verify(&balance, bounds, &owner, &expected, &presentation, || now)?;
+    assert_eq!(verified.record(), &presentation.record);
+    assert_eq!(verified.context(), &expected);
+    assert_eq!(verified.checked_at(), now);
+    assert_eq!(verified.record_until(), 200);
+    assert_eq!(verified.commit_until(), expected.expires_at);
+    verifier.check_current(&verified, &balance, bounds, now)?;
+
+    // A genuine new signed publication fences the old result even though its
+    // immutable epoch descriptor is unchanged and its proof remains correct.
+    let mut replacement = material;
+    replacement.revision = 2;
+    let replacement_bytes = signer
+        .sign(
+            Kind::SettingsSnapshot,
+            &serde_json::to_vec(&replacement).unwrap(),
+            now,
+            900,
+        )
+        .unwrap();
+    let replacement = Balance::verify(signer.key_ring(), &replacement_bytes, 1, 2, now).unwrap();
+    assert_eq!(
+        verifier.check_current(&verified, &replacement, bounds, now),
+        Err(Error::PolicyMismatch)
+    );
+    assert_eq!(
+        verifier.check_current(&verified, &balance, bounds, now),
+        Err(Error::Replay)
+    );
+    assert_eq!(
+        verifier.check_current(&verified, &replacement, bounds, expected.expires_at),
+        Err(Error::Expired)
+    );
+    assert!(matches!(
+        verifier.verify(
+            &replacement,
+            bounds,
+            &owner,
+            &expected,
+            &presentation,
+            || expected.expires_at
+        ),
+        Err(Error::Expired)
+    ));
+    assert_eq!(
+        verifier.check_current(&verified, &replacement, bounds, expected.expires_at - 1),
+        Err(Error::ClockRollback)
+    );
+    Ok(json!(true))
+}
