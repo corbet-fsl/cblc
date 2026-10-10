@@ -241,7 +241,9 @@ fn main() {
                                 .is_err()
                         );
                     }
-                    for (before, after) in [(now, now + 1), (now, now - 1), (0, now)] {
+                    // The forward-time expiry probe has its own ledger handle in
+                    // extension_adversaries: a live handle must retain that time.
+                    for (before, after) in [(now, now - 1), (0, now)] {
                         let tick = std::cell::Cell::new(before);
                         assert!(
                             ledger

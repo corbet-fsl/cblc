@@ -161,6 +161,18 @@ fn main() {
     ledger
         .admit_checkpoint(0, serde_json::from_value(init["root"].clone()).unwrap())
         .unwrap();
+    // Forward-time refusal scenarios use independent handles. Their RAM clocks
+    // must never be reset to resume the main fixture's earlier timeline.
+    let open_probe = || {
+        base(&path, &fixture, settings.clone())
+            .with_extensions(
+                extension.clone(),
+                verifier(scope.clone(), &directory),
+                limits(),
+                activation(init),
+            )
+            .unwrap()
+    };
     #[cfg(feature = "publication")]
     let authenticated_material = {
         let material = publication::exercise(&mut ledger);
@@ -354,9 +366,10 @@ fn main() {
         ledger.check_record(record.owner, &context, &record, &proof, || now),
         Err(Error::Admission)
     );
+    let mut late_record = open_probe();
     let calls = Cell::new(0);
     assert_eq!(
-        ledger.check_record(record.owner, &record.context, &record, &proof, || {
+        late_record.check_record(record.owner, &record.context, &record, &proof, || {
             let call = calls.get();
             calls.set(call + 1);
             if call == 0 {
@@ -366,6 +379,10 @@ fn main() {
             }
         }),
         Err(Error::Expired)
+    );
+    assert_eq!(
+        late_record.check_record(record.owner, &record.context, &record, &proof, || now),
+        Err(Error::ClockRollback)
     );
     let applied_key = record_key(7, &record.owner);
     replace(
@@ -401,7 +418,7 @@ fn main() {
         .collect();
     replace(&database, &record_key(10, &batch[0].0.recipient), b"64");
     assert_eq!(
-        ledger.deposit_batch(&batch, || value["now"].as_u64().unwrap()),
+        open_probe().deposit_batch(&batch, || value["now"].as_u64().unwrap()),
         Err(Error::Capacity)
     );
     // Actual root continuity must revoke even otherwise valid inbox observations.
@@ -424,6 +441,31 @@ fn main() {
             )
             .is_ok()
     );
+    let mut late_read = open_probe();
+    let calls = Cell::new(0);
+    assert!(matches!(
+        late_read.authenticated_obligations(
+            &fixture.grant(7, &fixture.device),
+            &fixture.authorize(7, &fixture.device),
+            &observed,
+            || {
+                let call = calls.get();
+                calls.set(call + 1);
+                if call < 2 { now } else { observed.expires_at }
+            }
+        ),
+        Err(Error::Expired)
+    ));
+    assert_eq!(calls.get(), 3, "expiry must be observed after the read");
+    assert!(matches!(
+        late_read.authenticated_obligations(
+            &fixture.grant(7, &fixture.device),
+            &fixture.authorize(7, &fixture.device),
+            &observed,
+            || now
+        ),
+        Err(Error::ClockRollback)
+    ));
     let mut rotation = RootRotation {
         community: accepted[0].statement.community,
         owner: accepted[0].statement.owner,
