@@ -26,6 +26,9 @@ commands = [["cargo", "deny", "--locked", "check", "advisories", "licenses"]]
 tool_revision = "e38f347d6941aa105ac4b55a0d4b8fec2ef22433"
 
 [jobs.verify]
+# Real native/Wasm proof generation plus fresh instrumented replay can exceed
+# the default 45 minutes; preserve every gate with a bounded two-hour budget.
+environment = { CI_TIMEOUT = "7200" }
 scheduler = "crow"
 checks = ["verify", "advisories"]
 workflow = "repository-jobs"
