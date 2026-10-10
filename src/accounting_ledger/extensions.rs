@@ -75,7 +75,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             },
             &activation.proof,
         )?;
-        #[cfg(feature = "publication")]
         let artifact_binding = verifier.artifact_binding.clone();
         let config =
             serde_json::to_vec(&(policy.clone(), &scope)).map_err(|_| Error::InvalidInput)?;
@@ -87,7 +86,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.put(b"extensions", &config)?;
         tx.commit()?;
         self.extensions = Some(Extensions {
-            #[cfg(feature = "publication")]
             artifact_binding,
             policy,
             budget,
@@ -106,7 +104,29 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         update: &ExtendedUpdate,
         clock: impl Fn() -> u64,
     ) -> Result<AccountAcceptance, Error> {
-        self.apply_inner(grant, authorization, request, Some(update), clock)
+        self.apply_inner(grant, authorization, request, Some(update), None, clock)
+            .map(|result| result.acceptance)
+    }
+
+    /// Issue ancestry only inside the original verified update transaction.
+    /// The configured issuer key must be the one in the original proof manifest.
+    pub fn apply_extended_certified(
+        &mut self,
+        grant: &AdmissionGrant,
+        authorization: &DeviceAuthorization,
+        request: &AccountRequest,
+        update: &ExtendedUpdate,
+        issuer: &cssr::certificate::CertificateIssuer,
+        clock: impl Fn() -> u64,
+    ) -> Result<crate::extensions::ExtendedAcceptance, Error> {
+        self.apply_inner(
+            grant,
+            authorization,
+            request,
+            Some(update),
+            Some(issuer),
+            clock,
+        )
     }
 
     /// Accept a delayed batch of anonymous settlements. Every outcome uses the
@@ -234,6 +254,76 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         Ok(result)
     }
 
+    /// Verify the cached epoch proof with a fresh Ed25519 challenge binding.
+    /// Recheck actual publication and time after expensive verification, then
+    /// consume the relying party's live challenge. No per-member lookup or log.
+    pub fn check_epoch_record(
+        &mut self,
+        challenge: &mut crate::extensions::RecordChallenge,
+        presentation: &czkp::record::Presentation,
+        clock: impl Fn() -> u64,
+    ) -> Result<Option<[u16; 3]>, Error> {
+        let clock = observed_clock(self.observed_time.clone(), clock);
+        if challenge.consumed {
+            return Err(Error::Replay);
+        }
+        let now = clock();
+        check_time(now, 0)?;
+        if challenge.context.expires_at > now.saturating_add(self.policy.max_authorization_seconds)
+        {
+            return Err(Error::Expired);
+        }
+        let extensions = self
+            .extensions
+            .as_ref()
+            .ok_or(Error::UnsupportedCapability)?;
+        let check = |tx: &mut Transaction<'_>, now| -> Result<(), Error> {
+            check_time(now, clock_floor(tx)?)?;
+            check_config(tx, &self.config)?;
+            check_extension_config(tx, Some(extensions))?;
+            let epoch = super::record_epoch::current_descriptor(
+                tx,
+                &self.community,
+                &extensions.verifier.scope(),
+                &self.config,
+                &extensions.config,
+            )?;
+            presentation.check_binding(&challenge.context, &epoch, &challenge.owner, now)
+        };
+        let mut tx = self.connection.transaction()?;
+        check(&mut tx, now)?;
+        tx.rollback()?;
+        let proof = data_encoding::HEXLOWER
+            .decode(presentation.proof.as_bytes())
+            .map_err(|_| Error::InvalidInput)?;
+        if proof.len() > self.policy.max_proof_bytes {
+            return Err(Error::InvalidInput);
+        }
+        extensions.budget.check(&challenge.owner)?;
+        extensions.verifier.verify_anonymous(
+            &ExtensionStatement::RecordEpoch {
+                policy: extensions.policy.clone(),
+                record: presentation.record.clone(),
+            },
+            &proof,
+        )?;
+        let completed = clock();
+        check_time(completed, now)?;
+        let mut tx = self.connection.transaction()?;
+        check(&mut tx, completed)?;
+        tx.rollback()?;
+        let returned = clock();
+        check_time(returned, completed)?;
+        presentation.check_binding(
+            &challenge.context,
+            &presentation.record.epoch,
+            &challenge.owner,
+            returned,
+        )?;
+        challenge.consumed = true;
+        Ok(presentation.record.shares)
+    }
+
     /// A pure proof check against current state. It records no display/request history.
     /// Stale records and unconsumed obligations are rejected before and after verification.
     pub(crate) fn public_record(
@@ -341,8 +431,10 @@ pub(super) fn consume(
     tx: &mut Transaction<'_>,
     owner: &[u8; 32],
     update: &ExtendedUpdate,
-) -> Result<(), Error> {
+    required: Option<[u8; 32]>,
+) -> Result<bool, Error> {
     let mut cursor = update.inbox.clone();
+    let mut consumed = required == Some(cursor.root);
     let mut count = 0;
     while cursor != update.previous_inbox {
         if count >= 64 {
@@ -352,10 +444,12 @@ pub(super) fn consume(
         let pending: PendingObligation = tx.get(&entry_key)?.ok_or(Error::Storage)?;
         tx.delete(&entry_key)?;
         cursor = pending.previous;
+        consumed |= required == Some(cursor.root);
         count += 1;
     }
     tx.delete(&key(10, &[owner]))?;
-    tx.put(&key(7, &[owner]), &update.inbox)
+    tx.put(&key(7, &[owner]), &update.inbox)?;
+    Ok(consumed)
 }
 
 pub(super) fn read_obligations(

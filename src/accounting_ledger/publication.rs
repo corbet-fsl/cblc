@@ -24,6 +24,14 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         let mut transaction = self.connection.transaction()?;
         check_config(&mut transaction, &self.config)?;
         check_extension_config(&mut transaction, Some(extensions))?;
+        let record_epoch = super::record_epoch::public_descriptor(
+            &mut transaction,
+            &self.community,
+            policy_epoch,
+            &extensions.verifier.scope(),
+            &self.config,
+            &extensions.config,
+        )?;
         transaction.rollback()?;
         let material = PublicVerifierMaterial {
             purpose: Purpose::PublicVerifierV1,
@@ -37,6 +45,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             manifest_sha256: binding.manifest_sha256,
             account_response_key: self.operator.verifying_key().to_bytes(),
             certificate_key: binding.certificate_key.to_vec(),
+            record_epoch,
         };
         material.validate(&self.trust.community_id)?;
         Ok(material)

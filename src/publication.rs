@@ -33,6 +33,10 @@ pub struct PublicVerifierMaterial {
     pub account_response_key: [u8; 32],
     /// Uncompressed affine coordinates, matching the existing manifest encoding.
     pub certificate_key: Vec<u8>,
+    /// Current common minimum-frontier descriptor, authenticated with this material.
+    /// Absence does not authorize a mandatory record decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub record_epoch: Option<czkp::record::Epoch>,
 }
 
 impl PublicVerifierMaterial {
@@ -66,7 +70,19 @@ impl PublicVerifierMaterial {
         if self.policy.account.digest(&community)? != self.policy_digest {
             return Err(Error::PolicyMismatch);
         }
-        self.extension_policy.validate()
+        self.extension_policy.validate()?;
+        if let Some(record) = &self.record_epoch {
+            // The descriptor cannot choose the relying owner's authenticated period.
+            let period = record
+                .expires_at
+                .checked_sub(record.starts_at)
+                .ok_or(Error::InvalidInput)?;
+            record.validate(&community, period)?;
+            if record.policy_epoch != self.policy_epoch || record.proof_scope != self.proof_scope {
+                return Err(Error::PolicyMismatch);
+            }
+        }
+        Ok(())
     }
 }
 

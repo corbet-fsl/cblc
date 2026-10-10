@@ -55,6 +55,24 @@ pub(super) fn check_config(
     Ok(())
 }
 
+pub(super) fn check_epoch_config(frozen: &[u8], current: &[u8]) -> Result<(), Error> {
+    let mut prior: StoredConfig = serde_json::from_slice(frozen).map_err(|_| Error::Storage)?;
+    let active: StoredConfig = serde_json::from_slice(current).map_err(|_| Error::Storage)?;
+    prior.policy.validate()?;
+    active.policy.validate()?;
+    if active.tuning_revision > MAX_INTEGER || active.tuning_revision < prior.tuning_revision {
+        return Err(Error::PolicyMismatch);
+    }
+    if active.tuning_revision > prior.tuning_revision {
+        prior.tuning_revision = active.tuning_revision;
+        prior.policy.account.abandon_after = active.policy.account.abandon_after;
+    }
+    if serde_json::to_vec(&prior).map_err(|_| Error::Storage)? != current {
+        return Err(Error::PolicyMismatch);
+    }
+    Ok(())
+}
+
 impl<V: AccountProofVerifier> AccountLedger<V> {
     /// Current local snapshot. Call `reload_policy` to observe another writer's update.
     pub fn account_policy(&self) -> &AccountPolicy {
@@ -160,3 +178,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         self.waiting_period()
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/internal/epoch_tuning.rs"]
+mod epoch_tests;

@@ -52,7 +52,6 @@ impl Budget {
 pub struct NativeExtensionVerifier {
     scope: AccountProofScope,
     issuer: [u8; 64],
-    #[cfg(feature = "publication")]
     pub(crate) artifact_binding: crate::artifacts::ArtifactBinding,
     updates: cvfy::NativeVerifier,
     deposits: cvfy::NativeVerifier,
@@ -79,7 +78,6 @@ impl NativeExtensionVerifier {
         Ok(Self {
             scope: artifacts.scope(),
             issuer: artifacts.issuer,
-            #[cfg(feature = "publication")]
             artifact_binding: artifacts.binding(),
             updates: cvfy::NativeVerifier::new(updates)?,
             deposits: cvfy::NativeVerifier::with_capacity(deposits, capacity.clone())?,
@@ -91,6 +89,12 @@ impl NativeExtensionVerifier {
     }
 }
 impl ExtensionVerifier for NativeExtensionVerifier {
+    fn require_record_epoch(&self) -> Result<(), Error> {
+        self.record_epochs
+            .as_ref()
+            .map(|_| ())
+            .ok_or(Error::UnsupportedCapability)
+    }
     fn scope(&self) -> AccountProofScope {
         self.scope.clone()
     }

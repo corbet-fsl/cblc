@@ -53,6 +53,10 @@ fn missing_worker_refuses_both_pools_and_domain_confusion_without_accepting_a_pr
     let expected_scope = artifacts.scope();
     let verifier = NativeExtensionVerifier::new(config(), config(), artifacts).unwrap();
     assert_eq!(verifier.scope(), expected_scope);
+    assert_eq!(
+        verifier.require_record_epoch(),
+        Err(Error::UnsupportedCapability)
+    );
     let policy = ExtensionPolicy {
         revision: 1,
         public_record_quorum: 5,

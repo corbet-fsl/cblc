@@ -59,14 +59,35 @@ original Ed25519 issuer certificate over community, epoch and blinded leaf.
 The R2 circuit binds the certificate bytes but does not verify that signature.
 The presentation key is encoded as the original two unsigned 128-bit limbs.
 
-This migration stage preserves the original R2 circuit and public codec. Its
-new signature, ABI, artifact and refusal tests have only been source-reviewed;
-native R2 proof acceptance has not been executed or qualified. Existing circuit
-qualification does not cover R2. The issuer freeze/descendant lineage port,
-authenticated current descriptor, cached proof plus fresh presentation binding,
-and atomic challenge consumption are still required for a current-record
-decision. Constructing `ExtensionStatement::RecordEpoch` grants none of those
-capabilities. Forum admission remains refused until that composition exists.
+The issuer now preserves the original minimum-frontier epoch owner in source.
+`register_record_recipient` requires a genuinely accepted account and current
+signed grant/device authority. `freeze_record_epoch` reads the whole bounded
+current frontier range and requires every recipient. An authenticated native R2
+key is mandatory; a successful legacy genesis activation cannot substitute it.
+`publish_record_epoch` encrypts the original common unlabeled HPKE object, then
+rechecks every frontier, inbox and recipient before atomically installing the
+object, anchor and all owner lineages. Its live commit deadline is the original
+epoch expiry. Exact retries return the original bytes, never a fresh object.
+
+`apply_extended_certified` carries ancestry only through the verified linear
+account CAS and complete actual inbox chain. It requires the configured P-256
+issuer before any retry or proof work. Private ancestry and the original blinded
+Ed25519 leaf certificate are retained with the same acceptance; retries never
+acquire a later epoch. Ordinary updates cannot discard a live lineage by omitting
+the issuer. Main's existing raw AcceptedState/deposit transcript stays unchanged.
+
+The existing signed public-material projection includes the actual optional
+epoch descriptor. `check_epoch_record` verifies the cached proof and fresh
+presentation, checks actual publication/configuration and durable clock floors
+before and after verification, then consumes the caller's independent live
+challenge. It creates no persistent request log or relying-service member state.
+
+The new signature, ABI, artifact, HPKE, ancestry-recovery, inbox-chain and refusal
+tests have only been source-reviewed. Native R2 proof acceptance and full issuer
+race/deadline integration have not been executed or qualified; existing circuit
+qualification does not cover R2. New dependency edges still need a coherent
+resolver-produced lock. Forum admission remains refused until the complete
+issuer/publication/wallet/consumer composition is integrated and qualified.
 
 Update bundles contain one to 65 strict steps and remain capped at 4 MiB.
 The complete original account is validated once. Intermediate ingestion steps

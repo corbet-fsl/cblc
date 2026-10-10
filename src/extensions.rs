@@ -56,6 +56,60 @@ pub struct StateCertificate {
     pub accepted_at: u64,
     pub signature: Vec<u8>,
 }
+/// Private ancestry witness returned only on the authenticated account response.
+/// It must never be projected into a listing or contact's public record inputs.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EpochAncestryCertificate {
+    /// Hash of the issuer's community identifier.
+    pub community: [u8; 32],
+    /// Private community-scoped account owner.
+    pub owner: [u8; 32],
+    /// Published epoch number.
+    pub epoch: u64,
+    /// Original published epoch root.
+    pub root: [u8; 32],
+    /// Commitment to the original blinded owner frontier leaf.
+    pub frozen_leaf: [u8; 32],
+    /// Newly accepted private state commitment.
+    pub state: [u8; 32],
+    /// Newly accepted private version.
+    pub version: u64,
+    /// Original circuit and verification-key digests.
+    pub proof_scope: AccountProofScope,
+    /// Original acceptance time, unchanged by an exact retry.
+    pub issued_at: u64,
+    /// Canonical low-S P-256 signature, exactly 64 bytes.
+    pub signature: Vec<u8>,
+    /// Same private signed-leaf packet used by frozen and descendant records.
+    pub record: czkp::record::SignedLeaf,
+}
+impl EpochAncestryCertificate {
+    /// Original fixed-width issuer transcript; no JSON is signed.
+    pub fn body(&self) -> cssr::certificate::EpochAncestry {
+        cssr::certificate::EpochAncestry {
+            community: self.community,
+            owner: self.owner,
+            epoch: self.epoch,
+            root: self.root,
+            frozen_leaf: self.frozen_leaf,
+            state: self.state,
+            version: self.version,
+            circuit_digest: self.proof_scope.circuit_digest,
+            verifying_key_digest: self.proof_scope.verifying_key_digest,
+            issued_at: self.issued_at,
+        }
+    }
+}
+/// Coherent result of one committed extended update, including its original
+/// optional ancestry certificate. Exact retries never acquire a later epoch.
+pub struct ExtendedAcceptance {
+    /// Signed acceptance committed by the original ledger.
+    pub acceptance: crate::accounting::AccountAcceptance,
+    /// Original certificate, present only when issued in that acceptance's CAS.
+    pub ancestry: Option<EpochAncestryCertificate>,
+}
 /// The public effect to prove in addition to all ordinary account constraints.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -88,22 +142,28 @@ pub struct Deposit {
     pub authorization_nullifier: [u8; 32],
     pub obligation: [u8; 32],
 }
-/// Every visibility/contact decision carries an action-specific, fresh record proof.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-pub enum RecordUse {
-    FirstContact,
-    ForumListing,
+pub use czkp::record::{Context as RecordContext, Use as RecordUse};
+
+/// One relying-party decision. Keep this value with the outstanding request;
+/// do not reconstruct it from member input. Successful verification consumes it.
+/// No persistent request or member-activity log is created.
+pub struct RecordChallenge {
+    pub(crate) owner: [u8; 32],
+    pub(crate) context: RecordContext,
+    pub(crate) consumed: bool,
 }
-/// A challenge supplied by the relying service for exactly one decision context.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RecordContext {
-    pub purpose: RecordUse,
-    pub challenge: [u8; 32],
-    pub expires_at: u64,
+impl RecordChallenge {
+    /// Bind a freshly issued random challenge to its expected owner and action.
+    pub fn new(owner: [u8; 32], context: RecordContext) -> Result<Self, Error> {
+        if owner == [0; 32] || context.challenge == [0; 32] || context.expires_at == 0 {
+            return Err(Error::InvalidInput);
+        }
+        Ok(Self {
+            owner,
+            context,
+            consumed: false,
+        })
+    }
 }
 /// Relative public values only: 10,000 basis points in accepted/declined/punished order.
 /// The proof establishes the hidden total reaches the configured quorum.
@@ -154,6 +214,8 @@ pub const EXTENSION_PROOF_BYTES: usize = 4 * 1024 * 1024;
 /// implements this sealed trait; a caller cannot substitute a signed verdict.
 pub trait ExtensionVerifier: sealed::Sealed + Send {
     fn scope(&self) -> AccountProofScope;
+    /// Refuse epoch publication unless the authenticated native R2 key exists.
+    fn require_record_epoch(&self) -> Result<(), Error>;
     fn verify(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error>;
     /// Use a separate bounded pool for unauthenticated work.
     fn verify_anonymous(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error>;
@@ -166,7 +228,6 @@ pub struct ExtensionActivation {
     pub proof: Vec<u8>,
 }
 pub(crate) struct Extensions {
-    #[cfg(feature = "publication")]
     pub artifact_binding: crate::artifacts::ArtifactBinding,
     pub policy: ExtensionPolicy,
     pub verifier: Box<dyn ExtensionVerifier>,
