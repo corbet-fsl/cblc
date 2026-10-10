@@ -91,6 +91,7 @@ export async function withPinnedBrowserWasm(bytes, create) {
 export function artifactFetcher(base, fetchImpl = globalThis.fetch) {
   const root = new URL(base);
   return async (name, maximum) => {
+    if (!Number.isSafeInteger(maximum) || maximum <= 0 || maximum > DEFAULT_LIMITS.maxArtifactBytes) throw new Error('Artifact download limit');
     if (!['manifest.json','circuit.json','vk.bin','setup/g1.dat','setup/g2.dat','barretenberg-threads.wasm',
       'peer-reservation/circuit.json','peer-reservation/vk.bin'].includes(name)) throw new Error('Artifact name');
     const response = await fetchImpl(new URL(name, root), { redirect: 'error', credentials: 'omit' });

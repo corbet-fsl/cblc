@@ -159,8 +159,9 @@ export async function checkpointFromVerified(community, entries, hashes) {
   const seen = new Set(), normalized = [], tree = await SparseTree.create(hashes.enrollmentNode);
   for (let index = 0; index < entries.length; index++) {
     const entry = entries[index];
-    if (seen.has(entry.memberId)) throw new Error('Duplicate permanent enrollment'); seen.add(entry.memberId);
-    const value = { member: memberBytes(entry.memberId), key: unhex(entry.accountKey), secretHash: unhex(entry.secretHash),
+    const member = bytes32(memberBytes(entry.memberId)), identity = hex(member);
+    if (seen.has(identity)) throw new Error('Duplicate permanent enrollment'); seen.add(identity);
+    const value = { member, key: unhex(entry.accountKey), secretHash: unhex(entry.secretHash),
       start: time(entry.issuedAt), end: time(entry.expiresAt), delegationDigest: unhex(entry.delegationDigest), index: BigInt(index) };
     if (value.key.length !== 64 || value.start === 0n || value.end <= value.start) throw new Error('Enrollment key/time');
     fieldValue(value.secretHash); bytes32(value.delegationDigest);

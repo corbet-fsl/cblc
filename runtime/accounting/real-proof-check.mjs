@@ -1,7 +1,7 @@
 // CI: verify existing public browser proofs using the shipped runtime, not a mock.
 // Usage: node real-proof-check.mjs /absolute/config.json /absolute/browser-evidence.json
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { boundedFile } from '../bounded-file.ts';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createAccountVerifier } from './runtime.mjs';
@@ -29,7 +29,9 @@ export async function verifyPublicProofRecords(options, records) {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const [config,evidencePath]=process.argv.slice(2);
   if (!config || !evidencePath) throw new Error('Trusted configuration and public browser evidence required');
-  const evidence=JSON.parse(await readFile(evidencePath,'utf8'));
+  // Public CI evidence still needs a pre-allocation cap before JSON parsing.
+  const evidence=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(
+    await boundedFile(evidencePath,128*1024*1024)));
   assert.equal(evidence.contract?.ok,true);
   const options=await nodeArtifactOptions(config);
   assert(evidence.contract.runtimeFactory?.record,'Actual browser runtime factory evidence required');
