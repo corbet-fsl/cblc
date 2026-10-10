@@ -4,7 +4,7 @@ use cblc::{accounting::*, accounting_ledger::*, accounting_service::*};
 use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
 use ed25519_dalek::{Signer, SigningKey};
 use serde::Deserialize;
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Record {
@@ -21,20 +21,8 @@ fn real_account_proofs_round_trip_through_libsql() {
         serde_json::from_slice(&std::fs::read(directory.join("records.json")).unwrap()).unwrap();
     assert_eq!(records.len(), 2);
     let f = common::Fixture::new();
-    let config = ProcessVerifierConfig {
-        node: std::env::split_paths(&std::env::var_os("PATH").unwrap())
-            .map(|p| p.join("node"))
-            .find(|p| p.is_absolute() && p.is_file())
-            .unwrap(),
-        script: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("runtime/accounting/node-verifier.mjs"),
-        artifact_config: directory.join("config.json"),
-        scope: records[0].proof_scope.clone(),
-        timeout: Duration::from_secs(60),
-        maximum_parallel: 1,
-        max_proof_bytes: 1024 * 1024,
-        node_heap_megabytes: 2048,
-    };
+    let artifacts = common::native::account(&directory);
+    assert_eq!(artifacts.scope(), records[0].proof_scope);
     let policy = AccountLedgerPolicy {
         account: records[0].statement.policy.clone(),
         max_authorization_seconds: 100,
@@ -48,7 +36,8 @@ fn real_account_proofs_round_trip_through_libsql() {
             &path,
             f.trust.clone(),
             policy.clone(),
-            ProcessAccountVerifier::new(config.clone()).unwrap(),
+            NativeAccountVerifier::new(common::native::options(1024 * 1024), artifacts.clone())
+                .unwrap(),
             SigningKey::from_bytes(&[9; 32]),
         )
         .unwrap()

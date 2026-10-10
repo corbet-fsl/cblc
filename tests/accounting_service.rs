@@ -254,61 +254,28 @@ fn actual_js_client_request_is_accepted_by_rust_and_js_checks_the_signed_rust_re
 }
 
 #[test]
-fn verifier_kills_and_reaps_timeout_then_releases_capacity_and_rejects_large_stdout() {
-    use std::{
-        fs,
-        time::{Duration, Instant},
-    };
-    let node = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
-        .map(|path| path.join("node"))
-        .find(|path| path.is_absolute() && path.is_file())
-        .expect("Node is required for the process-verifier integration test");
-    let directory = tempfile::tempdir().unwrap();
-    let script = directory.path().join("worker.mjs");
-    let config = directory.path().join("config.json");
-    fs::write(&config, "{}").unwrap();
-    fs::write(&script, "process.stdin.resume(); setInterval(()=>{},1000);").unwrap();
-    let verifier = ProcessAccountVerifier::new(ProcessVerifierConfig {
-        node,
-        script: script.clone(),
-        artifact_config: config,
-        scope: proofs::record(0).proof_scope,
-        timeout: Duration::from_millis(500),
-        maximum_parallel: 1,
-        max_proof_bytes: 1024 * 1024,
-        node_heap_megabytes: 64,
-    })
-    .unwrap();
+fn native_verifier_checks_domain_input_and_refuses_unavailable_backend_without_retaining_capacity()
+{
+    // Native process framing/timeout adversaries live in cvfy. This adapter test
+    // retains the domain checks and only observes genuine backend refusal.
+    let directory = std::path::PathBuf::from(std::env::var_os("CBLC_PROOF_DIRECTORY").unwrap());
+    let artifacts = common::native::account(&directory);
+    assert_eq!(artifacts.scope(), proofs::record(0).proof_scope);
+    let mut options = common::native::options(1024 * 1024);
+    options.executable = "/unavailable/czkp-bb-worker".into();
+    let verifier = NativeAccountVerifier::new(options, artifacts).unwrap();
     let statement = genesis(&Fixture::new()).statement;
-    let started = Instant::now();
+    for _ in 0..2 {
+        assert_eq!(
+            verifier.verify(&statement, &[1; 32]),
+            Err(Error::CryptoProvider)
+        );
+    }
+    let mut malformed = statement.clone();
+    malformed.policy_digest[0] ^= 1;
     assert_eq!(
-        verifier.verify(&statement, &[1, 2, 3]),
-        Err(Error::CryptoProvider)
-    );
-    assert!(started.elapsed() < Duration::from_secs(5));
-    fs::write(
-        &script,
-        "process.stdin.resume(); process.stdout.write('x'.repeat(5000));",
-    )
-    .unwrap();
-    assert_eq!(
-        verifier.verify(&statement, &[1, 2, 3]),
-        Err(Error::CryptoProvider)
-    );
-    // A well-formed refusal tests framing after cleanup; this worker never accepts a proof.
-    let verdict = serde_json::json!({"verified":false,"proofScope":proofs::record(0).proof_scope})
-        .to_string();
-    fs::write(
-        &script,
-        format!(
-            "process.stdin.resume(); process.stdout.write({});",
-            serde_json::to_string(&verdict).unwrap()
-        ),
-    )
-    .unwrap();
-    assert_eq!(
-        verifier.verify(&statement, &[1, 2, 3]),
-        Err(Error::CryptoProvider)
+        verifier.verify(&malformed, &[1; 32]),
+        Err(Error::InvalidInput)
     );
     assert_eq!(
         verifier.verify(&statement, &vec![0; 1024 * 1024 + 1]),

@@ -12,7 +12,7 @@ use cblc::{
     accounting::*,
     accounting_ledger::*,
     extensions::*,
-    verification::{ExtensionLimits, ProcessExtensionVerifier},
+    verification::{ExtensionLimits, NativeExtensionVerifier},
 };
 use common::{Fixture, proofs::RealVerifier};
 use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
@@ -33,22 +33,11 @@ fn limits() -> ExtensionLimits {
         maximum_keys: NonZeroUsize::new(32).unwrap(),
     }
 }
-fn verifier(scope: AccountProofScope, directory: &Path) -> ProcessExtensionVerifier {
-    let config = cvfy::ProcessVerifierConfig {
-        node: std::env::split_paths(&std::env::var_os("PATH").unwrap())
-            .map(|p| p.join("node"))
-            .find(|p| p.is_absolute() && p.is_file())
-            .unwrap(),
-        script: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("runtime/extensions/node-verifier.mjs"),
-        artifact_config: directory.join("config.json"),
-        scope,
-        timeout: Duration::from_secs(180),
-        maximum_parallel: 1,
-        max_proof_bytes: EXTENSION_PROOF_BYTES,
-        node_heap_megabytes: 4096,
-    };
-    ProcessExtensionVerifier::new(config.clone(), config).unwrap()
+fn verifier(scope: AccountProofScope, directory: &Path) -> NativeExtensionVerifier {
+    let artifacts = common::native::extension(directory);
+    assert_eq!(artifacts.scope(), scope);
+    let options = common::native::options(1024 * 1024);
+    NativeExtensionVerifier::new(options.clone(), options, artifacts).unwrap()
 }
 fn activation(init: &Value) -> ExtensionActivation {
     ExtensionActivation {

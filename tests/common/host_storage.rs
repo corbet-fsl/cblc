@@ -4,7 +4,7 @@ use cblc::{
     accounting::AccountProofVerifier,
     accounting_ledger::{AccountLedger, AccountLedgerPolicy},
     admission::AdmissionTrust,
-    storage::{AccountStorage, AtomicTransaction, Transaction},
+    storage::{AccountStorage, AtomicTransaction, CommitDeadline, Transaction},
 };
 use ed25519_dalek::SigningKey;
 use std::path::Path;
@@ -28,6 +28,12 @@ impl AtomicTransaction for HostTransaction<'_> {
         self.0.delete(key).map_err(|_| Error::Storage)
     }
     fn commit(self: Box<Self>) -> Result<(), Error> {
+        self.0.commit().map_err(|_| Error::Storage)
+    }
+    fn commit_before(self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
+        // All staged SQL work already holds the exclusive transaction. This is
+        // the host's logical commit decision; durability may finish later.
+        deadline.check()?;
         self.0.commit().map_err(|_| Error::Storage)
     }
     fn rollback(self: Box<Self>) -> Result<(), Error> {

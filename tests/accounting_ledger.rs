@@ -853,21 +853,12 @@ fn extension_activation_requires_a_real_proof() {
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap();
-    let config = cvfy::ProcessVerifierConfig {
-        node: "/unavailable/node".into(),
-        script: "/unavailable/verifier.mjs".into(),
-        artifact_config: "/unavailable/config.json".into(),
-        scope: AccountProofScope {
-            circuit_digest: [71; 32],
-            verifying_key_digest: [72; 32],
-        },
-        timeout: Duration::from_secs(1),
-        maximum_parallel: 1,
-        max_proof_bytes: cblc::extensions::EXTENSION_PROOF_BYTES,
-        node_heap_megabytes: 64,
-    };
+    let artifacts = common::native::extension(&common::native::extension_directory());
+    let mut options = common::native::options(1024 * 1024);
+    options.executable = "/unavailable/czkp-bb-worker".into();
     let verifier =
-        cblc::verification::ProcessExtensionVerifier::new(config.clone(), config).unwrap();
+        cblc::verification::NativeExtensionVerifier::new(options.clone(), options, artifacts)
+            .unwrap();
     let result = ledger.with_extensions(
         cblc::extensions::ExtensionPolicy {
             revision: 1,

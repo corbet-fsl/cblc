@@ -1,92 +1,65 @@
-//! Real process adapter configuration and refusal paths; no accepting verifier.
-
+//! Native adapter configuration and refusal paths; no accepting verifier.
+mod common;
 use cblc::{
     Error,
-    accounting::AccountProofScope,
+    artifacts::NativeVerifierOptions,
     extensions::{
-        EXTENSION_PROOF_BYTES, ExtensionPolicy, ExtensionStatement, ExtensionVerifier, Inbox,
+        Effect, ExtendedUpdate, ExtensionPolicy, ExtensionStatement, ExtensionVerifier, Inbox,
         PublicRecord, RecordContext, RecordUse,
     },
-    verification::ProcessExtensionVerifier,
+    verification::NativeExtensionVerifier,
 };
-use cvfy::ProcessVerifierConfig;
 use std::time::Duration;
 
-fn config() -> ProcessVerifierConfig {
-    ProcessVerifierConfig {
-        node: "/unavailable/node".into(),
-        script: "/unavailable/verifier.mjs".into(),
-        artifact_config: "/unavailable/config.json".into(),
-        scope: AccountProofScope {
-            circuit_digest: [71; 32],
-            verifying_key_digest: [72; 32],
-        },
+fn config() -> NativeVerifierOptions {
+    NativeVerifierOptions {
+        executable: "/unavailable/czkp-bb-worker".into(),
         timeout: Duration::from_secs(1),
         maximum_parallel: 1,
-        max_proof_bytes: EXTENSION_PROOF_BYTES,
-        node_heap_megabytes: 64,
+        max_proof_bytes: 1024 * 1024,
+        threads: 1,
+        memory_megabytes: 8192,
     }
 }
 
 #[test]
-fn different_artifacts_and_invalid_independent_pools_refuse_construction() {
-    let good = config();
-    let mut too_small = good.clone();
-    too_small.max_proof_bytes -= 1;
-    assert!(matches!(
-        ProcessExtensionVerifier::new(too_small, good.clone()),
-        Err(Error::InvalidInput)
-    ));
-    for anonymous in [
-        ProcessVerifierConfig {
-            scope: AccountProofScope {
-                circuit_digest: [73; 32],
-                verifying_key_digest: [72; 32],
-            },
-            ..good.clone()
-        },
-        ProcessVerifierConfig {
-            script: "/unavailable/other.mjs".into(),
-            ..good.clone()
-        },
-        ProcessVerifierConfig {
-            artifact_config: "/unavailable/other.json".into(),
-            ..good.clone()
-        },
-    ] {
+fn invalid_independent_pools_refuse_construction() {
+    let artifacts = common::native::extension(&common::native::extension_directory());
+    for field in 0..5 {
+        let mut invalid = config();
+        match field {
+            0 => invalid.executable = "relative-worker".into(),
+            1 => invalid.timeout = Duration::ZERO,
+            2 => invalid.maximum_parallel = 0,
+            3 => invalid.max_proof_bytes = 0,
+            _ => invalid.threads = 0,
+        }
         assert!(matches!(
-            ProcessExtensionVerifier::new(good.clone(), anonymous),
-            Err(Error::PolicyMismatch)
+            NativeExtensionVerifier::new(invalid.clone(), config(), artifacts.clone()),
+            Err(Error::InvalidInput)
+        ));
+        assert!(matches!(
+            NativeExtensionVerifier::new(config(), invalid, artifacts.clone()),
+            Err(Error::InvalidInput)
         ));
     }
-    let invalid = ProcessVerifierConfig {
-        node: "relative-node".into(),
-        ..good.clone()
-    };
-    assert!(matches!(
-        ProcessExtensionVerifier::new(invalid.clone(), good.clone()),
-        Err(Error::InvalidInput)
-    ));
-    assert!(matches!(
-        ProcessExtensionVerifier::new(good, invalid),
-        Err(Error::InvalidInput)
-    ));
 }
 
 #[test]
-fn missing_worker_refuses_both_pools_and_releases_capacity() {
-    let config = config();
-    let expected_scope = config.scope.clone();
-    let verifier = ProcessExtensionVerifier::new(config.clone(), config).unwrap();
+fn missing_worker_refuses_both_pools_and_domain_confusion_without_accepting_a_proof() {
+    let artifacts = common::native::extension(&common::native::extension_directory());
+    let expected_scope = artifacts.scope();
+    let verifier = NativeExtensionVerifier::new(config(), config(), artifacts).unwrap();
     assert_eq!(verifier.scope(), expected_scope);
-    let statement = ExtensionStatement::Record {
-        policy: ExtensionPolicy {
-            revision: 1,
-            public_record_quorum: 5,
-            change_token_cost: 1,
-            deposit_delay_seconds: 10,
-            minimum_deposit_batch: 2,
-        },
+    let policy = ExtensionPolicy {
+        revision: 1,
+        public_record_quorum: 5,
+        change_token_cost: 1,
+        deposit_delay_seconds: 10,
+        minimum_deposit_batch: 2,
+    };
+    let record = ExtensionStatement::Record {
+        policy: policy.clone(),
         record: PublicRecord {
             context: RecordContext {
                 purpose: RecordUse::FirstContact,
@@ -101,14 +74,39 @@ fn missing_worker_refuses_both_pools_and_releases_capacity() {
             shares: None,
         },
     };
+    let account = common::proofs::record(0).statement;
+    let update = ExtensionStatement::Update {
+        policy,
+        account: Box::new(account.clone()),
+        update: ExtendedUpdate {
+            previous_inbox: Inbox::default(),
+            inbox: Inbox::default(),
+            effect: Effect::Update,
+        },
+    };
+    let record_proof =
+        serde_json::to_vec(&serde_json::json!({"version":1,"proofs":[{"proof":"01".repeat(32)}]}))
+            .unwrap();
+    let update_proof = serde_json::to_vec(&serde_json::json!({"version":1,"proofs":[{
+        "state":account.next_state,"inbox": vec![0_u8;32],"proof":"01".repeat(32)
+    }]}))
+    .unwrap();
     for _ in 0..2 {
         assert_eq!(
-            verifier.verify(&statement, &[1]),
+            verifier.verify(&update, &update_proof),
             Err(Error::CryptoProvider)
         );
         assert_eq!(
-            verifier.verify_anonymous(&statement, &[1]),
+            verifier.verify_anonymous(&record, &record_proof),
             Err(Error::CryptoProvider)
+        );
+        assert_eq!(
+            verifier.verify(&record, &record_proof),
+            Err(Error::InvalidInput)
+        );
+        assert_eq!(
+            verifier.verify_anonymous(&update, &update_proof),
+            Err(Error::InvalidInput)
         );
     }
 }

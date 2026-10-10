@@ -236,8 +236,8 @@ pub fn verify_record(
     record: &cblc::extensions::PublicRecord,
     proof: &[u8],
 ) {
+    use cblc::extensions::ExtensionVerifier;
     use sha2::{Digest, Sha256};
-    use std::{path::PathBuf, time::Duration};
     material
         .validate_at(&material.community, record.context.expires_at - 1)
         .unwrap();
@@ -245,42 +245,26 @@ pub fn verify_record(
         record.community,
         <[u8; 32]>::from(Sha256::digest(material.community.as_bytes()))
     );
-    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".extension-test");
-    let temporary = tempfile::tempdir().unwrap();
-    let config_path = temporary.path().join("verified-config.json");
-    std::fs::write(
-        &config_path,
-        serde_json::to_vec(&serde_json::json!({
-            "directory": directory,
-            "manifestSha256": data_encoding::HEXLOWER.encode(&material.manifest_sha256),
-        }))
-        .unwrap(),
+    let directory = crate::common::native::extension_directory();
+    let artifacts =
+        crate::common::native::extension_pinned(&directory, material.manifest_sha256).unwrap();
+    assert_eq!(artifacts.scope(), material.proof_scope);
+    let options = crate::common::native::options(material.policy.max_proof_bytes);
+    let verifier = cblc::verification::NativeExtensionVerifier::new(
+        options.clone(),
+        options.clone(),
+        artifacts,
     )
     .unwrap();
-    let config = cvfy::ProcessVerifierConfig {
-        node: std::env::split_paths(&std::env::var_os("PATH").unwrap())
-            .map(|p| p.join("node"))
-            .find(|p| p.is_absolute() && p.is_file())
-            .unwrap(),
-        script: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("runtime/extensions/node-verifier.mjs"),
-        artifact_config: config_path.clone(),
-        scope: material.proof_scope.clone(),
-        timeout: Duration::from_secs(180),
-        maximum_parallel: 1,
-        max_proof_bytes: material.policy.max_proof_bytes,
-        node_heap_megabytes: 4096,
-    };
-    let verifier = cvfy::ProcessVerifier::new(config).unwrap();
     let statement = cblc::extensions::ExtensionStatement::Record {
         policy: material.extension_policy.clone(),
         record: record.clone(),
     };
-    verifier.verify(&statement, proof).unwrap();
+    verifier.verify_anonymous(&statement, proof).unwrap();
     let mut wrong_context = record.clone();
     wrong_context.context.challenge[0] ^= 1;
     assert_eq!(
-        verifier.verify(
+        verifier.verify_anonymous(
             &cblc::extensions::ExtensionStatement::Record {
                 policy: material.extension_policy.clone(),
                 record: wrong_context,
@@ -289,21 +273,14 @@ pub fn verify_record(
         ),
         Err(cblc::Error::CryptoProvider)
     );
-    std::fs::write(
-        &config_path,
-        serde_json::to_vec(&serde_json::json!({
-            "directory": directory,
-            "manifestSha256": "00".repeat(32),
-        }))
-        .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(
-        verifier.verify(&statement, proof),
-        Err(cblc::Error::CryptoProvider)
-    );
-    // A complete copied fixture must first verify successfully, so later
-    // refusals cannot be caused merely by absent setup or key files.
+    assert!(matches!(
+        crate::common::native::extension_pinned(&directory, [0; 32]),
+        Err(cblc::Error::PolicyMismatch)
+    ));
+
+    // Authenticate a complete host-read copy first. Later file mutation must
+    // refuse new snapshots and cannot change the already authenticated RAM data.
+    let temporary = tempfile::tempdir().unwrap();
     let copied = temporary.path().join("artifacts");
     std::fs::create_dir_all(copied.join("setup")).unwrap();
     for name in [
@@ -315,26 +292,26 @@ pub fn verify_record(
     ] {
         std::fs::copy(directory.join(name), copied.join(name)).unwrap();
     }
-    std::fs::write(
-        &config_path,
-        serde_json::to_vec(&serde_json::json!({
-            "directory": copied,
-            "manifestSha256": data_encoding::HEXLOWER.encode(&material.manifest_sha256),
-        }))
-        .unwrap(),
+    let copied_artifacts =
+        crate::common::native::extension_pinned(&copied, material.manifest_sha256).unwrap();
+    let copied_verifier = cblc::verification::NativeExtensionVerifier::new(
+        options.clone(),
+        options,
+        copied_artifacts,
     )
     .unwrap();
-    verifier.verify(&statement, proof).unwrap();
+    copied_verifier.verify_anonymous(&statement, proof).unwrap();
     for name in ["circuits.json", "keys.json"] {
         let path = copied.join(name);
         let original = std::fs::read(&path).unwrap();
         let mut value: serde_json::Value = serde_json::from_slice(&original).unwrap();
-        // The extra group field is ignored by proof selection; the authenticated
-        // group hash must nevertheless refuse it.
         value["unrecognizedFixtureField"] = true.into();
         std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
-        let refused = verifier.verify(&statement, proof);
+        assert!(matches!(
+            crate::common::native::extension_pinned(&copied, material.manifest_sha256),
+            Err(cblc::Error::PolicyMismatch)
+        ));
+        copied_verifier.verify_anonymous(&statement, proof).unwrap();
         std::fs::write(&path, original).unwrap();
-        assert_eq!(refused, Err(cblc::Error::CryptoProvider));
     }
 }

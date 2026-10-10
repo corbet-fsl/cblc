@@ -8,7 +8,7 @@ use cblc::{
     accounting_service::{AccountService, AccountServiceRequest, AccountServiceResponse},
     extensions::*,
     pins::{PinSpendVerifier, SpentChange, change_binding},
-    verification::{ExtensionLimits, ProcessExtensionVerifier},
+    verification::{ExtensionLimits, NativeExtensionVerifier},
 };
 use cpns::{
     Fingerprint,
@@ -37,22 +37,7 @@ impl AccountProofVerifier for RejectLegacy {
         Err(Error::UnsupportedCapability)
     }
 }
-fn config(scope: AccountProofScope) -> cvfy::ProcessVerifierConfig {
-    cvfy::ProcessVerifierConfig {
-        node: std::env::split_paths(&std::env::var_os("PATH").unwrap())
-            .map(|p| p.join("node"))
-            .find(|p| p.is_absolute() && p.is_file())
-            .unwrap(),
-        script: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("runtime/extensions/node-verifier.mjs"),
-        artifact_config: PathBuf::from(std::env::args().nth(1).unwrap()),
-        scope,
-        timeout: Duration::from_secs(180),
-        maximum_parallel: 1,
-        max_proof_bytes: EXTENSION_PROOF_BYTES,
-        node_heap_megabytes: 4096,
-    }
-}
+
 fn main() {
     let fixture = common::Fixture::new();
     let directory = tempfile::tempdir().unwrap();
@@ -76,10 +61,15 @@ fn main() {
                         max_proof_bytes: EXTENSION_PROOF_BYTES,
                         checkpoint_period_seconds: 1000,
                     };
-                    let verifier = ProcessExtensionVerifier::new(
-                        config(proof_scope.clone()),
-                        config(proof_scope.clone()),
-                    )?;
+                    let artifacts = common::native::extension_config(&PathBuf::from(
+                        std::env::args().nth(1).unwrap(),
+                    ))?;
+                    if artifacts.scope() != proof_scope {
+                        return Err(Error::PolicyMismatch);
+                    }
+                    let options = common::native::options(1024 * 1024);
+                    let verifier =
+                        NativeExtensionVerifier::new(options.clone(), options, artifacts)?;
                     let mut opened = common::host_storage::open(
                         directory.path().join("issuer.db"),
                         fixture.trust.clone(),

@@ -1,5 +1,6 @@
 #[allow(dead_code)]
 pub mod host_storage;
+pub mod native;
 pub mod proofs;
 use cblc::admission::{AdmissionGrant, AdmissionTrust, DeviceAuthorization};
 use data_encoding::BASE64URL_NOPAD;
