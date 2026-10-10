@@ -6,6 +6,8 @@ pub mod accounting_ledger;
 mod accounting_policy;
 pub mod accounting_service;
 pub mod admission;
+pub mod artifacts;
+pub mod prepared;
 pub mod storage;
 pub use czkp::Error;
 pub mod extensions;

@@ -25,16 +25,20 @@ Surveyed crates.io and GitHub on 2026-09-30:
 
 | Candidate | Choice |
 | --- | --- |
-| [crlt](https://github.com/corbet-foss/crlt), [libsql](https://crates.io/crates/libsql) | crlt main already exposes community capabilities, transactions and indexed queries. Used only by test-owned host adapters; no database adapter is shipped by cblc. |
+| [crlt](https://git.corbet.ch/corbet-foss/crlt), [libsql](https://crates.io/crates/libsql) | crlt main already exposes community capabilities, transactions and indexed queries. Used only by test-owned host adapters; no database adapter is shipped by cblc. |
 | [Noir](https://github.com/noir-lang/noir), [Barretenberg](https://github.com/AztecProtocol/aztec-packages/tree/next/barretenberg) | Retain the existing pinned relation and upstream proof backend. No own cryptographic primitive. |
 | [Bulletproofs](https://github.com/dalek-cryptography/bulletproofs) | Not selected: changing proof systems would discard the existing tested receipt and state relation. |
 | [ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek), [sha2](https://crates.io/crates/sha2) | Retain established signing and hashing dependencies used by the protocol. |
-| [cssr](https://github.com/corbet-foss/cssr), [cvfy](https://github.com/corbet-foss/cvfy), [czkp](https://github.com/corbet-foss/czkp) | Extracted adapters are available on main before use as git dependencies. Substantive policy remains here under FSL. |
+| [cssr](https://git.corbet.ch/corbet-foss/cssr), [cvfy](https://git.corbet.ch/corbet-foss/cvfy), [czkp](https://git.corbet.ch/corbet-foss/czkp) | Extracted adapters are available on main before use as git dependencies. Substantive policy remains here under FSL. |
 
 The existing admission envelope is local protocol glue, not a dependency on
 cfrm or an assumed unreleased cvld API. `AccountProofVerifier` is the minimal
-trusted verifier boundary; `ProcessAccountVerifier` supplies the production
-adapter. Tests label synthetic upstream verifiers as storage-only tests.
+trusted verifier boundary; `NativeAccountVerifier` supplies the production
+adapter. It validates the existing signed statement in Rust and sends only ordered
+public field elements and proof bytes to the maintained native verifier.
+`NativeExtensionVerifier` performs the complete bounded ingestion-chain mapping in
+Rust. There is no production Node runtime or frontend. Test fixture SDK helpers
+are not exported server APIs. See [native verification](docs/NATIVE-VERIFIER.md).
 
 CI runs fmt, clippy with warnings denied, Rust integration tests and
 JavaScript contract tests. The legacy circuits and browser experiments remain
@@ -42,7 +46,7 @@ validation tooling, excluded from the server API. Real proof acceptance and
 storage tests have distinct evidence; historical reports are not new CI results.
 The three extension circuits prove punishment, inbox ingestion, change spends
 and quorum records. Member witness construction lives in
-[cwlt](https://github.com/corbet-foss/cwlt), with a native/wasm Rust planner and
+[cwlt](https://git.corbet.ch/corbet-foss/cwlt), with a native/wasm Rust planner and
 an adapter to the existing Noir/Barretenberg stack. Activation requires a real
 genesis probe through the pinned worker; no synthetic extension verifier ships.
 See [the extension contract](docs/EXTENSIONS.md) and
@@ -52,8 +56,8 @@ See [CONTRACT](docs/CONTRACT.md) and [migration](docs/MIGRATION.md).
 ## Extension proof validation
 
 The end-to-end suite is `tests/extensions-proof.mjs`. It uses cwlt's wasm Rust
-planner, real Noir/Barretenberg proofs, the cvfy process boundary, a local libSQL
-issuer through cssr, and cpns's atomic change API. It checks initial and established
+planner, real Noir/Barretenberg proofs, the native cvfy process boundary, a local libSQL
+issuer through a test-owned cssr adapter, and cpns's atomic change API. It checks initial and established
 punishment, forced ingestion, reordered deliveries, debt repayment, three outcome
 counters, quorum/rounding, exact pin binding and adversarial inputs. Fictional
 identities and keys are confined to the CI fixture.
@@ -96,7 +100,7 @@ rotation is a dual-signed continuity update, never a new accounting identity.
 Security dependency survey (2026-09-30): `cthl` main exposes bounded ephemeral
 rate limits over maintained `governor`; use its pinned API before anonymous proof
 verification. `cpns` main exposes `ChangeTokenVerifier` and atomic pin revision
-checks; use the pinned API for exact owner/member and change binding. The process
+checks; use the pinned API for exact owner/member and change binding. The native
 extension adapter allocates separate authenticated and anonymous cvfy pools.
 No alternate throttling algorithm or cryptographic primitive is implemented here.
 

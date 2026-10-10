@@ -1,6 +1,7 @@
 //! Transport-neutral authenticated account service and bounded real verifier.
 //! Member requests never supply clocks, checkpoints, executable paths or policy.
 
+use crate::artifacts::{AccountArtifacts, NativeVerifierOptions};
 use crate::{
     Error,
     accounting::{
@@ -10,22 +11,22 @@ use crate::{
     accounting_ledger::{AccountLedger, WaitingPeriodTuning},
     admission::{AdmissionGrant, DeviceAuthorization},
 };
-pub use cvfy::ProcessVerifierConfig;
 use serde::{Deserialize, Serialize};
 /// Adapter connecting policy public inputs to the generic proof verifier leaf.
 #[derive(Clone)]
-pub struct ProcessAccountVerifier(cvfy::ProcessVerifier);
-impl ProcessAccountVerifier {
-    pub fn new(config: ProcessVerifierConfig) -> Result<Self, Error> {
-        Ok(Self(cvfy::ProcessVerifier::new(config)?))
+pub struct NativeAccountVerifier(cvfy::NativeVerifier);
+impl NativeAccountVerifier {
+    pub fn new(options: NativeVerifierOptions, artifacts: AccountArtifacts) -> Result<Self, Error> {
+        Ok(Self(cvfy::NativeVerifier::new(artifacts.config(options))?))
     }
 }
-impl AccountProofVerifier for ProcessAccountVerifier {
+impl AccountProofVerifier for NativeAccountVerifier {
     fn scope(&self) -> AccountProofScope {
         self.0.scope()
     }
     fn verify(&self, statement: &AccountStatement, proof: &[u8]) -> Result<(), Error> {
-        self.0.verify(statement, proof)
+        self.0
+            .verify(&crate::prepared::account_inputs(statement)?, proof)
     }
 }
 

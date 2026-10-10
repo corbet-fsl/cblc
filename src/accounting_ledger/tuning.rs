@@ -77,6 +77,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     /// The host must authorize this operation separately from member requests.
     /// `expected_revision` prevents concurrent operators from overwriting a
     /// newer decision. New writes on stale ledger handles fail closed.
+    /// A late or uncertain commit may have stored the new revision even though
+    /// this returns an error. Call `reload_policy` to reconcile before deciding
+    /// another update; never assume the attempted tuning was rolled back.
     pub fn update_waiting_period(
         &mut self,
         expected_revision: u64,
@@ -113,7 +116,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         policy.account.reservation_deadline(now)?;
         transaction.put(b"config", &config)?;
         advance_clock(&mut transaction, now)?;
-        transaction.commit()?;
+        // reservation_deadline(now) above proved this subtraction is positive.
+        // Recheck the actual atomic decision after all host writes complete.
+        transaction.commit_before(&CommitDeadline::new(
+            &clock,
+            now,
+            policy.account.policy_valid_until - policy.account.abandon_after,
+        ))?;
         self.config = config;
         self.policy = policy;
         self.policy_digest = digest;

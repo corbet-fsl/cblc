@@ -6,6 +6,33 @@ The host implements `storage::AccountStorage::transaction(&mut self)` returning
 `Transaction::new(Box::new(host_transaction))`. Its `AtomicTransaction` implements
 byte-keyed `get`, `put`, `delete`, consuming `commit` and `rollback`.
 
+Fresh time-bounded operations also require the mandatory
+`AtomicTransaction::commit_before(&CommitDeadline)` port. The deadline contains
+the live trusted clock, a monotonic lower bound and exclusive expiry. The host
+calls `deadline.check()` after blocking reads/writes, immediately at its logical
+commit decision while the same write mutex/transaction lock is held. Checking
+once before lock acquisition or using a saved timestamp is insufficient. The
+RAM adapter checks under the upstream mutex before swapping staged records.
+The SQL adapter in tests checks at the serialized commit decision under its
+existing write lock; this is test-owned host code, never library SQL.
+
+Logical atomic linearization is distinct from later physical persistence or
+return latency. The library resamples again after the host returns. If a valid
+commit completes too late, it refuses fresh authority with `Expired`; the state
+may already be committed and is not described as rolled back. Reconcile using
+the original request ID or a newly authenticated status query. Exact historical
+retry does not mint fresh credit and retains its separate authorization checks.
+The deadline tracks successive observations, so a backward clock during commit
+also refuses the returned result. Host errors remain potentially uncertain.
+
+The same distinction applies to trusted waiting-period tuning. A late commit
+may store the new revision while the handle retains its old local snapshot.
+Call `AccountLedger::reload_policy()` to authenticate and adopt the committed
+configuration before another revision-based decision; reconstructing the
+ledger also loads the stored configuration. A stale snapshot fails closed.
+`AccountService::handle` reloads policy on entry. An error is not permission to
+issue another unconditional tuning operation.
+
 The transaction must serialize all reads/writes against other issuer instances
 and roll back on drop. Preserve the namespace/community binding, all-key atomicity,
 proof verification outside the transaction, and the library's mutable predicate
@@ -26,12 +53,11 @@ The current cssr dependency has no memory-only Cargo feature, so its database
 dependencies remain transitive build dependencies. No cssr database API is called
 by cblc production code. A future upstream feature can trim that build graph.
 
-The publication boundary reads explicitly configured public proof-artifact
-metadata from caller-supplied filesystem paths, with a 64 KiB bound per metadata
-file. It checks the manifest digest and configured circuit/key identities; the
-real verifier authenticates the complete proof artifacts. This read-only public
-configuration access creates no file cache and never persists member inputs,
-proof bytes, provider results or accounting state.
+The verifier and publication boundaries use authenticated public artifact
+snapshots supplied by the host in RAM. Circuit/key groups and the complete setup
+are hashed against an independently configured manifest pin before constructing
+the verifier. No cblc production path reads artifact files or caches member data.
+Filesystem loading, release pins and any artifact download belong to the host.
 
 All policy amounts, periods, circuits, verifier configuration, operator signing
 keys and trust roots are explicit caller inputs. No environment credential
@@ -39,7 +65,7 @@ lookup, commercial API, pricing endpoint or automatic provider fallback exists.
 Local proof verification consumes host compute; no external service fee is
 invented. A host introducing remote/billable verification must provide its own
 bound quote, budget authorization and atomic dispatch reservation before invoking
-that service; the current process verifier does not integrate such a provider.
+that service; the current native verifier does not integrate such a provider.
 
 Local simulation uses the real accounting planner/proof backend, explicit fixture
 keys/trust, and MemoryStore or a disposable test-owned database. Production must

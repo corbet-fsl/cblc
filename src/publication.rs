@@ -6,7 +6,6 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-pub(crate) mod binding;
 
 /// Strict payload purpose inside the existing SettingsSnapshot envelope kind.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

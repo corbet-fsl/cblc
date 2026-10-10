@@ -42,14 +42,14 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     pub fn with_extensions(
         mut self,
         policy: ExtensionPolicy,
-        verifier: crate::verification::ProcessExtensionVerifier,
+        verifier: crate::verification::NativeExtensionVerifier,
         limits: crate::verification::ExtensionLimits,
         activation: crate::extensions::ExtensionActivation,
     ) -> Result<Self, Error> {
         policy.validate()?;
         let budget = crate::verification::Budget::new(&self.trust.community_id, limits)?;
         let scope = verifier.scope();
-        // ProcessExtensionVerifier construction already rejects zero digests.
+        // NativeExtensionVerifier construction already authenticates both digests.
         if scope == self.proof_scope {
             return Err(Error::PolicyMismatch);
         }
@@ -76,8 +76,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             &activation.proof,
         )?;
         #[cfg(feature = "publication")]
-        let artifact_binding =
-            crate::publication::binding::configured(&verifier.artifact_config, &scope)?;
+        let artifact_binding = verifier.artifact_binding.clone();
         let config =
             serde_json::to_vec(&(policy.clone(), &scope)).map_err(|_| Error::InvalidInput)?;
         let mut tx = self.connection.transaction()?;
@@ -88,8 +87,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.put(b"extensions", &config)?;
         tx.commit()?;
         self.extensions = Some(Extensions {
-            #[cfg(feature = "publication")]
-            artifact_config: verifier.artifact_config.clone(),
             #[cfg(feature = "publication")]
             artifact_binding,
             policy,

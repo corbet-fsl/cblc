@@ -89,7 +89,7 @@ pub use czkp::ProofScope as AccountProofScope;
 /// Security-critical host dependency, configured independently of a request.
 /// `verify` must verify the actual proof against *all* supplied public inputs
 /// with the circuit and VK named by `scope`. There is no permissive default.
-/// Hosts use the shipped process adapter; test wrappers preserve real verification.
+/// Hosts use the shipped native adapter; test wrappers preserve real verification.
 pub trait AccountProofVerifier {
     fn scope(&self) -> AccountProofScope;
     fn verify(&self, statement: &AccountStatement, proof: &[u8]) -> Result<(), Error>;

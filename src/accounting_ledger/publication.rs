@@ -17,12 +17,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             .extensions
             .as_ref()
             .ok_or(Error::UnsupportedCapability)?;
-        let binding = crate::publication::binding::configured(
-            &extensions.artifact_config,
-            &extensions.verifier.scope(),
-        )?;
-        if binding != extensions.artifact_binding || binding.certificate_key != issuer.public_key()
-        {
+        let binding = &extensions.artifact_binding;
+        if binding.certificate_key.as_slice() != issuer.public_key() {
             return Err(Error::PolicyMismatch);
         }
         let mut transaction = self.connection.transaction()?;
@@ -40,7 +36,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             proof_scope: extensions.verifier.scope(),
             manifest_sha256: binding.manifest_sha256,
             account_response_key: self.operator.verifying_key().to_bytes(),
-            certificate_key: binding.certificate_key,
+            certificate_key: binding.certificate_key.to_vec(),
         };
         material.validate(&self.trust.community_id)?;
         Ok(material)

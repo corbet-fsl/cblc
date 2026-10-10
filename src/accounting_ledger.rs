@@ -18,7 +18,7 @@ use crate::{
         AdmissionGrant, AdmissionTrust, DeviceAuthorization, MAX_INTEGER, decode, signature,
         verify_admission, verify_device_authorization,
     },
-    storage::{AccountStorage, Transaction, key},
+    storage::{AccountStorage, CommitDeadline, Transaction, key},
 };
 use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};
@@ -352,7 +352,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::Replay);
             }
             advance_clock(&mut transaction, now)?;
-            transaction.commit()?;
+            transaction.commit_before(&CommitDeadline::new(
+                &clock,
+                now,
+                grant.expires_at.min(authorization.expires_at),
+            ))?;
             return Ok(result);
         }
         check_config(&mut transaction, &self.config)?;
@@ -413,7 +417,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::Replay);
             }
             advance_clock(&mut transaction, completed)?;
-            transaction.commit()?;
+            transaction.commit_before(&CommitDeadline::new(
+                &clock,
+                completed,
+                grant.expires_at.min(authorization.expires_at),
+            ))?;
             return Ok(result);
         }
         check_config(&mut transaction, &self.config)?;
@@ -467,7 +475,16 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         // Replace the latest signed acceptance; no historical request table is retained.
         transaction.put(&key(2, &[&statement.owner]), &acceptance)?;
         advance_clock(&mut transaction, completed)?;
-        transaction.commit()?;
+        // Both operands are bounded by MAX_INTEGER, so the next slot boundary
+        // is below 2 * MAX_INTEGER and cannot overflow u64.
+        let checkpoint_end = (statement.now / self.policy.checkpoint_period_seconds + 1)
+            * self.policy.checkpoint_period_seconds;
+        let expires_at = request
+            .expires_at
+            .min(checkpoint_end)
+            .min(grant.expires_at)
+            .min(authorization.expires_at);
+        transaction.commit_before(&CommitDeadline::new(&clock, completed, expires_at))?;
         Ok(acceptance)
     }
 
@@ -542,7 +559,14 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 .to_bytes(),
         );
         advance_clock(&mut transaction, now)?;
-        transaction.commit()?;
+        transaction.commit_before(&CommitDeadline::new(
+            &clock,
+            now,
+            request
+                .expires_at
+                .min(grant.expires_at)
+                .min(authorization.expires_at),
+        ))?;
         Ok(response)
     }
 }

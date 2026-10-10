@@ -44,6 +44,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         )?;
         let result = read(&mut tx, &self.operator, now)?;
         tx.rollback()?;
+        CommitDeadline::new(&clock, now, request.expires_at).check()?;
         Ok(result)
     }
 

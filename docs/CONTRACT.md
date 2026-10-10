@@ -30,6 +30,15 @@ All mutable accounting checks and writes remain in the same atomic transaction.
 Dropping without commit rolls back; uncertain commit requires exact idempotent
 retry. See [STORAGE.md](STORAGE.md). Async services use a blocking executor.
 
+Fresh account transitions pass a live `CommitDeadline` to the mandatory host
+`commit_before` operation, bounded by request/authority expiry and the common
+checkpoint slot. The host checks under its transaction lock at the logical
+commit decision after all blocking work; cblc checks again after return.
+Successful but late commits remain committed and reconcile by exact identity;
+they return no fresh acceptance. Status and authenticated reads likewise refuse
+responses whose authorization expires while host work is in progress. Physical
+durability latency is not claimed to be the logical decision timestamp.
+
 Reciprocity v2 preserves reservations in both directions, prepared/active
 separation, Answer refunds, recipient Close, fixed original outgoing deadlines,
 one common budget, admission windows, bounded refill, no catch-up issuance and
@@ -78,9 +87,9 @@ recovery of the last accepted response.
 current-state and replay checks run before anonymous proof verification; cthl
 then admits global and per-subject work. Limits are ephemeral and reset with the
 handle, so composition must reuse its handle and enforce transport-level limits.
-`ProcessExtensionVerifier` uses independent cvfy process pools for authenticated
+`NativeExtensionVerifier` uses independent cvfy process pools for authenticated
 updates and anonymous deposits/record checks. The extension trait is sealed;
-activation accepts the shipped process adapter and a real genesis probe. Host
+activation accepts the shipped native adapter and a real genesis probe. Host
 configuration of the executable and artifacts remains trusted.
 
 `pins::change_binding` length-prefixes community, canonical cpsd member hex and
@@ -139,16 +148,19 @@ The canonical document implements Beacon's `document::Document`, requiring the
 protected `SettingsSnapshot` kind, strict `cblc.public-verifier.v1` purpose and
 community issuer. It contains only public owner policies/bounds, their digest,
 proof scope, manifest SHA256 and actual account/certificate public keys. Its
-manifest binding is captured after real activation and must still match the
-configured files, proof scope and certificate issuer at publication. Current
+manifest binding is authenticated from host-supplied RAM snapshots before
+activation and binds the active proof scope and certificate issuer at publication.
+Later filesystem changes cannot alter an already authenticated verifier; changing
+artifacts requires explicit reconstruction and successful activation. Current
 ledger and extension database configuration are checked transactionally.
 
 Consumers authenticate original signed bytes with their independently configured
 Charter/Policy ring and monotonic publication floors through Beacon, then call
 `validate_at(expected_community, now)` for economic-policy validity. A ring carried
 by a response is never publication authority. The existing verifier configuration
-uses the authenticated manifest hash and scope; its worker authenticates the
-entire circuit/key groups and setup files before real proof verification.
+uses the authenticated manifest hash and scope. Rust authenticates the complete
+circuit/key groups and setup snapshots before constructing the native verifier.
+No library artifact-file or network lookup occurs during proof verification.
 
 This document contains no member, account version, inbox observation or record
 certificate. It authenticates material, never current membership or the absence
