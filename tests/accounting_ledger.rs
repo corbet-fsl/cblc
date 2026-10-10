@@ -5,6 +5,8 @@ mod bounds;
 mod common;
 #[path = "accounting_ledger/integrity.rs"]
 mod integrity;
+#[path = "accounting_ledger/recipient.rs"]
+mod recipient;
 #[path = "accounting_ledger/refusals.rs"]
 mod refusals;
 #[path = "accounting_ledger/wire.rs"]

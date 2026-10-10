@@ -35,6 +35,7 @@ mod clock_tests;
 
 mod extensions;
 mod obligations;
+pub mod record_epoch;
 mod rotation;
 use rotation::check_root;
 pub use rotation::{RootRotation, root_rotation_bytes};
