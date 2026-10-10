@@ -51,13 +51,14 @@ pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> Publi
         ledger.public_verifier_material(1, 1, &wrong_issuer),
         Err(cblc::Error::PolicyMismatch)
     );
-    // Changing even semantically equivalent manifest bytes after real activation
-    // cannot silently replace the producer's authenticated artifact binding.
+    // Host files cannot replace the activated ledger's authenticated RAM snapshot.
+    // Fresh authentication must independently reject a changed manifest at its
+    // original pin, including a semantically equivalent JSON representation.
     let configured_path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".extension-test/config.json");
     let saved_config = std::fs::read(&configured_path).unwrap();
     let mut configuration: serde_json::Value = serde_json::from_slice(&saved_config).unwrap();
-    let old_directory = std::path::Path::new(configuration["directory"].as_str().unwrap());
+    let old_directory = std::path::PathBuf::from(configuration["directory"].as_str().unwrap());
     let mut manifest = std::fs::read(old_directory.join("manifest.json")).unwrap();
     manifest.push(b' ');
     let changed_directory = tempfile::tempdir().unwrap();
@@ -74,7 +75,22 @@ pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> Publi
     .unwrap();
     let changed_binding = ledger.public_verifier_material(1, 1, &issuer);
     std::fs::write(&configured_path, saved_config).unwrap();
-    assert_eq!(changed_binding, Err(cblc::Error::PolicyMismatch));
+    assert_eq!(changed_binding, Ok(material.clone()));
+    let circuit = std::fs::read(old_directory.join("circuits.json")).unwrap();
+    let keys = std::fs::read(old_directory.join("keys.json")).unwrap();
+    let srs_g1 = std::fs::read(old_directory.join("setup/g1.dat")).unwrap();
+    let srs_g2 = std::fs::read(old_directory.join("setup/g2.dat")).unwrap();
+    assert!(matches!(
+        cblc::artifacts::ExtensionArtifacts::authenticate(cblc::artifacts::ArtifactBytes {
+            manifest: &manifest,
+            manifest_sha256: material.manifest_sha256,
+            circuit: &circuit,
+            keys: &keys,
+            srs_g1: &srs_g1,
+            srs_g2: &srs_g2,
+        }),
+        Err(cblc::Error::PolicyMismatch)
+    ));
     for variant in 0..18 {
         let mut invalid = material.clone();
         match variant {

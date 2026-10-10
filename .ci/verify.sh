@@ -103,6 +103,8 @@ CBLC_LAST_GATE="replay"
 node .ci/replay-account-proofs.ts
 CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/replay-extensions.mjs | tee -a "$proof_fixture_evidence"
 CBLC_LAST_GATE="adversaries"
+python3 -B .ci/test-extension-scope-output.py
+python3 -B .ci/test-extension-scope-regression.py
 cargo run --locked --all-features --example extension_adversaries | tee -a "$proof_fixture_evidence"
 if ! "$proof_cache_hit"; then
   python3 .ci/proof-cache.py publish --cache "$proof_fixture_cache" --evidence "$proof_fixture_evidence" --generation-commit "$CI_COMMIT_SHA"

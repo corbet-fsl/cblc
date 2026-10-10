@@ -47,16 +47,36 @@ fn activation(init: &Value) -> ExtensionActivation {
             .unwrap(),
     }
 }
+struct ScopeCollisionVerifier {
+    scope: AccountProofScope,
+    actual: RealVerifier,
+}
+impl AccountProofVerifier for ScopeCollisionVerifier {
+    fn scope(&self) -> AccountProofScope {
+        self.scope.clone()
+    }
+    fn verify(&self, statement: &AccountStatement, proof: &[u8]) -> Result<(), Error> {
+        self.actual.verify(statement, proof)
+    }
+}
 fn base(
     path: &Path,
     fixture: &Fixture,
     settings: AccountLedgerPolicy,
 ) -> AccountLedger<RealVerifier> {
+    base_with_verifier(path, fixture, settings, RealVerifier::default())
+}
+fn base_with_verifier<V: AccountProofVerifier>(
+    path: &Path,
+    fixture: &Fixture,
+    settings: AccountLedgerPolicy,
+    account_verifier: V,
+) -> AccountLedger<V> {
     let ledger = common::host_storage::open(
         path,
         fixture.trust.clone(),
         settings,
-        RealVerifier::default(),
+        account_verifier,
         SigningKey::from_bytes(&[9; 32]),
     )
     .unwrap();
@@ -124,13 +144,41 @@ fn main() {
         checkpoint_period_seconds: 1000,
     };
     let fixture = Fixture::new();
-    for variant in 0..6 {
+    // The authenticated native scope stays honest. Only this refusal fixture
+    // misconfigures the host's legacy side with that same scope. Cryptography
+    // still delegates to the real verifier if legacy verification is requested.
+    let temporary = tempfile::tempdir().unwrap();
+    let actual = RealVerifier::default();
+    let calls = actual.calls.clone();
+    let result = base_with_verifier(
+        &temporary.path().join("scope-collision.db"),
+        &fixture,
+        settings.clone(),
+        ScopeCollisionVerifier {
+            scope: scope.clone(),
+            actual,
+        },
+    )
+    .with_extensions(
+        extension.clone(),
+        verifier(scope.clone(), &directory),
+        limits(),
+        activation(init),
+    );
+    assert!(
+        matches!(result, Err(Error::PolicyMismatch)),
+        "equal account and extension scopes must refuse activation"
+    );
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    println!("Equal account and extension scopes refused activation");
+    if std::env::args().nth(1).as_deref() == Some("--equal-scope-only") {
+        return;
+    }
+    for variant in 1..6 {
         let temporary = tempfile::tempdir().unwrap();
         let mut configured = settings.clone();
         let mut probe = activation(init);
-        let mut configured_scope = scope.clone();
         match variant {
-            0 => configured_scope = RealVerifier::default().scope(),
             1 => configured.max_proof_bytes = EXTENSION_PROOF_BYTES - 1,
             2 => probe.account.genesis = false,
             3 => probe.account.community[0] ^= 1,
@@ -140,13 +188,11 @@ fn main() {
         let result = base(&temporary.path().join("refusal.db"), &fixture, configured)
             .with_extensions(
                 extension.clone(),
-                verifier(configured_scope, &directory),
+                verifier(scope.clone(), &directory),
                 limits(),
                 probe,
             );
-        assert!(
-            matches!(result, Err(error) if error == if variant == 0 { Error::PolicyMismatch } else { Error::InvalidInput })
-        );
+        assert!(matches!(result, Err(Error::InvalidInput)));
     }
     let temporary = tempfile::tempdir().unwrap();
     let path = temporary.path().join("active.db");
