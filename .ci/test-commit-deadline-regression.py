@@ -47,6 +47,14 @@ CONTROLS = (
         b"observed.load(Ordering::Acquire)",
         "observations retained across calls",
     ),
+    (
+        "src/accounting_ledger.rs",
+        "accounting_ledger::clock_tests::ledger_clock_numeric_bounds_and_floor_are_checked",
+        "tests/internal/ledger_clock.rs",
+        b"if now == 0 || now < floor || now > MAX_INTEGER {",
+        b"if now == 0 || now < floor {",
+        "bounded ledger clock integer",
+    ),
 )
 
 

@@ -487,6 +487,44 @@ fn main() {
             )
             .is_ok()
     );
+    // The request expires while admission, device authority, and policy stay live.
+    let mut expired_read = observed.clone();
+    expired_read.expires_at = now + 1;
+    expired_read.signature = B64.encode(
+        &fixture
+            .device
+            .sign(&cblc::obligations::request_bytes(&expired_read).unwrap())
+            .to_bytes(),
+    );
+    let grant = fixture.grant(7, &fixture.device);
+    let authority = fixture.authorize(7, &fixture.device);
+    assert!(expired_read.expires_at < grant.expires_at);
+    assert!(expired_read.expires_at < authority.expires_at);
+    assert!(expired_read.expires_at < settings.account.policy_valid_until);
+    let mut expiry_probe = open_probe();
+    assert!(
+        expiry_probe
+            .authenticated_obligations(&grant, &authority, &expired_read, || now)
+            .is_ok()
+    );
+    let calls = Cell::new(0);
+    assert!(matches!(
+        expiry_probe.authenticated_obligations(&grant, &authority, &expired_read, || {
+            let call = calls.get();
+            calls.set(call + 1);
+            if call == 0 {
+                now
+            } else {
+                expired_read.expires_at
+            }
+        }),
+        Err(Error::Expired)
+    ));
+    assert_eq!(
+        calls.get(),
+        2,
+        "exclusive expiry must refuse before reading"
+    );
     let mut late_read = open_probe();
     let calls = Cell::new(0);
     assert!(matches!(
