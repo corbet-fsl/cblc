@@ -118,15 +118,16 @@ node tests/replay-extensions.mjs
 adversaries="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "extension_adversaries" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one adversary executable") end' instrumented-build.json)"
 CBLC_LAST_GATE="nightly-adversaries"
 "$adversaries"
+# The environment above remains active in this shell. Unlike separate GitHub
+# Actions steps, reports must not source show-env again: cargo-llvm-cov can
+# record its own compiler wrapper as the predecessor and recursively invoke it.
+# Only report/clean are supported inside the environment produced by show-env.
 # Retain raw coverage even when a real execution fails (CI: if always()).
-source <("$NIGHTLY_CARGO" llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
 CBLC_LAST_GATE="coverage-report"
 "$NIGHTLY_CARGO" llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --json --output-path coverage.json
 # Retain source coverage diagnostics from the same execution (CI: if always()).
-source <("$NIGHTLY_CARGO" llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
 "$NIGHTLY_CARGO" llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --lcov --output-path coverage.lcov
 # Retain independent annotated source inventory (CI: if always()).
-source <("$NIGHTLY_CARGO" llvm-cov show-env --sh --branch --no-cfg-coverage --no-cfg-coverage-nightly)
 "$NIGHTLY_CARGO" llvm-cov report --branch --ignore-filename-regex '/tests/|/examples/' --text --output-path coverage.txt
 )
 # Require complete source line and branch coverage.
