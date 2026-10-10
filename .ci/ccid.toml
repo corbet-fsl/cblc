@@ -15,7 +15,7 @@ project = "cblc"
 kind = "commands"
 commands = [["bash", ".ci/verify.sh"]]
 cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["node", "--version"], ["python3", "--version"], ["wasm-pack", "--version"], ["jq", "--version"], ["clang", "--version"], ["pkg-config", "--version"]]
-cache_env = ["LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
+cache_env = ["BB_LIB_DIR", "BB_NATIVE_RUSTFLAGS", "LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
 cache_outputs = ["coverage.json", "coverage.lcov", "coverage.txt", "dependency-metadata.json", "instrumented-build.json", "runtime-coverage/coverage-final.json", "runtime-coverage/coverage-summary.json", "runtime-coverage/lcov.info", "runtime-coverage/v8.json.tar.gz"]
 
 [checks.advisories]

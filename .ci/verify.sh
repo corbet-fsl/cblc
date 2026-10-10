@@ -12,6 +12,7 @@ exec 2>&1
 # to a stale earlier label. Earlier stages keep init.
 CBLC_LAST_GATE="init"
 trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "CBLC-DIAG last_gate=$CBLC_LAST_GATE exit=$rc"; fi; exit "$rc"' EXIT
+export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }${BB_NATIVE_RUSTFLAGS:?Missing native loader configuration}"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
 export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
@@ -31,6 +32,7 @@ python3 -B .ci/check-native-sdk.py
 rustc --version
 cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }
 cargo clippy --locked --all-targets --all-features -- -D warnings
+python3 -B .ci/test-commit-deadline-regression.py
 cargo build --locked --example czkp_bb_worker
 cblc_target_dir="${CARGO_TARGET_DIR:-target}"
 export CBLC_BB="$(realpath "$cblc_target_dir/debug/examples/czkp_bb_worker")"
@@ -75,7 +77,7 @@ cargo test --locked --all-features --no-fail-fast -- --test-threads=2 | tee -a "
   node runtime/extensions/compile.mjs
 )
 CBLC_LAST_GATE="wasm-pack-build"
-wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
+env -u RUSTFLAGS wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
 CBLC_LAST_GATE="issuer-build"
 cargo build --locked --example extension_issuer
 mkdir -p .extension-test

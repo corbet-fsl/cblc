@@ -27,6 +27,9 @@ in pkgs.mkShell {
   ];
   LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
   BB_LIB_DIR = "${bbLibrary}/lib";
+  # The worker clears its environment. Embed the host-provisioned loader path
+  # in native binaries instead of forwarding LD_LIBRARY_PATH to requests.
+  BB_NATIVE_RUSTFLAGS = "-C link-arg=-Wl,-rpath,${pkgs.lib.makeLibraryPath [ pkgs.llvmPackages.libcxx ]}";
   shellHook = ''
     export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.llvmPackages.libclang.lib pkgs.llvmPackages.libcxx ]}:''${LD_LIBRARY_PATH:-}";
   '';
