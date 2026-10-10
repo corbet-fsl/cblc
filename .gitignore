@@ -7,3 +7,6 @@
 .extension-test/
 .extension-wasm/
 dependency-metadata.json
+
+.runtime-v8/
+runtime-coverage/

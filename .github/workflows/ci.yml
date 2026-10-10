@@ -115,7 +115,7 @@ jobs:
       with:
         path: .proof-test
         key: proofs-v1-${{ runner.os }}-${{ hashFiles('experiments/private-accounting/account-state/**',
-          'runtime/accounting/**', 'tests/real-proof.mjs', 'tests/holder/**', 'package*.json')
+          'runtime/**', 'tests/real-proof.mjs', 'tests/holder/**', 'tests/runtime/**', 'package*.json')
           }}
     - if: steps.proof-cache.outputs.cache-hit != 'true'
       run: node tests/real-proof.mjs
@@ -130,7 +130,7 @@ jobs:
       with:
         path: .extension-test
         key: extension-public-v1-${{ runner.os }}-${{ hashFiles('circuits/extensions/**',
-          'runtime/extensions/**', 'tests/extensions-proof.mjs', 'tests/holder/extension-checkpoint.mjs', 'tests/common/mod.rs',
+          'runtime/**', 'tests/runtime/**', 'tests/extensions-proof.mjs', 'tests/holder/extension-checkpoint.mjs', 'tests/common/mod.rs',
           'examples/extension_issuer.rs', 'package*.json') }}
     - run: node runtime/extensions/compile.mjs
       if: steps.extension-cache.outputs.cache-hit != 'true'
@@ -232,6 +232,7 @@ jobs:
     - run: 'rustc --version
 
         cargo llvm-cov --version'
+    - run: npm test
     - name: Measure real native round trips and failure paths
       run: |
         set -euo pipefail
@@ -264,6 +265,10 @@ jobs:
       run: |
         python3 .github/test-source-coverage.py
         python3 .github/check-source-coverage.py coverage.lcov coverage.json coverage.txt
+    - name: Measure all owned JavaScript and TypeScript runtime paths
+      run: |
+        env -u NODE_V8_COVERAGE npm run coverage:runtime:report
+        tar -czf runtime-coverage/v8.json.tar.gz -C .runtime-v8 .
     - uses: actions/upload-artifact@v4
       if: always()
       with:
@@ -278,9 +283,12 @@ jobs:
 
           coverage.txt
 
-          instrumented-build.json'
+          instrumented-build.json
+
+          runtime-coverage/'
         retention-days: 7
     env:
+      NODE_V8_COVERAGE: ${{ github.workspace }}/.runtime-v8
       CBLC_PROOF_DIRECTORY: ${{ github.workspace }}/.proof-test
 'on':
   push:

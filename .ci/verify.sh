@@ -31,6 +31,11 @@ cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint
 npm ci --ignore-scripts --no-audit --no-fund
+# V8 instrumentation is explicit test-only host state. The worker inherits it,
+# so existing real native tests/replays measure the shipped JS/TS verifier too.
+test ! -e .runtime-v8 || { echo 'Stale runtime coverage directory' >&2; exit 2; }
+mkdir .runtime-v8
+export NODE_V8_COVERAGE="$PWD/.runtime-v8"
 npm test
 # As in source CI, reuse only complete fictional public proof fixtures. The
 # stronger local key also binds all Rust code/locks and this cache machinery.
@@ -150,3 +155,8 @@ CBLC_LAST_GATE="coverage-report"
 CBLC_LAST_GATE="coverage-check"
 python3 .github/test-source-coverage.py
 python3 .github/check-source-coverage.py coverage.lcov coverage.json coverage.txt
+
+CBLC_LAST_GATE="runtime-coverage-report"
+unset NODE_V8_COVERAGE
+npm run coverage:runtime:report
+tar -czf runtime-coverage/v8.json.tar.gz -C .runtime-v8 .

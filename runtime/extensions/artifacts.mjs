@@ -1,16 +1,16 @@
-import {readFile,stat} from 'node:fs/promises';
+import {boundedFile as bounded} from '../bounded-file.ts';
 import {resolve,isAbsolute} from 'node:path';
 import {createHash} from 'node:crypto';
 import {unhex} from '@corbet-labs/czkp/encoding';
 const digest=b=>createHash('sha256').update(b).digest('hex');
-async function bounded(path,max) {if((await stat(path)).size>max)throw new Error('Artifact bound');const b=await readFile(path);if(b.length>max)throw new Error('Artifact bound');return b;}
+const json=bytes=>JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
 export async function loadArtifacts(configPath) {
   if(!isAbsolute(configPath))throw new Error('Absolute trusted artifact configuration required');
-  const config=JSON.parse(await bounded(configPath,65536));
+  const config=json(await bounded(configPath,65536));
   if(!isAbsolute(config.directory))throw new Error('Absolute artifact directory required');
   const manifestBytes=await bounded(resolve(config.directory,'manifest.json'),65536);
   if(digest(manifestBytes)!==config.manifestSha256)throw new Error('Manifest authentication');
-  const manifest=JSON.parse(manifestBytes);
+  const manifest=json(manifestBytes);
   if(manifest.version!==1||manifest.accountingMode!=='account-extension-v1'||manifest.compiler!=='1.0.0-beta.26'||manifest.backend!=='5.0.0'||manifest.verifierTarget!=='noir-recursive')throw new Error('Extension artifact suite');
   const circuitBytes=await bounded(resolve(config.directory,'circuits.json'),64*1024*1024),vkBytes=await bounded(resolve(config.directory,'keys.json'),1024*1024);
   if(digest(circuitBytes)!==manifest.circuitSha256||digest(vkBytes)!==manifest.vkSha256)throw new Error('Artifact authentication');
@@ -21,7 +21,7 @@ export async function loadArtifacts(configPath) {
     if(data.length!==spec.bytes||digest(data)!==spec.sha256)throw new Error('Setup authentication');setup[spec.name]=data;
   }
   if(!setup['g1.dat']||!setup['g2.dat']||manifest.numPoints*32!==setup['g1.dat'].length||setup['g2.dat'].length!==128)throw new Error('Setup completeness');
-  const circuits=JSON.parse(circuitBytes),keys=JSON.parse(vkBytes);
+  const circuits=json(circuitBytes),keys=json(vkBytes);
   return {manifest,scope:{circuitDigest:Array.from(unhex(manifest.circuitSha256)),verifyingKeyDigest:Array.from(unhex(manifest.vkSha256))},
     artifacts(kind){if(!['update','deposit','record'].includes(kind))throw new Error('Circuit domain');
       return {manifest,circuit:circuits[kind],verificationKey:unhex(keys[kind]),setup,limits:{memoryPages:65536,maxProofBytes:1024*1024}};}};

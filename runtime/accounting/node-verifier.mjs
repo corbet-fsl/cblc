@@ -1,24 +1,8 @@
 // One bounded worker. Only public proofs enter stdin. Configuration is operator-owned.
-import { open } from 'node:fs/promises';
+import {boundedFile} from '../bounded-file.ts';
 import { resolve, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createAccountVerifier } from './runtime.mjs';
-
-async function boundedFile(path, maximum) {
-  const file = await open(path, 'r');
-  try {
-    const stat = await file.stat();
-    if (!stat.isFile() || stat.size > maximum) throw new Error('Artifact file bound');
-    const data = new Uint8Array(stat.size + 1);
-    let offset = 0;
-    while (offset < data.length) {
-      const { bytesRead } = await file.read(data, offset, data.length - offset, null);
-      if (!bytesRead) break; offset += bytesRead;
-    }
-    if (offset !== stat.size) throw new Error('Artifact changed while reading');
-    return data.slice(0, offset);
-  } finally { await file.close(); }
-}
 
 export async function nodeArtifactOptions(configPath) {
   if (!isAbsolute(configPath)) throw new Error('Absolute trusted configuration path required');

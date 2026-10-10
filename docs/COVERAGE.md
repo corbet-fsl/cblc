@@ -1,6 +1,6 @@
 # Coverage contract
 
-CI targets 100% of reachable production lines and branches. Stable Rust runs
+CI requires 100% of reachable production Rust lines and branches. Stable Rust runs
 the existing native and wasm checks. Nightly Rust is used only for LLVM branch
 instrumentation, which currently requires it. Both jobs use the same resolved
 Cargo.lock snapshot; all build and test commands after resolution use --locked.
@@ -144,3 +144,28 @@ publication floors. Its complete copied artifact directory must verify before
 tampering, avoiding a false pass caused by absent setup files. Pure bounded
 metadata parsing uses the original public manifest and real malformed files;
 it never supplies a successful proof verdict. No new production exclusion exists.
+
+## Runtime language inventory
+
+The Rust percentage above measures only `src/**/*.rs`. The shipped Node workers,
+artifact loading and public-statement adapters in `runtime/` are separately
+measured with [Node V8 instrumentation](https://nodejs.org/api/cli.html#node_v8_coveragedir)
+and maintained [c8](https://github.com/bcoe/c8). Existing unit tests, real-proof
+Rust tests and current issuer replays run with explicit test-only instrumentation.
+`c8 --all` includes every `.mjs`/`.ts` runtime file, including completely unloaded
+files, without source exclusions. The job retains V8 data, detailed JSON, summary
+and LCOV. This initial measurement does not imply that JavaScript reaches the
+Rust gate's 100% target; any remaining counters are reported as gaps, not passed
+or excluded. Compile/proof-check helpers remain visible in this broad inventory.
+
+Owned Noir source under `circuits/` and the legacy account relation is exercised
+by real witness/proof generation and adversarial verification. No Noir source
+line/branch instrumentation is configured, so these tests do not establish a
+circuit coverage percentage or cryptographic completeness. Explicit unsupported
+accounting integrations remain refusals regardless of Rust coverage.
+
+Both workers use one fixed-allocation public artifact reader. Tests race actual
+filesystem growth/truncation immediately after fstat, verify the sentinel bound
+and closed handles, and reject oversized files/directories. This closes the
+extension reader's prior stat/readFile allocation race without changing proof
+relations or trusting a synthetic verification result.
