@@ -268,3 +268,102 @@ fn missing_or_malformed_pinned_keys_are_not_native_verifiers() {
         Err(Error::InvalidInput)
     ));
 }
+
+#[test]
+fn optional_original_r2_key_is_authenticated_distinct_and_never_substituted() {
+    let mut fixture = Fixture::new(true);
+    let legacy = fixture.extension().unwrap();
+    assert!(legacy.record_epoch_config(options()).is_none());
+    fixture.keys =
+        br#"{"update":"0102","deposit":"0304","record":"0506","record_epoch":"0708"}"#.to_vec();
+    // Adding a capability cannot evade the existing independent manifest pin.
+    assert!(matches!(fixture.extension(), Err(Error::PolicyMismatch)));
+    fixture.manifest["vkSha256"] = json!(hash(&fixture.keys));
+    let artifacts = fixture.extension().unwrap();
+    let config = artifacts.record_epoch_config(options()).unwrap();
+    assert_eq!(config.verification_key, [7, 8]);
+    assert_eq!(config.max_public_inputs, 303);
+    assert_eq!(
+        config.scope.circuit_digest,
+        artifacts.scope().circuit_digest
+    );
+    assert_eq!(
+        config.scope.verifying_key_digest,
+        <[u8; 32]>::from(Sha256::digest([7, 8]))
+    );
+    assert_ne!(
+        artifacts.scope().verifying_key_digest,
+        legacy.scope().verifying_key_digest
+    );
+    assert_eq!(config.srs_g1, vec![7; 4 * 1024 * 1024]);
+    assert_eq!(config.srs_g2, [8; 128]);
+    // The native input is immutable even when host-owned download bytes change.
+    fixture.keys.clear();
+    assert_eq!(
+        artifacts
+            .record_epoch_config(options())
+            .unwrap()
+            .verification_key,
+        [7, 8]
+    );
+    for malformed in ["", "xyz", "0", "AB"] {
+        let mut fixture = Fixture::new(true);
+        fixture.keys = serde_json::to_vec(
+            &json!({"update":"01", "deposit":"02", "record":"03", "record_epoch":malformed}),
+        )
+        .unwrap();
+        fixture.manifest["vkSha256"] = json!(hash(&fixture.keys));
+        assert!(
+            matches!(fixture.extension(), Err(Error::InvalidInput)),
+            "{malformed}"
+        );
+    }
+}
+
+#[test]
+fn legacy_group_cannot_route_r2_to_a_legacy_key_or_native_worker() {
+    use crate::extensions::{ExtensionPolicy, ExtensionStatement, ExtensionVerifier};
+    let artifacts = Fixture::new(true).extension().unwrap();
+    let verifier =
+        crate::verification::NativeExtensionVerifier::new(options(), options(), artifacts).unwrap();
+    let statement = ExtensionStatement::RecordEpoch {
+        policy: ExtensionPolicy {
+            revision: 1,
+            public_record_quorum: 1,
+            change_token_cost: 1,
+            deposit_delay_seconds: 1,
+            minimum_deposit_batch: 2,
+        },
+        record: czkp::record::Record {
+            epoch: czkp::record::Epoch {
+                purpose: czkp::record::Purpose::RecordEpochV3,
+                community: [1; 32],
+                policy_epoch: 1,
+                epoch: 1,
+                starts_at: 1,
+                expires_at: 2,
+                root: [2; 32],
+                issuer_key: [3; 32],
+                proof_scope: verifier.scope(),
+                leaf_count: 1,
+                download_digest: [4; 32],
+                download_bytes: 1,
+            },
+            owner: [5; 32],
+            presentation_key: [6; 32],
+            blinded_leaf: [7; 32],
+            certificate: vec![8; 64],
+            shares: None,
+        },
+    };
+    // Deliberately unverified input: lack of capability refuses before parsing,
+    // and the missing worker cannot turn this into a generic provider error.
+    assert_eq!(
+        verifier.verify_anonymous(&statement, b"invalid"),
+        Err(Error::UnsupportedCapability)
+    );
+    assert_eq!(
+        verifier.verify(&statement, b"invalid"),
+        Err(Error::InvalidInput)
+    );
+}

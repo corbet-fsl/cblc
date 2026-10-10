@@ -62,8 +62,16 @@ fn anonymous() -> Vec<u8> {
     bundle_bytes(json!({"version":1,"proofs":[{"proof":"0102"}]}))
 }
 fn prepare(statement: &ExtensionStatement, proof: &[u8]) -> Result<Vec<PreparedProof>, Error> {
-    extension_proofs(statement, proof, &[9; 64], &[10; 32])
+    extension_proofs(statement, proof, &[9; 64], &scope())
 }
+fn scope() -> crate::accounting::AccountProofScope {
+    crate::accounting::AccountProofScope {
+        circuit_digest: [10; 32],
+        verifying_key_digest: [11; 32],
+    }
+}
+
+mod record_epoch;
 fn update() -> ExtensionStatement {
     ExtensionStatement::Update {
         policy: policy(),

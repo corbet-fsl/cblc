@@ -194,6 +194,8 @@ struct Keys {
     update: String,
     deposit: String,
     record: String,
+    /// Original R2 is a distinct circuit, never the legacy record key.
+    record_epoch: Option<String>,
 }
 
 /// Immutable extension group, including the pinned certificate issuer key.
@@ -202,6 +204,7 @@ pub struct ExtensionArtifacts {
     material: Material,
     pub(crate) issuer: [u8; 64],
     keys: [Vec<u8>; 3],
+    record_epoch_key: Option<Vec<u8>>,
 }
 
 #[cfg(feature = "publication")]
@@ -232,10 +235,22 @@ impl ExtensionArtifacts {
                 .decode(text.as_bytes())
                 .map_err(|_| Error::InvalidInput)?;
         }
+        let record_epoch_key = keys
+            .record_epoch
+            .map(|text| {
+                if text.is_empty() {
+                    return Err(Error::InvalidInput);
+                }
+                HEXLOWER
+                    .decode(text.as_bytes())
+                    .map_err(|_| Error::InvalidInput)
+            })
+            .transpose()?;
         Ok(Self {
             material,
             issuer,
             keys: decoded,
+            record_epoch_key,
         })
     }
     pub fn scope(&self) -> AccountProofScope {
@@ -263,6 +278,14 @@ impl ExtensionArtifacts {
                 .config(anonymous.clone(), self.keys[1].clone(), 262),
             self.material.config(anonymous, self.keys[2].clone(), 172),
         ]
+    }
+    pub(crate) fn record_epoch_config(
+        &self,
+        options: NativeVerifierOptions,
+    ) -> Option<cvfy::NativeVerifierConfig> {
+        self.record_epoch_key
+            .as_ref()
+            .map(|key| self.material.config(options, key.clone(), 303))
     }
 }
 

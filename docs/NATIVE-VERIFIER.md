@@ -49,6 +49,25 @@ group scope. Circuit public-input counts are update 345, deposit 262 and record
 172. Deposit issuer/scope inputs come from authenticated material, not request
 arguments.
 
+The original R2 cached record relation has a separate optional `record_epoch`
+entry in the authenticated `keys.json` group. Its native verifier consumes 303
+public inputs and shares the existing anonymous capacity and deadline. Groups
+without this key continue to support the three existing circuits and refuse R2
+with `UnsupportedCapability`; the legacy record key is never substituted.
+Preparation requires both aggregate scope digests to match and verifies the
+original Ed25519 issuer certificate over community, epoch and blinded leaf.
+The R2 circuit binds the certificate bytes but does not verify that signature.
+The presentation key is encoded as the original two unsigned 128-bit limbs.
+
+This migration stage preserves the original R2 circuit and public codec. Its
+new signature, ABI, artifact and refusal tests have only been source-reviewed;
+native R2 proof acceptance has not been executed or qualified. Existing circuit
+qualification does not cover R2. The issuer freeze/descendant lineage port,
+authenticated current descriptor, cached proof plus fresh presentation binding,
+and atomic challenge consumption are still required for a current-record
+decision. Constructing `ExtensionStatement::RecordEpoch` grants none of those
+capabilities. Forum admission remains refused until that composition exists.
+
 Update bundles contain one to 65 strict steps and remain capped at 4 MiB.
 The complete original account is validated once. Intermediate ingestion steps
 chain state/inbox roots, preserve the previous version, and clear settlement and

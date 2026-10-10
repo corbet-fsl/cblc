@@ -137,6 +137,12 @@ pub enum ExtensionStatement {
         policy: ExtensionPolicy,
         record: PublicRecord,
     },
+    /// Original cached R2 relation. This input is not an authenticated epoch:
+    /// the relying owner must bind its descriptor and consume a fresh challenge.
+    RecordEpoch {
+        policy: ExtensionPolicy,
+        record: czkp::record::Record,
+    },
 }
 pub(crate) mod sealed {
     pub trait Sealed {}

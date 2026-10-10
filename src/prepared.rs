@@ -2,7 +2,7 @@
 //! No private witness or application policy is interpreted by the backend.
 use crate::{
     Error,
-    accounting::{AccountStatement, statement_bytes},
+    accounting::{AccountProofScope, AccountStatement, statement_bytes},
     extensions::{
         EXTENSION_PROOF_BYTES, Effect, ExtendedUpdate, ExtensionPolicy, ExtensionStatement,
         RecordUse,
@@ -14,8 +14,8 @@ use serde::Deserialize;
 #[cfg(test)]
 mod tests;
 
-/// Canonical BN254 public scalar encoding. Every emitted value is a byte or u64,
-/// so its zero-extended big-endian representation is below the field modulus.
+/// Canonical BN254 public scalar encoding. Values are bytes, u64s or zero-extended
+/// 128-bit limbs, all below the field modulus.
 pub type PublicField = [u8; 32];
 
 fn scalar(value: u64) -> PublicField {
@@ -208,7 +208,7 @@ pub(crate) fn extension_proofs(
     statement: &ExtensionStatement,
     proof: &[u8],
     issuer: &[u8; 64],
-    circuit_digest: &[u8; 32],
+    scope: &AccountProofScope,
 ) -> Result<Vec<PreparedProof>, Error> {
     let fields = match statement {
         ExtensionStatement::Update {
@@ -231,7 +231,7 @@ pub(crate) fn extension_proofs(
                 czkp::field(value, true)?;
             }
             bytes(&mut fields, issuer);
-            bytes(&mut fields, circuit_digest);
+            bytes(&mut fields, &scope.circuit_digest);
             bytes(&mut fields, &deposit.community);
             bytes(&mut fields, &deposit.recipient);
             fields.push(scalar(deposit.release_epoch));
@@ -271,6 +271,51 @@ pub(crate) fn extension_proofs(
                     .shares
                     .unwrap_or([0; 3])
                     .map(|share| scalar(u64::from(share))),
+            );
+            fields
+        }
+        ExtensionStatement::RecordEpoch { policy, record } => {
+            let mut fields = extension_fields(policy)?;
+            record.validate()?;
+            let epoch = &record.epoch;
+            if epoch.proof_scope != *scope {
+                return Err(Error::PolicyMismatch);
+            }
+            // R2 binds these public bytes in the circuit; the original issuer
+            // Ed25519 certificate itself must be checked natively, every time.
+            // Authentication of this descriptor remains the relying owner's job.
+            czkp::record::verify_certificate(
+                &epoch.issuer_key,
+                &epoch.community,
+                epoch.epoch,
+                &record.blinded_leaf,
+                &record.certificate,
+            )?;
+            for value in [
+                epoch.issuer_key.as_slice(),
+                record.certificate.as_slice(),
+                epoch.proof_scope.circuit_digest.as_slice(),
+                epoch.proof_scope.verifying_key_digest.as_slice(),
+                epoch.community.as_slice(),
+                record.owner.as_slice(),
+            ] {
+                bytes(&mut fields, value);
+            }
+            fields.extend([epoch.epoch, epoch.starts_at, epoch.expires_at].map(scalar));
+            bytes(&mut fields, &epoch.root);
+            fields.push(scalar(u64::from(epoch.leaf_count)));
+            bytes(&mut fields, &record.blinded_leaf);
+            for limb in record.presentation_key.chunks_exact(16) {
+                let mut field = [0; 32];
+                field[16..].copy_from_slice(limb);
+                fields.push(field);
+            }
+            fields.push(scalar(u64::from(record.shares.is_some())));
+            fields.extend(
+                record
+                    .shares
+                    .unwrap_or([0; 3])
+                    .map(|v| scalar(u64::from(v))),
             );
             fields
         }

@@ -57,6 +57,7 @@ pub struct NativeExtensionVerifier {
     updates: cvfy::NativeVerifier,
     deposits: cvfy::NativeVerifier,
     records: cvfy::NativeVerifier,
+    record_epochs: Option<cvfy::NativeVerifier>,
     update_timeout: Duration,
     anonymous_timeout: Duration,
 }
@@ -70,6 +71,10 @@ impl NativeExtensionVerifier {
         let capacity = cvfy::NativeCapacity::new(anonymous.maximum_parallel)?;
         let update_timeout = updates.timeout;
         let anonymous_timeout = anonymous.timeout;
+        let record_epochs = artifacts
+            .record_epoch_config(anonymous.clone())
+            .map(|config| cvfy::NativeVerifier::with_capacity(config, capacity.clone()))
+            .transpose()?;
         let [updates, deposits, records] = artifacts.configs(updates, anonymous);
         Ok(Self {
             scope: artifacts.scope(),
@@ -79,6 +84,7 @@ impl NativeExtensionVerifier {
             updates: cvfy::NativeVerifier::new(updates)?,
             deposits: cvfy::NativeVerifier::with_capacity(deposits, capacity.clone())?,
             records: cvfy::NativeVerifier::with_capacity(records, capacity)?,
+            record_epochs,
             update_timeout,
             anonymous_timeout,
         })
@@ -93,12 +99,8 @@ impl ExtensionVerifier for NativeExtensionVerifier {
             return Err(Error::InvalidInput);
         }
         let deadline = std::time::Instant::now() + self.update_timeout;
-        let prepared = crate::prepared::extension_proofs(
-            statement,
-            proof,
-            &self.issuer,
-            &self.scope.circuit_digest,
-        )?;
+        let prepared =
+            crate::prepared::extension_proofs(statement, proof, &self.issuer, &self.scope)?;
         let requests: Vec<_> = prepared
             .iter()
             .map(|p| (p.inputs.as_slice(), p.proof.as_slice()))
@@ -109,15 +111,15 @@ impl ExtensionVerifier for NativeExtensionVerifier {
         let verifier = match statement {
             ExtensionStatement::Deposit { .. } => &self.deposits,
             ExtensionStatement::Record { .. } => &self.records,
+            ExtensionStatement::RecordEpoch { .. } => self
+                .record_epochs
+                .as_ref()
+                .ok_or(Error::UnsupportedCapability)?,
             ExtensionStatement::Update { .. } => return Err(Error::InvalidInput),
         };
         let deadline = std::time::Instant::now() + self.anonymous_timeout;
-        let prepared = crate::prepared::extension_proofs(
-            statement,
-            proof,
-            &self.issuer,
-            &self.scope.circuit_digest,
-        )?;
+        let prepared =
+            crate::prepared::extension_proofs(statement, proof, &self.issuer, &self.scope)?;
         let requests: Vec<_> = prepared
             .iter()
             .map(|p| (p.inputs.as_slice(), p.proof.as_slice()))
