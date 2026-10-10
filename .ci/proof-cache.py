@@ -16,7 +16,7 @@ SCHEMA = "cblc-public-proof-fixtures-v1"
 ROOTS = ("src", "tests", "examples", "circuits", "runtime", "experiments", ".cargo")
 ROOT_FILES = {"Cargo.toml", "Cargo.lock", "package.json", "package-lock.json",
               "build.rs", "rust-toolchain", "rust-toolchain.toml"}
-IMPLEMENTATION = (".ci/proof-cache.py", ".ci/replay-account-proofs.ts", ".ci/verify.sh")
+IMPLEMENTATION = (".ci/proof-cache.py", ".ci/replay-account-proofs.ts", ".ci/verify.sh", ".ci/check-fixture-suite.ts")
 DIRECTORIES = (".proof-test", ".extension-test")
 MAX_BYTES = 512 * 1024 * 1024
 MAX_FILE_BYTES = 256 * 1024 * 1024
