@@ -37,6 +37,7 @@ export CBLC_BB="$(realpath "$cblc_target_dir/debug/examples/czkp_bb_worker")"
 test -x "$CBLC_BB"
 cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint
 npm ci --ignore-scripts --no-audit --no-fund
+node .ci/check-fixture-suite.ts
 # V8 instrumentation measures legacy SDK fixture helpers only.
 # Authoritative backend coverage comes from the native Rust adapters below.
 test ! -e .runtime-v8 || { echo 'Stale runtime coverage directory' >&2; exit 2; }
