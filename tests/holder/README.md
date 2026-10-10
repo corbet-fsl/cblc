@@ -1,4 +1,11 @@
-# Reusable private accounting
+# Historical holder fixtures
+
+This directory retains JavaScript holder/prover fixtures for cross-checking the
+existing accounting relation. It is excluded from the Rust server package and
+is not the current member SDK, frontend or server verification API. Current
+member functionality belongs to cwlt. The implementation notes below describe
+the retained fixture bridge; production cblc verification uses the
+[native Rust adapters](../../docs/NATIVE-VERIFIER.md).
 
 This package implements the existing account-state-v2 relation. It contains the
 real Barretenberg 5 / Noir prover and verifier, canonical account witnesses,
@@ -174,8 +181,9 @@ CAS/rollback protection and a common conversation release lock: before every
 apply, including retries, durably invalidate any cached own-state send gates.
 After acceptance, cmsg must bind a fresh own presentation before releasing data.
 
-The Rust `AccountService` exposes only authenticated `apply` and `status` on its
-member JSON boundary. It owns the trusted clock and refreshes durable policy
+The Rust `AccountService` exposes authenticated `apply`, `applyExtended`,
+`obligations` and `status` requests on its member JSON boundary. It uses the host's
+trusted clock and refreshes stored policy
 before requests; the existing ledger rechecks time, policy, authority and state
 at commit. Public policy retrieval and the local administrative checkpoint and
 tuning methods are separate from member requests. An embedding must authorize
@@ -209,21 +217,18 @@ two-sided Active reservation gates. Presentations reveal the contact pair and
 belong only on the authenticated peer channel, never in named account requests,
 operator storage or diagnostic logs.
 
-`ProcessAccountVerifier` invokes the concrete `node-verifier.mjs` with an
-operator-owned absolute configuration file:
+The legacy test-only `node-verifier.mjs` fixture accepts an absolute public
+artifact configuration file:
 
 ```json
 {"directory":"/absolute/release/public","manifestSha256":"<independent release manifest SHA-256>","limits":{"maxProofBytes":20000,"memoryPages":32768}}
 ```
 
-Configure the same circuit/VK digests in its Rust `scope`. Member inputs cannot
-choose executable paths, configuration, artifacts, a clock or a roster. Worker
-count, input/output sizes, deadline, Node heap and Wasm linear-memory maximum are
-bounded. Excess work fails with `Capacity`; it is not queued indefinitely. The
-Rust parent kills and reaps timed-out workers. These are component limits, not a
-claim about exact process RSS or mobile memory. The shipped worker spawns no
-children. Deploy only the trusted shipped script; arbitrary replacement workers
-are outside the trust boundary.
+The removed `ProcessAccountVerifier` API must not be used by server consumers.
+Current `NativeAccountVerifier` takes authenticated RAM artifacts and explicit
+limits and invokes the isolated `czkp-bb-worker` through cvfy. No production Node
+configuration file or script is selected. The legacy command remains an
+independent test cross-check, with fixture-owned public artifact paths.
 
 Cryptographic verification alone does not accept a state. The Rust ledger is
 the authoritative boundary for current enrollment roots, policy, server time,
@@ -233,9 +238,9 @@ or synthetic time allow-list.
 
 Validation is split explicitly: `test/*.test.mjs` exercises artifact bounds,
 live statement encoding and real Ed25519 client signatures; Rust
-`tests/accounting_service.rs` covers service authority and process limits with a
-storage-only verifier. The real browser proof suite calls the shared production
-`proveAccountCandidate` core. After that suite, run:
+`tests/accounting_service.rs` covers service authority with real maintained
+proofs through the native verifier. The historical browser proof suite calls
+the retained `proveAccountCandidate` fixture core. Its separate SDK cross-check is:
 
 ```sh
 node runtime/accounting/real-proof-check.mjs /absolute/config.json /absolute/browser-evidence.json

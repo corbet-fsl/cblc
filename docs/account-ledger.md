@@ -15,7 +15,8 @@ remain visible. This does not hide timing correlations or operator equivocation.
 
 The host configures a complete `AccountProofVerifier`, common independently
 verified enrollment checkpoints, an eligibility authority, an operator signing
-key, trusted time and durable SQLite storage. There is no successful default
+key, trusted time and an atomic storage adapter. Durable storage belongs to the
+host; the library opens no database. There is no successful default
 verifier. A verifier that merely checks a signature or returns success defeats
 the accounting relation; the storage API cannot turn it into a proof verifier.
 
@@ -31,8 +32,8 @@ closed; the older blind-permit allocation ledger is a separate mechanism.
 One common checkpoint root can be admitted per configured time slot. Publishing
 a root is a trusted local operation and requires independently verifying its
 root/device/accounting delegations. Member-supplied roots are not authoritative.
-The immutable database configuration is pinned on first open. Its trusted
-[tuning API](tuning.md) changes only the prospective waiting period with durable
+The immutable stored configuration is pinned on first construction. Its trusted
+[tuning API](STORAGE.md) changes only the prospective waiting period with atomic
 revision/CAS checks. Full named policy digests change; stable state-policy
 bindings and committed slot deadlines do not. Other economic rules and proof
 scopes remain pinned; a configuration edit cannot bypass state continuity.
@@ -51,13 +52,16 @@ its signed expiry cannot exceed it. That commit deadline does not expire an
 already accepted Active reservation. Its private lease and the original
 reservation-device authority bound protected first-payload release separately.
 
-A short SQLite transaction checks whether the request is already accepted or
-eligible for verification. Proof verification runs with all database locks
-released. A final immediate transaction rechecks current authorization, time,
+A short host transaction checks whether the request is already accepted or
+eligible for verification. Proof verification runs outside the host transaction.
+A final exclusive transaction rechecks current authorization, time,
 current configuration, checkpoint, cached response, lifetime genesis or exact previous state, and
 settlement markers before committing the successor and signed acceptance.
-Another owner can commit while a slow proof is being checked. WAL with
-`synchronous=FULL` protects commits under SQLite's filesystem durability assumptions.
+Another owner can commit while a slow proof is being checked. The host must
+atomically record the live commit observation through `commit_before`; later
+clock observations remain a lower bound for that handle. The test-owned SQLite
+adapter uses WAL and `synchronous=FULL`; these are fixture durability settings,
+not a database implementation shipped by cblc. See [the storage contract](STORAGE.md).
 
 Exact signed retries recover the cached acceptance without another proof or
 debit, including after the original request expires when the caller supplies

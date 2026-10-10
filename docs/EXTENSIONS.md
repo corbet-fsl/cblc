@@ -1,10 +1,12 @@
 # Extension proof contract
 
 The relation is implemented in circuits/extensions/{update,deposit,record}, with
-shared policy constraints in core. It uses Noir 1.0.0-beta.26, Barretenberg 5.0.0
-UltraHonk (noir-recursive target), pinned upstream SHA-256/Poseidon2 and standard
-P-256 verification. Generic ABI/proof adapters are in czkp; member witnesses are
-in cwlt. No opening enters the server API.
+shared policy constraints in core. Its historical reference artifacts use Noir
+1.0.0-beta.26 and Barretenberg 5.0.0 UltraHonk (noir-recursive target), upstream
+SHA-256/Poseidon2 and standard P-256 verification. CI retains that coherent
+test-only generator graph and verifies its proofs with the current compatible
+native Rust SDK. Safe Rust public-input preparation is in cblc; native execution
+is in cvfy/czkp. Member witnesses are in cwlt. No opening enters the server API.
 
 The real-proof integration suite passed on 2026-09-30; see
 [CI](https://github.com/corbet-libs/cblc/actions/runs/36743686840) and
@@ -12,13 +14,13 @@ The real-proof integration suite passed on 2026-09-30; see
 
 ## Activation and artifacts
 
-with_extensions(policy, process_verifier, limits, activation) requires a real
+`with_extensions(policy, native_verifier, limits, activation)` requires a real
 extended genesis proof and checks it before writing immutable configuration.
 The probe does not admit an account. There is no synthetic-verifier feature or
 public implementation hook. Legacy v2 proofs cannot establish extended states
 or bypass an enabled extension. No automatic migration or second genesis exists.
 
-runtime/extensions/compile.mjs compiles all three circuits. A host-pinned manifest
+The test-only `runtime/extensions/compile.mjs` compiles all three circuits. A host-pinned manifest
 authenticates the circuit/key groups, issuer public key, toolchain and setup files.
 Acceptances pin the circuit/key group digests. setup-lock.json pins the upstream
 compressed G1 prefix and G2 bytes. Verification initializes one authenticated G1
@@ -33,7 +35,7 @@ the actual generated proof size in CI. Anonymous pools may use a smaller bound.
 1. **Complete inbox.** An update bundle contains one proof per pending entry and
    one final action (at most 65). Each intermediate commitment retains the old
    version, reblinds the opening and advances the exact SHA-256 chain by one entry.
-   The worker connects every state/root and binds owner, policy, checkpoint and
+   Rust preparation connects every state/root and binds owner, policy, checkpoint and
    time throughout. The final action increments once. The issuer rechecks the
    complete frontier inside the commit transaction and deletes consumed rows.
 2. **Authorized, recoverable deposits.** The deposit circuit verifies a hidden

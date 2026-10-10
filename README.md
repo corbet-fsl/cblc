@@ -105,10 +105,10 @@ extension adapter allocates separate authenticated and anonymous cvfy pools.
 No alternate throttling algorithm or cryptographic primitive is implemented here.
 
 
-The cargo-deny gate uses narrowly scoped inherited libSQL transport exceptions
-with locked-version and upstream-source checks; see
-[dependency exposure](docs/DEPENDENCIES.md). Two TLS name-constraint risks and an
-unmaintained parser remain open. The optional Turso test requires both credentials.
+The cargo-deny gate checks the retained dependency graph; current transport
+boundaries are documented in [dependency exposure](docs/DEPENDENCIES.md).
+Historical advisory exceptions are not the current validation result. Native
+validation uses local fixture storage and invokes no live database service.
 
 ## Continuous verification
 

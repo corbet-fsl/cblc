@@ -103,21 +103,25 @@ The wasm Rust planner also shares native test vectors. Node wasm results are
 not browser/mobile latency measurements; loading, setup, transport and queue
 delay are separate costs. See [README](../README.md).
 
-## Dependency audit exceptions
+## Historical dependency audit exceptions (2026-09-30)
 
-The six inherited libSQL transport advisories are documented in
-[DEPENDENCIES.md](DEPENDENCIES.md). CI checks their exact locked versions and
-upstream connector source. HTTP/2 is unused and CRLs are not configured; two remote
-TLS name-constraint risks and the unmaintained parser remain open. A green
-exception-policy audit is not an advisory-free dependency graph. The optional
-Turso integration still requires externally supplied credentials.
+The following findings describe the old measured graph, not current dependency
+status. See [DEPENDENCIES.md](DEPENDENCIES.md) for the current transport boundary
+and the retained lockfile's CI result for its advisory evidence.
 
-The locked graph also predates two concurrent leaf-review fixes. cthl at
+That graph contained six inherited libSQL transport advisories. CI checked their
+exact locked versions and upstream connector source. HTTP/2 was unused and CRLs
+were not configured; two remote TLS name-constraint risks and an unmaintained
+parser remained open. A green exception-policy audit did not establish an
+advisory-free graph. The optional Turso integration required externally supplied
+credentials.
+
+That locked graph also predates two concurrent leaf-review fixes. cthl at
 7f1a38d can scan its bounded key table on repeated full-capacity denials; upstream
 [6939c3c](https://github.com/corbet-foss/cthl/commit/6939c3c6b586bf057451f47673c261ad757ffd7e)
 adds the recovery checkpoint. crlt at 6b94dac accepts namespace-changing foreign-key
 SET DEFAULT/SET NULL actions; upstream
 [4ba0656](https://github.com/corbet-foss/crlt/commit/4ba065601b93a710aab56104ab070ab0521cf33e)
 rejects them. cblc's issuer schema does not use those foreign-key actions.
-Coordinated downstream pin adoption remains separate integration work; this
-extension implementation does not claim to repair those older leaf revisions.
+Those findings do not describe the later native-verifier migration's resolved
+dependency graph.

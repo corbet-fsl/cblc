@@ -7,10 +7,10 @@ owns the extracted accounting code; do not maintain a second accounting fork.
 | --- | --- |
 | src/accounting.rs | cblc wire; canonical field checks and ProofScope in czkp |
 | src/accounting_policy.rs | cblc policy |
-| src/accounting_ledger.rs and accounting_ledger/tuning.rs | cblc policy/authorization orchestration; cssr atomic storage through crlt |
+| src/accounting_ledger.rs and accounting_ledger/tuning.rs | cblc policy/authorization orchestration through caller-owned atomic storage ports; cssr supplies the RAM reference adapter |
 | src/accounting_service.rs | cblc service; generic bounded subprocess verifier in cvfy |
 | src/admission.rs | Necessary local admission wire glue in cblc; existing cfrm consumers still need their copy until the door protocol replaces it |
-| runtime/accounting | Server verifier and public inputs; historical v2 holder fixtures remain in tests/holder. The member SDK and extension witness now live in corbet-foss/cwlt |
+| runtime/accounting | Historical SDK fixture generation and replay only. Server public-input preparation lives in safe Rust in src/prepared.rs; cvfy/czkp supply the isolated native verifier. Historical v2 holder fixtures remain in tests/holder; the member SDK and extension witness live in corbet-foss/cwlt |
 | experiments/private-accounting | Preserved validation experiment, including published policy circuit source |
 | docs/account-ledger.md, private-accounting.md, reciprocity-policy.md, account-proof-cost.md | cblc documentation; historical evidence is explicitly historical |
 | src/allocation.rs | Plaintext legacy credit backend, incompatible with the private-account boundary; do not activate it in cblc |

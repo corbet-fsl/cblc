@@ -1,6 +1,8 @@
 # Dependency security
 
-Storage uses the pinned crlt facade. Its remote transport uses maintained
+Test-owned durable storage adapters use the crlt facade; cblc exports no database
+adapter and production code uses caller-owned atomic ports. cssr still brings
+crlt transitively. Its remote transport uses maintained
 reqwest/rustls with the repaired certificate verifier; libSQL's old remote
 connector is not enabled. No old libSQL TLS advisory exceptions remain.
 
