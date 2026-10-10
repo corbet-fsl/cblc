@@ -1,6 +1,6 @@
 //! Atomic accounting port for the experimental account-state proof relation.
 //!
-//! The database stores named opaque states and owner-specific markers, never a
+//! The caller-owned state stores named opaque states and owner-specific markers, never a
 //! peer, conversation tuple, balance or private receipt. Its trusted dependencies
 //! are the configured proof verifier, independently admitted common enrollment
 //! checkpoints, trusted time and caller-owned atomic state. It does not establish

@@ -22,6 +22,9 @@ construction into the application and implement the two ports explicitly.
 `tests/common/host_storage.rs` demonstrates the host bridge to the maintained
 cssr/crlt transaction implementation, retaining the real SQL and proof tests.
 This is a test fixture, not a production database adapter exported by cblc.
+The current cssr dependency has no memory-only Cargo feature, so its database
+dependencies remain transitive build dependencies. No cssr database API is called
+by cblc production code. A future upstream feature can trim that build graph.
 
 All policy amounts, periods, circuits, verifier configuration, operator signing
 keys and trust roots are explicit caller inputs. No environment credential
