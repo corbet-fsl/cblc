@@ -10,7 +10,7 @@ use cblc::{
     storage::MemoryStore,
 };
 use common::{Fixture, proofs};
-use ed25519_dalek::SigningKey;
+use ed25519_dalek::{Signer as _, SigningKey};
 use serde::Serialize;
 use serde_json::{Value, json};
 use utoipa::ToSchema;
@@ -116,6 +116,62 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
     let mut altered = accepted;
     altered["value"]["proofScope"]["verifyingKeyDigest"] = json!("not-bytes");
     assert!(!validator::<AccountServiceResponse>().is_valid(&altered));
+    // The schema carries the original admitted account's actual device-signed
+    // recipient operation; shape validation alone is not registration authority.
+    use hpke::{Kem as _, Serializable};
+    let recipient_key: [u8; 32] = hpke::kem::X25519HkdfSha256::derive_keypair(&[77; 32])
+        .1
+        .to_bytes()
+        .as_slice()
+        .try_into()
+        .unwrap();
+    let mut recipient = cblc::accounting_ledger::record_epoch::RecipientRequest {
+        community: request.statement.community,
+        owner: request.statement.owner,
+        recipient_key,
+        chat_public_key: request.chat_public_key.clone(),
+        issued_at: 120,
+        expires_at: 220,
+        signature: String::new(),
+    };
+    recipient.signature = data_encoding::BASE64URL_NOPAD.encode(
+        &f.device
+            .sign(&cblc::accounting_ledger::record_epoch::recipient_bytes(&recipient).unwrap())
+            .to_bytes(),
+    );
+    let registration = AccountServiceRequest::RegisterRecordRecipient {
+        grant: grant.clone(),
+        authorization: authorization.clone(),
+        request: recipient,
+    };
+    let encoded = valid(&registration);
+    for bad in [
+        {
+            let mut value = encoded.clone();
+            value["request"]["recipientKey"] = json!([1, 2, 3]);
+            value
+        },
+        {
+            let mut value = encoded.clone();
+            value["request"]["now"] = json!(120);
+            value
+        },
+        json!({"action":"publishRecordEpoch","policyEpoch":1,"periodSeconds":100}),
+    ] {
+        assert!(!schema.is_valid(&bad));
+        assert!(serde_json::from_value::<AccountServiceRequest>(bad).is_err());
+    }
+    let registered = service.handle_for_member(&[7; 48], registration).unwrap();
+    assert!(
+        matches!(&registered, AccountServiceResponse::RecordRecipient { recipient_key: key } if *key == recipient_key)
+    );
+    let encoded = valid(&registered);
+    let mut altered = encoded.clone();
+    altered["value"]["recipient_key"] = json!([1, 2, 3]);
+    assert!(!validator::<AccountServiceResponse>().is_valid(&altered));
+    let mut injected = encoded;
+    injected["value"]["override"] = true.into();
+    assert!(!validator::<AccountServiceResponse>().is_valid(&injected));
     let status = AccountStatusRequest {
         community: request.statement.community,
         owner: request.statement.owner,
