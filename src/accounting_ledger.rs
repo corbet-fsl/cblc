@@ -1,9 +1,9 @@
-//! Durable host boundary for the experimental account-state proof relation.
+//! Atomic accounting port for the experimental account-state proof relation.
 //!
 //! The database stores named opaque states and owner-specific markers, never a
 //! peer, conversation tuple, balance or private receipt. Its trusted dependencies
 //! are the configured proof verifier, independently admitted common enrollment
-//! checkpoints, trusted time and durable SQLite storage. It does not establish
+//! checkpoints, trusted time and caller-owned atomic state. It does not establish
 //! a consistent log against an equivocating operator or restore lost openings.
 
 use crate::{
@@ -18,13 +18,12 @@ use crate::{
         AdmissionGrant, AdmissionTrust, DeviceAuthorization, MAX_INTEGER, decode, signature,
         verify_admission, verify_device_authorization,
     },
-    storage::{AccountStorage, LibsqlStore, Transaction, key},
+    storage::{AccountStorage, Transaction, key},
 };
 use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::path::Path;
 
 mod extensions;
 mod obligations;
@@ -179,17 +178,6 @@ fn check_pending(
 }
 
 impl<V: AccountProofVerifier> AccountLedger<V> {
-    pub fn open(
-        path: impl AsRef<Path>,
-        trust: AdmissionTrust,
-        policy: AccountLedgerPolicy,
-        verifier: V,
-        operator: SigningKey,
-    ) -> Result<Self, Error> {
-        let store = LibsqlStore::local(path, &trust.community_id).map_err(|_| Error::Storage)?;
-        Self::with_store(store, trust, policy, verifier, operator)
-    }
-
     pub fn with_store(
         store: impl AccountStorage + 'static,
         trust: AdmissionTrust,

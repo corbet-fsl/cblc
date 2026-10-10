@@ -38,7 +38,7 @@ fn policy() -> AccountLedgerPolicy {
     }
 }
 fn open<V: AccountProofVerifier>(path: &Path, fixture: &Fixture, verifier: V) -> AccountLedger<V> {
-    AccountLedger::open(
+    common::host_storage::open(
         path,
         fixture.trust.clone(),
         policy(),

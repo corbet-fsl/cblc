@@ -26,6 +26,9 @@ command -v wasm-pack >/dev/null || { echo 'missing wasm-pack' >&2; exit 2; }
 # Wasm target on stable is guaranteed by run-cached.sh (helper readiness +
 # exclusive provisioning); no toolchain mutation here under the shared lock.
 rustc --version
+# Resolve the migrated first-party graph once on CI and preserve the candidate.
+cargo update
+cp Cargo.lock "$ARTIFACT_ROOT/Cargo.lock"
 cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint

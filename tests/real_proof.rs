@@ -44,7 +44,7 @@ fn real_account_proofs_round_trip_through_libsql() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("db");
     let open = || {
-        AccountLedger::open(
+        common::host_storage::open(
             &path,
             f.trust.clone(),
             policy.clone(),

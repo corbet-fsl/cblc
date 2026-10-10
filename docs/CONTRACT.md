@@ -3,8 +3,8 @@
 
 # Implemented balance contract
 
-cblc is a server facade, called by cvld. It owns reciprocity v2 policy; cssr owns
-atomic record mechanics, cvfy the bounded proof-verifier process, and czkp
+cblc is a reusable server facade, called by cvld. It owns reciprocity v2 policy;
+the application owns atomic records, cvfy the bounded proof-verifier process, and czkp
 encoding/crypto adapters. The holder keeps openings, counterpart data and receipts.
 
 The account API retains the existing signed v2 public statement and policy
@@ -21,12 +21,14 @@ clock floor persist. The last acceptance supports exact retry; a superseded
 acceptance is discarded. Status authenticates a fresh challenge and returns
 no private opening. No request log, login date or historical receipt table exists.
 
-The small AccountStorage trait is implemented by cssr memory and crlt/libSQL
-stores. All SQL is namespace-scoped and index-backed; one database per community
-is the deployment contract. `with_store` permits service composition using a
-pre-scoped crlt community and the shared migration history. Standalone `open`
-creates the issuer schema. Async services call the synchronous facade through
-a blocking executor.
+`AccountStorage::transaction` supplies a caller-owned serializable transaction
+through `Transaction::new(Box<dyn AtomicTransaction>)`. The library provides an
+explicit adapter only for RAM `MemoryStore`; there is no blanket implementation
+for database stores, database pool or `AccountLedger::open`. Applications own
+all connections, migrations and durable state through their explicit adapters.
+All mutable accounting checks and writes remain in the same atomic transaction.
+Dropping without commit rolls back; uncertain commit requires exact idempotent
+retry. See [STORAGE.md](STORAGE.md). Async services use a blocking executor.
 
 Reciprocity v2 preserves reservations in both directions, prepared/active
 separation, Answer refunds, recipient Close, fixed original outgoing deadlines,

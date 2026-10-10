@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! Server balance facade: private-account policy, verification and atomic issuance.
 #![allow(missing_docs)]
 pub mod accounting;

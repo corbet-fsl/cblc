@@ -63,7 +63,7 @@ fn base(
     fixture: &Fixture,
     settings: AccountLedgerPolicy,
 ) -> AccountLedger<RealVerifier> {
-    let ledger = AccountLedger::open(
+    let ledger = common::host_storage::open(
         path,
         fixture.trust.clone(),
         settings,

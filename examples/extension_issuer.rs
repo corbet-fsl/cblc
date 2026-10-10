@@ -80,7 +80,7 @@ fn main() {
                         config(proof_scope.clone()),
                         config(proof_scope.clone()),
                     )?;
-                    let mut opened = AccountLedger::open(
+                    let mut opened = common::host_storage::open(
                         directory.path().join("issuer.db"),
                         fixture.trust.clone(),
                         settings,

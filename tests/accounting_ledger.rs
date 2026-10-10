@@ -93,7 +93,7 @@ fn policy() -> AccountLedgerPolicy {
     }
 }
 fn open<V: AccountProofVerifier>(path: &Path, fixture: &Fixture, verifier: V) -> AccountLedger<V> {
-    AccountLedger::open(
+    common::host_storage::open(
         path,
         fixture.trust.clone(),
         policy(),
@@ -408,7 +408,7 @@ fn checkpoint_slot_expiry_during_verification_cannot_commit() {
     let f = Fixture::new();
     let mut configured = policy();
     configured.checkpoint_period_seconds = 150;
-    let mut ledger = AccountLedger::open(
+    let mut ledger = common::host_storage::open(
         &path,
         f.trust.clone(),
         configured,
@@ -639,7 +639,7 @@ fn canonical_fields_versions_unknown_wire_fields_and_policy_scope_fail_closed() 
     let mut changed = policy();
     changed.account.initial_credit = 2;
     assert!(matches!(
-        AccountLedger::open(
+        common::host_storage::open(
             &path,
             f.trust,
             changed,

@@ -55,7 +55,7 @@ fn corrupt_durable_configuration_never_replaces_the_live_policy() {
         assert_eq!(ledger.waiting_period().unwrap(), before);
         if variant == 2 {
             assert!(matches!(
-                AccountLedger::open(
+                common::host_storage::open(
                     &path,
                     f.trust,
                     policy(),
@@ -73,7 +73,7 @@ fn directory_cannot_be_opened_as_an_account_database() {
     let f = Fixture::new();
     let dir = tempfile::tempdir().unwrap();
     assert!(matches!(
-        AccountLedger::open(
+        common::host_storage::open(
             dir.path(),
             f.trust,
             policy(),

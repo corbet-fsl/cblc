@@ -175,7 +175,7 @@ fn state_binding_and_restart_pin_every_policy_field_except_wait() {
             account: changed,
             ..policy()
         };
-        let reopened = AccountLedger::open(
+        let reopened = common::host_storage::open(
             &path,
             f.trust.clone(),
             supplied,

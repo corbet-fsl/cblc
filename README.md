@@ -1,21 +1,23 @@
 # cblc
 
 Server balance facade and reciprocity v2 policy, extracted from cfrm. Consumers
-enter through cblc; cssr records opaque state, cvfy checks proofs, and czkp wraps
+enter through cblc; caller-owned state records opaque commitments, cvfy checks proofs, and czkp wraps
 canonical encodings and established cryptography. No holder SDK is exported.
 
-`AccountLedger::{open,with_store,apply,status}` authenticates accounts, validates
+`AccountLedger::{with_store,apply,status}` authenticates accounts, validates
 policy and checkpoints, verifies the complete proof outside database locks, and
 atomically records a single successor. `AccountService` provides a bounded JSON
 apply/status protocol plus separate trusted administration. Policy amounts and
 durations are mandatory; no product defaults are supplied.
 
-Storage uses the small `AccountStorage` trait, with `MemoryStore` and
-`LibsqlStore` (through cssr and crlt). One database per community; every record
-has a community key and all production queries use the composite primary key.
-Only the latest acceptance survives; superseded requests cannot be recovered.
-No balances, counterparts, private receipts, login dates or request logs are stored.
-The synchronous API belongs on a blocking thread outside Tokio.
+Storage uses the explicit `AccountStorage` and `AtomicTransaction` ports. This
+RAM-only library opens no database, accepts no database pool and has no SQL
+implementation. `MemoryStore` is the upstream RAM implementation, process-local
+only. Durable adapters, migrations and credentials belong to the application.
+Only selected current commitments, version, latest acceptance and replay metadata
+are submitted to the port; never balances, counterparties, private receipts,
+provider payloads, login dates or request history. The synchronous API belongs
+on a blocking thread outside Tokio. See [storage migration](docs/STORAGE.md).
 
 ## Dependency survey
 
@@ -23,7 +25,7 @@ Surveyed crates.io and GitHub on 2026-09-30:
 
 | Candidate | Choice |
 | --- | --- |
-| [crlt](https://github.com/corbet-foss/crlt), [libsql](https://crates.io/crates/libsql) | crlt main already exposes community capabilities, transactions and indexed queries. Use it through cssr; no direct production database adapter. |
+| [crlt](https://github.com/corbet-foss/crlt), [libsql](https://crates.io/crates/libsql) | crlt main already exposes community capabilities, transactions and indexed queries. Used only by test-owned host adapters; no database adapter is shipped by cblc. |
 | [Noir](https://github.com/noir-lang/noir), [Barretenberg](https://github.com/AztecProtocol/aztec-packages/tree/next/barretenberg) | Retain the existing pinned relation and upstream proof backend. No own cryptographic primitive. |
 | [Bulletproofs](https://github.com/dalek-cryptography/bulletproofs) | Not selected: changing proof systems would discard the existing tested receipt and state relation. |
 | [ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek), [sha2](https://crates.io/crates/sha2) | Retain established signing and hashing dependencies used by the protocol. |
@@ -34,7 +36,7 @@ cfrm or an assumed unreleased cvld API. `AccountProofVerifier` is the minimal
 trusted verifier boundary; `ProcessAccountVerifier` supplies the production
 adapter. Tests label synthetic upstream verifiers as storage-only tests.
 
-GitHub Actions runs fmt, clippy with warnings denied, Rust integration tests and
+CI runs fmt, clippy with warnings denied, Rust integration tests and
 JavaScript contract tests. The legacy circuits and browser experiments remain
 validation tooling, excluded from the server API. Real proof acceptance and
 storage tests have distinct evidence; historical reports are not new CI results.
