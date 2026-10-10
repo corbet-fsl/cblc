@@ -571,7 +571,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#81e338e4b0d18c018f88604da30669af42608611"
+source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#a53d16a2e8de415863669f3dfaec89023858622a"
 dependencies = [
  "barretenberg-rs",
  "data-encoding",

@@ -33,6 +33,7 @@ rustc --version
 cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }
 cargo clippy --locked --all-targets --all-features -- -D warnings
 python3 -B .ci/test-commit-deadline-regression.py
+cargo test --locked --all-features --lib
 cargo build --locked --example czkp_bb_worker
 cblc_target_dir="${CARGO_TARGET_DIR:-target}"
 export CBLC_BB="$(realpath "$cblc_target_dir/debug/examples/czkp_bb_worker")"
