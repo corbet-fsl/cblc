@@ -150,6 +150,26 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
         Err(Error::Expired)
     ));
     clock.store(110, Ordering::SeqCst);
+    assert!(matches!(
+        service.handle(request.clone()),
+        Err(Error::ClockRollback)
+    ));
+    // This independent scenario starts with a valid clock. Reloading the first
+    // service must never erase its observation of the later expired request.
+    let observed = clock.clone();
+    let mut service = AccountService::new(
+        open(
+            &dir.path().join("retry-accounts"),
+            &f,
+            RealVerifier::default(),
+        ),
+        move || observed.load(Ordering::SeqCst),
+        100_000,
+    )
+    .unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     let accepted = service.handle(request.clone()).unwrap();
     assert!(matches!(accepted, AccountServiceResponse::Apply(_)));
     let tune = service.tune_waiting_period(0, 1100).unwrap();

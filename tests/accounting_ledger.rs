@@ -219,32 +219,53 @@ fn real_authority_and_common_checkpoint_are_required_before_verifying() {
 }
 
 #[test]
-fn expiry_and_clock_changes_during_verification_have_no_effect() {
+fn expiry_and_clock_changes_during_verification_cannot_commit_state() {
     let dir = tempfile::tempdir().unwrap();
     let f = Fixture::new();
-    let mut ledger = open(
-        &dir.path().join("ledger.sqlite"),
-        &f,
-        RealVerifier::default(),
-    );
-    ledger
-        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
-        .unwrap();
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
-    for times in [[120, 120, 180], [120, 119, 120], [120, 120, 119]] {
+    for (scenario, (times, expected)) in [
+        ([120, 120, 180], Error::Expired),
+        ([120, 119, 120], Error::ClockRollback),
+        ([120, 120, 119], Error::ClockRollback),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        // Each clock schedule begins with its own ledger so a prior refusal's
+        // retained time cannot mask a later pre/post-verifier boundary.
+        let path = dir.path().join(format!("clock-{scenario}.sqlite"));
+        let mut ledger = open(&path, &f, RealVerifier::default());
+        ledger
+            .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
+        let database = inspect(&path);
+        let original = database.snapshot();
         let index = Cell::new(0);
         let clock = || {
             let i = index.get();
             index.set(i + 1);
             times[i]
         };
-        assert!(matches!(
-            ledger.apply(&g, &a, &request, clock),
-            Err(Error::Expired | Error::ClockRollback)
-        ));
+        assert_eq!(ledger.apply(&g, &a, &request, clock), Err(expected));
+        assert_eq!(database.snapshot(), original);
+        if scenario == 0 {
+            assert_eq!(
+                ledger.apply(&g, &a, &request, || 130),
+                Err(Error::ClockRollback)
+            );
+            assert_eq!(database.snapshot(), original);
+        }
     }
+    let mut ledger = open(
+        &dir.path().join("valid.sqlite"),
+        &f,
+        RealVerifier::default(),
+    );
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
     ledger.apply(&g, &a, &request, || 130).unwrap();
     assert_eq!(
         ledger.apply(&g, &a, &request, || 129),

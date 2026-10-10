@@ -30,10 +30,11 @@ impl AtomicTransaction for HostTransaction<'_> {
     fn commit(self: Box<Self>) -> Result<(), Error> {
         self.0.commit().map_err(|_| Error::Storage)
     }
-    fn commit_before(self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
+    fn commit_before(mut self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
         // All staged SQL work already holds the exclusive transaction. This is
         // the host's logical commit decision; durability may finish later.
-        deadline.check()?;
+        let (key, value) = deadline.commit_record()?;
+        self.0.put(key, &value).map_err(|_| Error::Storage)?;
         self.0.commit().map_err(|_| Error::Storage)
     }
     fn rollback(self: Box<Self>) -> Result<(), Error> {
