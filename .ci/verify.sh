@@ -32,6 +32,7 @@ python3 -B .ci/check-native-sdk.py
 rustc --version
 cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }
 cargo clippy --locked --all-targets --all-features -- -D warnings
+python3 -B .ci/test-commit-deadline-output.py
 python3 -B .ci/test-commit-deadline-regression.py
 cargo test --locked --all-features --lib
 cargo build --locked --example czkp_bb_worker

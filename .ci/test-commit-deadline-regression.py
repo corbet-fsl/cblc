@@ -61,7 +61,7 @@ def require_assertion(test, label):
     if (status != 101 or not named_result(output, test, "FAILED")
             or "test result: FAILED. 0 passed; 1 failed; 0 ignored;" not in output
             or not re.search(r"thread '" + re.escape(test)
-                             + r"' panicked at (?:src/\.\./)?tests/internal/storage\.rs:[0-9]+:[0-9]+:",
+                             + r"'(?: \([0-9]+\))? panicked at (?:src/\.\./)?tests/internal/storage\.rs:[0-9]+:[0-9]+:",
                              output)
             or "assertion `left == right` failed" not in output
             or "error[E" in output or "could not compile" in output):
