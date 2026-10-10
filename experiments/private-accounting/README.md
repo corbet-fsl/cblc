@@ -40,7 +40,7 @@ fixture explicitly begins at the scenarios' already reserved commitments and
 tests compare-and-swap/replay behavior only after real proof verification. It
 does not implement production genesis or account recovery. The current
 [SQLite storage contract](ledger.md) adds bounded process-restart and transaction
-tests; it passed Crow run 42 as detailed below. Duplicate
+tests; it passed verification run 42 as detailed below. Duplicate
 identity rejection in the native fixture tests enrollment uniqueness, not a
 zero-knowledge genesis proof.
 
@@ -121,7 +121,7 @@ rates. Additional negatives cover scheme reinterpretation, noncanonical fields
 and field-congruent identities. One test genuinely re-signs a receipt after
 changing nonce `7` to `7 + field_modulus`, retaining the old state and event
 marker; an erroneous whole-field identity conversion must not make it valid.
-The comparison passed Crow **9/40** with actual browser proofs and independent
+The comparison passed verification run **9/40** with actual browser proofs and independent
 verification; measurements and their limits are recorded below.
 The conservative 524,288-point setup floor remains pinned; a smaller setup has
 not been substituted to improve the benchmark.
@@ -177,7 +177,7 @@ No host libraries or dependency package files are patched.
 
 ## Running and interpreting the evidence
 
-Run on the existing Crow worker, with project-local dependencies and the
+Run on the existing CI worker, with project-local dependencies and the
 preinstalled browser. No host tool or browser installation is needed.
 
 ```sh
@@ -226,7 +226,7 @@ WASM memory, iOS and Android performance remain unmeasured.** The harness's
 process-family samples are a separate, incomplete estimate of resident memory.
 No result is a pass until the actual CI run succeeds.
 
-### Measured baseline: Crow 9/37
+### Measured baseline: verification run 9/37
 
 On 2026-09-15, source `310bd23086f0978b5ffe3f7492dcb28e30786eb9`
 passed **40 browser checks and 19 independent-verifier checks**, using
@@ -256,7 +256,7 @@ with `UltraHonkVerifierBackend`; its measured result follows below.
 This desktop synthetic result proves neither mobile feasibility, full private
 accounting, distributed concurrency nor anonymity against traffic observation.
 
-### Measured follow-up: Crow 9/38
+### Measured follow-up: verification run 9/38
 
 Source `36fc44b427a3cf7702d30d45fd0cc9aa212c5f25` passed **41 browser checks
 and 19 independent-verifier checks** on the same recorded browser/runtime
@@ -289,18 +289,18 @@ The faster verifier does not remove the prover's memory or latency costs.
 ### Profiling the existing compiled artifact
 
 [profile.mjs](profile.mjs) accepts `CIRCUIT_PATH`, `CIRCUIT_SHA256` and
-`PROFILE_ARTIFACT_DIR` (both paths absolute). On Crow, run it with the locked
+`PROFILE_ARTIFACT_DIR` (both paths absolute). In CI, run it with the locked
 project dependencies. It verifies the exact compiled JSON digest and requests
 per-opcode gate counts from the same backend, without compilation, setup or
 proof witnesses. It writes raw counts, decompressed public debug symbols and
 source mappings, including explicit missing-location/shared-overhead accounting.
 Source attribution is not an isolated primitive timing or memory benchmark.
-Crow **9/39** attributed 152,608 gates to SHA-256 source (76.2%), 43,103 to P-256,
+Verification run **9/39** attributed 152,608 gates to SHA-256 source (76.2%), 43,103 to P-256,
 556 to other located source and 3,738 to opcodes without debug locations, with
 209 further gates outside the opcode totals. This motivates the separate hash
 comparison; it does not predict a proportional reduction in time or memory.
 
-### Measured Poseidon2 comparison: Crow 9/40
+### Measured Poseidon2 comparison: verification run 9/40
 
 Source `d44c9f1e33f903a8e9a4bfea2a54ea82e9652521` passed **51 browser checks
 and 20 independent-verifier checks** with
@@ -339,7 +339,7 @@ follows below. Roughly 744 MiB of observed browser memory and
 13–14 seconds of proving still do not establish an acceptable mobile experience.
 No full accounting, traffic-unlinkability or audit claim follows from this test.
 
-### Same-source SHA compatibility: Crow 9/41
+### Same-source SHA compatibility: verification run 9/41
 
 The same source `d44c9f1e33f903a8e9a4bfea2a54ea82e9652521` and dependency locks
 passed **42 browser checks and 20 independent-verifier checks** with
@@ -365,7 +365,7 @@ This checks compatibility of the shared glue in both modes and supplies a closer
 comparison than separate source revisions. It remains two warmed proofs per
 mode, without repeated trials, controlled host load or target-mobile evidence.
 
-### Durable storage checkpoint: Crow 9/42
+### Durable storage checkpoint: verification run 9/42
 
 Source `0ef6fb410ad356ff483be49b7da45da3be9ed623` passed **51 browser
 checks and 54 independent-process checks**, including 37 labeled storage

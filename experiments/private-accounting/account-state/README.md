@@ -1,6 +1,6 @@
 # Account-state foundation
 
-**Revision3 Answer, Close and runtime waiting-period tuning passed on Crow 9/61.**
+**Revision3 Answer, Close and runtime waiting-period tuning passed in verification run 9/61.**
 Real proofs validate confirmed-Answer and fixed-deadline refunds, immediate
 recipient Close settlement, and waiting-only tuning with peer-v3. All downloaded
 artifacts match the final suite checksum manifest. The archived revision2
@@ -213,7 +213,7 @@ implementation diversity.
 
 ## Revision3 integration evidence
 
-Crow 9/61 passed Answer and Close at cfrm
+Verification run 9/61 passed Answer and Close at cfrm
 `96c1884a08e0b7aaba0dea38c238517ae0261f9c`, with cmsg
 `ef1483c0a709e86975c44f6f8c84e833e7aa6ac4`. All ten downloaded metadata/artifact
 files were verified against the final suite `SHA256SUMS`, whose SHA256 is
@@ -280,7 +280,7 @@ use the same BB engine.
 
 ## Archived revision2 integration evidence
 
-Crow 9/58 passed the former Close/expiry burn policy in both scenarios at cfrm
+Verification run 9/58 passed the former Close/expiry burn policy in both scenarios at cfrm
 `eddc92835b2e2b08bc431852c8ff3332203198eb`, with cmsg
 `80bbcf30e777b56a9ce6f8ea4a261f440c349eb0`:
 
@@ -348,19 +348,19 @@ These runs predate the current lifecycle/rate/refill policy. There is no v1
 state import or migration; changing scope must
 not permit a second lifetime genesis.
 
-Crow 9/46 at `79708b7251e6a983b3478bd9530068778940a436` passed nine actual
+Verification run 9/46 at `79708b7251e6a983b3478bd9530068778940a436` passed nine actual
 Answer-flow browser proofs, 85 browser checks and 19 independently pinned Node
 checks. The Rust integration then exposed a SQLite lock timeout during slow
 verifier startup. The corrected ledger passed 13 native storage/authorization
-tests on Crow 9/48 at `524956395852696c1d3f6ac4bd57ef5f8652c261`.
+tests in verification run 9/48 at `524956395852696c1d3f6ac4bd57ef5f8652c261`.
 
-Crow 9/49 at that corrected source reused the hash-verified run 46 public proofs
+Verification run 9/49 at that corrected source reused the hash-verified run 46 public proofs
 and retained native enrollment. All 18 real Rust integration checks passed,
 including independent-process contention, durable acceptance, process exit
 after commit, expired exact retry and malformed-proof rejection. This replay
 did not rerun the browser or receive private witnesses.
 
-Crow 9/50 at `1b404017b9bde8cffe9c27efff76bb8c275057b7` passed the separate
+Verification run 9/50 at `1b404017b9bde8cffe9c27efff76bb8c275057b7` passed the separate
 Close flow: eight real browser proofs, 69 browser checks, 18 independent Node
 checks and 17 real Rust ledger checks. The recipient settled after the silent
 sender's credentials expired. The additional outgoing obligation remained

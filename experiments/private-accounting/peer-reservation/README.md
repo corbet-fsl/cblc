@@ -1,13 +1,13 @@
 # Peer reservation proof foundation
 
-**Peer version3 passed in Answer and Close on Crow 9/61.**
+**Peer version3 passed in Answer and Close in verification run 9/61.**
 Two real browser peer proofs per scenario verified against genuine Rust account
 acceptances
 after waiting-period tuning and fed the native cmsg protected-release gate.
 Archived peer-v2 integrations are retained separately below. Production
 `AllocationLedger::resolve_private` remains closed; this fixture does not
 establish deployment, complete recovery or mobile feasibility. The older v1
-relation only compiled on Crow 9/51 at `0ae9b897490bd48810b89fcc561e9e04128a80bc`.
+relation only compiled in verification run 9/51 at `0ae9b897490bd48810b89fcc561e9e04128a80bc`.
 
 This separate Noir relation proves membership of one Prepared (`1`) or Active
 (`2`) obligation in an already accepted account state. Settled (`3`), Canceled
@@ -115,7 +115,7 @@ additional witnessing; this membership proof cannot establish non-equivocation.
 
 ## Bounded integration entrypoints
 
-Compile-only, from `experiments/private-accounting` on the existing Crow worker
+Compile-only, from `experiments/private-accounting` on the existing CI worker
 after its normal locked dependency installation:
 
 ```sh
@@ -209,7 +209,7 @@ must keep these artifacts on the authenticated peer channel.
 
 ## Peer-v3 evidence
 
-Crow 9/61 passed Answer and Close at cfrm
+Verification run 9/61 passed Answer and Close at cfrm
 `96c1884a08e0b7aaba0dea38c238517ae0261f9c`, with cmsg
 `ef1483c0a709e86975c44f6f8c84e833e7aa6ac4`: Answer's 231 and Close's 243
 Chromium checks each include **42 checks for each of two real Active peer proofs**.
@@ -248,7 +248,7 @@ locking are not established by this run. See the
 
 ## Archived peer-v2 evidence
 
-Crow 9/58 at cfrm `eddc92835b2e2b08bc431852c8ff3332203198eb`, with cmsg
+Verification run 9/58 at cfrm `eddc92835b2e2b08bc431852c8ff3332203198eb`, with cmsg
 `80bbcf30e777b56a9ce6f8ea4a261f440c349eb0`, passed 224 Chromium checks in Answer
 and 229 in Close. Each includes 41 checks for each of two real Active peer
 proofs. All four 14,656-byte proofs verified against genuine signed Rust

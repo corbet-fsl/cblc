@@ -173,3 +173,9 @@ filesystem growth/truncation immediately after fstat, verify the sentinel bound
 and closed handles, and reject oversized files/directories. This closes the
 extension reader's prior stat/readFile allocation race without changing proof
 relations or trusting a synthetic verification result.
+
+## Historical benchmark evidence
+
+The README's 2026-09-30 measurements at source `d145c4c` came from
+[the retained verification run](https://github.com/corbet-libs/cblc/actions/runs/36743686840).
+That historical result does not qualify later source revisions.

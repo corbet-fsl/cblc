@@ -21,7 +21,7 @@ on a blocking thread outside Tokio. See [storage migration](docs/STORAGE.md).
 
 ## Dependency survey
 
-Surveyed crates.io and GitHub on 2026-09-30:
+Surveyed registry packages and upstream repositories on 2026-09-30:
 
 | Candidate | Choice |
 | --- | --- |
@@ -72,7 +72,7 @@ G1 prefix. These Node wasm samples do not establish browser or mobile performanc
 and production validity windows must accommodate the complete proving/queue time.
 
 Measured on 2026-09-30 at source revision `d145c4c` in
-[the passing CI run](https://github.com/corbet-libs/cblc/actions/runs/36743686840):
+[the retained historical validation](docs/COVERAGE.md#historical-benchmark-evidence):
 Ubuntu 24.04.5, AMD EPYC 9V45 CPU model, about 15.6 GiB reported RAM,
 Node v24.21.0, one prover thread. Each cell is one sample, not a percentile.
 
