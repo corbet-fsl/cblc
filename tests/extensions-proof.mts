@@ -15,15 +15,40 @@ import {createProver} from '@corbet-labs/czkp/prove';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
-import {loadArtifacts} from '../runtime/extensions/artifacts.mjs';
-import init,{prepare} from '../.extension-wasm/cwlt.js';
-await init({module_or_path:await readFile('.extension-wasm/cwlt_bg.wasm')});
-const transition=input=>JSON.parse(prepare(JSON.stringify(input)));
+import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
+const recordEpochArtifacts=process.argv.length===3&&process.argv[2]==='--record-epoch-artifacts';
+if(process.argv.length!==2&&!recordEpochArtifacts)throw new Error('Unknown extension fixture selector');
+if(recordEpochArtifacts&&(!process.env.CBLC_EXTENSION_DIRECTORY||resolve(process.env.CBLC_EXTENSION_DIRECTORY)===resolve('.extension-test')))
+  throw new Error('Separate record epoch artifact directory required');
+let transition;
+if(!recordEpochArtifacts) {
+  const {default:init,prepare}=await import('../.extension-wasm/cwlt.js');
+  await init({module_or_path:await readFile('.extension-wasm/cwlt_bg.wasm')});
+  transition=input=>JSON.parse(prepare(JSON.stringify(input)));
+}
 const directory=resolve(process.env.CBLC_EXTENSION_DIRECTORY??'.extension-test');
 const sha=b=>createHash('sha256').update(b).digest();
 const bytes=n=>new Uint8Array(32).fill(n);
 const toArray=Array.from.bind(Array);
 const programs=JSON.parse(await readFile(resolve(directory,'circuits.json')));
+if(Object.hasOwn(programs,'record_epoch')!==recordEpochArtifacts)throw new Error('Matching record epoch compile and fixture selectors required');
+const kinds=recordEpochArtifacts?['update','deposit','record','record_epoch']:['update','deposit','record'];
+if(recordEpochArtifacts) {
+  // Count the actual compiled public ABI, never a claimed proof or zero witness.
+  const width=type=>{
+    if(['field','integer','boolean'].includes(type.kind))return 1;
+    if(type.kind==='array')return type.length*width(type.type);
+    if(type.kind==='struct')return type.fields.reduce((count,field)=>count+width(field.type),0);
+    throw new Error('Unsupported compiled public ABI');
+  };
+  const expected={update:345,deposit:262,record:172,record_epoch:303};
+  for(const kind of kinds) {
+    assert(programs[kind]?.bytecode,'Missing original compiled circuit');
+    const count=programs[kind].abi.parameters.filter(parameter=>parameter.visibility==='public')
+      .reduce((count,parameter)=>count+width(parameter.type),0);
+    assert.equal(count,expected[kind],`${kind} original public ABI width`);
+  }
+}
 const lock=JSON.parse(await readFile('circuits/extensions/setup-lock.json'));
 await mkdir(resolve(directory,'setup'),{recursive:true});
 const setup={};
@@ -37,7 +62,7 @@ for(const f of lock.files){
 const keyApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const keys={};
 try{await keyApi.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2Point:setup['g2.dat']});
-  for(const kind of ['update','deposit','record'])keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
+  for(const kind of kinds)keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
 }finally{await keyApi.destroy();}
 const keyBytes=Buffer.from(JSON.stringify(keys));await writeFile(resolve(directory,'keys.json'),keyBytes);
 const issuer=createECDH('prime256v1');issuer.setPrivateKey(Buffer.alloc(32,3));
@@ -46,6 +71,17 @@ const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-
 const manifestBytes=Buffer.from(JSON.stringify(manifest));await writeFile(resolve(directory,'manifest.json'),manifestBytes);
 const configPath=resolve(directory,'config.json');await writeFile(configPath,JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
 const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
+if(recordEpochArtifacts) {
+  for(const kind of kinds) {
+    const selected=artifacts.artifacts(kind);
+    assert.deepEqual(selected.circuit,programs[kind]);
+    assert.equal(hex(selected.verificationKey),keys[kind]);
+  }
+  // Genuine maintained compilation/key generation and authenticated artifact
+  // bytes only. No R2 witness, proof, issuer acceptance or runtime qualification.
+  console.log('Generated authenticated original four-circuit artifacts; R2 proofs remain unqualified');
+  process.exit(0);
+}
 const hashApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 const hashes=extensionHashes(hashApi);
 const child=spawn(resolve(process.env.CBLC_EXTENSION_ISSUER??'target/debug/examples/extension_issuer'),[configPath],{stdio:['pipe','pipe','inherit']});

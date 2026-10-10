@@ -55,7 +55,7 @@ See [CONTRACT](docs/CONTRACT.md) and [migration](docs/MIGRATION.md).
 
 ## Extension proof validation
 
-The end-to-end suite is `tests/extensions-proof.mjs`. It uses cwlt's wasm Rust
+The end-to-end suite is `tests/extensions-proof.mts`. It uses cwlt's wasm Rust
 planner, real Noir/Barretenberg proofs, the native cvfy process boundary, a local libSQL
 issuer through a test-owned cssr adapter, and cpns's atomic change API. It checks initial and established
 punishment, forced ingestion, reordered deliveries, debt repayment, three outcome

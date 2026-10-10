@@ -20,7 +20,17 @@ The probe does not admit an account. There is no synthetic-verifier feature or
 public implementation hook. Legacy v2 proofs cannot establish extended states
 or bypass an enabled extension. No automatic migration or second genesis exists.
 
-The test-only `runtime/extensions/compile.mjs` compiles all three circuits. A host-pinned manifest
+The test-only `runtime/extensions/compile.mts` compiles the existing three circuits
+by default. Its explicit `--record-epoch` mode also compiles the original R2
+relation into a separately configured `CBLC_EXTENSION_DIRECTORY`. The matching
+`tests/extensions-proof.mts --record-epoch-artifacts` mode derives all four keys
+with the maintained backend, checks their compiled public ABI widths, and checks
+the authenticated artifact group. It stops before any holder, issuer or proof
+round trip. These source paths and loader tests do not establish native R2 proof
+qualification. Both selectors require the separate directory; the default fixture
+retains the existing three-circuit journey.
+
+A host-pinned manifest
 authenticates the circuit/key groups, issuer public key, toolchain and setup files.
 Acceptances pin the circuit/key group digests. setup-lock.json pins the upstream
 compressed G1 prefix and G2 bytes. Verification initializes one authenticated G1

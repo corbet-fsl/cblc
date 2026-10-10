@@ -88,7 +88,7 @@ the verifier subprocess, and czkp wraps upstream proof/ABI operations.
 
 ## Validation and performance
 
-tests/extensions-proof.mjs generates proofs from cwlt's wasm Rust planner and
+tests/extensions-proof.mts generates proofs from cwlt's wasm Rust planner and
 sends them through the real cvfy worker into a libSQL-backed cblc issuer. It
 exercises both burns, forced ingestion, three outcomes, debt-first refill,
 quorum/rounding and the real cpns change API. Negative cases include corrupt

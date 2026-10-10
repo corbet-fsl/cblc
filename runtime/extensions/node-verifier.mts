@@ -1,7 +1,7 @@
 // Bounded public-proof worker. Member openings never enter this process.
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {loadArtifacts} from './artifacts.mjs';
+import {loadArtifacts} from './artifacts.mts';
 import {expectedProofs,exact,equal} from './statement.mjs';
 import {publicInputs} from '@corbet-labs/czkp/abi';
 import {createVerifier} from '@corbet-labs/czkp/verify';

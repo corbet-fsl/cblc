@@ -8,12 +8,12 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 
 const workers = [
-  {name: 'accounting', maximum: 3 * 1024 * 1024},
-  {name: 'extensions', maximum: 9 * 1024 * 1024},
+  {name: 'accounting', extension: 'mjs', maximum: 3 * 1024 * 1024},
+  {name: 'extensions', extension: 'mts', maximum: 9 * 1024 * 1024},
 ];
 
-for (const {name, maximum} of workers) {
-  const script = fileURLToPath(new URL(`../../runtime/${name}/node-verifier.mjs`, import.meta.url));
+for (const {name, extension, maximum} of workers) {
+  const script = fileURLToPath(new URL(`../../runtime/${name}/node-verifier.${extension}`, import.meta.url));
   function refuses(args: string[], input: string | Uint8Array = '{}') {
     const result = spawnSync(process.execPath, [script, ...args], {
       input, encoding: 'utf8', maxBuffer: 16 * 1024, timeout: 10_000,
