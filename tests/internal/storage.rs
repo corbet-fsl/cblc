@@ -60,6 +60,10 @@ impl cssr::Transaction for Unavailable {
 fn upstream_failures_cannot_become_success_or_expose_details() {
     let mut tx = Transaction::new(Box::new(MemoryTransaction(Box::new(Unavailable))));
     assert!(matches!(tx.get::<u64>(b"key"), Err(Error::Storage)));
+    assert!(matches!(
+        tx.current_range::<u64>(b"a", b"b", 2),
+        Err(Error::Storage)
+    ));
     assert!(matches!(tx.put(b"key", &1), Err(Error::Storage)));
     assert!(matches!(tx.delete(b"key"), Err(Error::Storage)));
     assert!(matches!(tx.commit(), Err(Error::Storage)));
@@ -70,6 +74,90 @@ fn upstream_failures_cannot_become_success_or_expose_details() {
         tx.commit_before(&CommitDeadline::new(&|| 10, 10, 20)),
         Err(Error::Storage)
     ));
+}
+
+#[test]
+fn current_snapshots_share_staged_memory_and_live_commit_deadline() {
+    let mut store = MemoryStore::default();
+    let mut tx = store.transaction().unwrap();
+    tx.put(b"aa", &1_u64).unwrap();
+    tx.put(b"ab", &2_u64).unwrap();
+    tx.put(b"ba", &3_u64).unwrap();
+    assert_eq!(
+        tx.current_range::<u64>(b"a", b"b", 1).unwrap(),
+        vec![(b"aa".to_vec(), 1)]
+    );
+    assert_eq!(
+        tx.current_range::<u64>(b"a", b"b", (1 << 20) + 1).unwrap(),
+        vec![(b"aa".to_vec(), 1), (b"ab".to_vec(), 2)]
+    );
+    tx.delete(b"aa").unwrap();
+    tx.put(b"ab", &4_u64).unwrap();
+    assert_eq!(
+        tx.current_range::<u64>(b"a", b"b", 3).unwrap(),
+        vec![(b"ab".to_vec(), 4)]
+    );
+    // The snapshot does not bypass the original live commit decision.
+    assert_eq!(
+        tx.commit_before(&CommitDeadline::new(&|| 20, 10, 20)),
+        Err(Error::Expired)
+    );
+    let mut tx = store.transaction().unwrap();
+    assert!(tx.current_range::<u64>(b"a", b"c", 3).unwrap().is_empty());
+    tx.put(b"ab", &5_u64).unwrap();
+    tx.commit_before(&CommitDeadline::new(&|| 19, 10, 20))
+        .unwrap();
+    let mut tx = store.transaction().unwrap();
+    assert_eq!(
+        tx.current_range::<u64>(b"a", b"b", 3).unwrap(),
+        vec![(b"ab".to_vec(), 5)]
+    );
+    assert_eq!(tx.get::<u64>(b"clock").unwrap(), Some(19));
+    tx.put(b"aa", &"wrong type").unwrap();
+    assert!(matches!(
+        tx.current_range::<u64>(b"a", b"b", 3),
+        Err(Error::Storage)
+    ));
+    tx.rollback().unwrap();
+}
+
+// A caller-owned adapter can retain its exact-key operations without silently
+// claiming to support a complete current snapshot.
+struct ExactOnly<'a>(Transaction<'a>);
+impl AtomicTransaction for ExactOnly<'_> {
+    fn get(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
+        self.0.0.get(key)
+    }
+    fn put(&mut self, key: &[u8], value: &[u8]) -> Result<(), Error> {
+        self.0.0.put(key, value)
+    }
+    fn delete(&mut self, key: &[u8]) -> Result<(), Error> {
+        self.0.0.delete(key)
+    }
+    fn commit(self: Box<Self>) -> Result<(), Error> {
+        self.0.commit()
+    }
+    fn commit_before(self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
+        self.0.commit_before(deadline)
+    }
+    fn rollback(self: Box<Self>) -> Result<(), Error> {
+        self.0.rollback()
+    }
+}
+
+#[test]
+fn unsupported_host_snapshot_is_not_an_empty_community() {
+    let mut store = MemoryStore::default();
+    let mut tx = Transaction::new(Box::new(ExactOnly(store.transaction().unwrap())));
+    tx.put(b"aa", &9_u64).unwrap();
+    assert_eq!(tx.get::<u64>(b"aa").unwrap(), Some(9));
+    assert!(matches!(
+        tx.current_range::<u64>(b"a", b"b", 3),
+        Err(Error::UnsupportedCapability)
+    ));
+    tx.rollback().unwrap();
+    let mut tx = store.transaction().unwrap();
+    assert_eq!(tx.get::<u64>(b"aa").unwrap(), None);
 }
 
 // Preserve the real staged RAM writes but refuse at the upstream commit edge.

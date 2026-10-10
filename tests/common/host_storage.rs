@@ -21,6 +21,16 @@ impl AtomicTransaction for HostTransaction<'_> {
     fn get(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
         self.0.get(key).map_err(|_| Error::Storage)
     }
+    fn current_range(
+        &mut self,
+        start: &[u8],
+        end: &[u8],
+        limit: u32,
+    ) -> Result<Vec<cssr::CurrentRecord>, Error> {
+        self.0
+            .current_range(start, end, limit)
+            .map_err(|_| Error::Storage)
+    }
     fn put(&mut self, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.0.put(key, value).map_err(|_| Error::Storage)
     }

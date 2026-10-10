@@ -497,9 +497,11 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cssr?branch=main#4c78547783207bdc58eb2d0445e4d62d7e2b7fd9"
+source = "git+https://git.corbet.ch/corbet-foss/cssr?branch=main#92f433cc4236ac170e09c75f6e61560788141325"
 dependencies = [
  "crlt",
+ "czkp",
+ "ed25519-dalek 3.0.0",
  "p256",
  "tokio",
  "url",

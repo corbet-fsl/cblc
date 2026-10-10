@@ -1,6 +1,6 @@
 //! Caller-owned atomic accounting state. The library opens no databases.
 use crate::Error;
-pub use cssr::MemoryStore;
+pub use cssr::{CurrentRecord, MemoryStore};
 use serde::{Serialize, de::DeserializeOwned};
 /// A store that supplies atomic issuer transactions.
 pub trait AccountStorage: Send {
@@ -14,6 +14,18 @@ pub trait AccountStorage: Send {
 /// never raw provider payloads, balances, counterparties or holder openings.
 pub trait AtomicTransaction {
     fn get(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Error>;
+    /// Read ordered current key/value pairs in the half-open range under this
+    /// same transaction. Accept a positive bound up to 2^20 + 1; the final row
+    /// is the original epoch freeze's overflow sentinel, not history pagination.
+    /// Existing hosts refuse until they implement a complete bounded snapshot.
+    fn current_range(
+        &mut self,
+        _start: &[u8],
+        _end: &[u8],
+        _limit: u32,
+    ) -> Result<Vec<CurrentRecord>, Error> {
+        Err(Error::UnsupportedCapability)
+    }
     fn put(&mut self, key: &[u8], value: &[u8]) -> Result<(), Error>;
     fn delete(&mut self, key: &[u8]) -> Result<(), Error>;
     fn commit(self: Box<Self>) -> Result<(), Error>;
@@ -82,6 +94,16 @@ impl AtomicTransaction for MemoryTransaction<'_> {
     fn get(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
         self.0.get(key).or(Err(Error::Storage))
     }
+    fn current_range(
+        &mut self,
+        start: &[u8],
+        end: &[u8],
+        limit: u32,
+    ) -> Result<Vec<CurrentRecord>, Error> {
+        self.0
+            .current_range(start, end, limit)
+            .or(Err(Error::Storage))
+    }
     fn put(&mut self, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.0.put(key, value).or(Err(Error::Storage))
     }
@@ -114,6 +136,24 @@ impl<'a> Transaction<'a> {
             .get(key)?
             .map(|v| serde_json::from_slice(&v).or(Err(Error::Storage)))
             .transpose()
+    }
+    /// Decode a bounded current snapshot without leaving the host transaction.
+    /// This is an issuer operation, never a member lookup or account-history API.
+    pub fn current_range<T: DeserializeOwned>(
+        &mut self,
+        start: &[u8],
+        end: &[u8],
+        limit: u32,
+    ) -> Result<Vec<(Vec<u8>, T)>, Error> {
+        self.0
+            .current_range(start, end, limit)?
+            .into_iter()
+            .map(|(key, value)| {
+                serde_json::from_slice(&value)
+                    .map(|value| (key, value))
+                    .or(Err(Error::Storage))
+            })
+            .collect()
     }
     pub fn put(&mut self, key: &[u8], value: &impl Serialize) -> Result<(), Error> {
         let bytes = serde_json::to_vec(value).or(Err(Error::Storage))?;

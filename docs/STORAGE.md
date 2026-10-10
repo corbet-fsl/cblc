@@ -6,6 +6,17 @@ The host implements `storage::AccountStorage::transaction(&mut self)` returning
 `Transaction::new(Box::new(host_transaction))`. Its `AtomicTransaction` implements
 byte-keyed `get`, `put`, `delete`, consuming `commit` and `rollback`.
 
+The original common record-epoch freeze also requires `current_range(start,
+end, limit)` over current opaque records in the same serialized transaction.
+The range is half-open, ordered by key, and bounded to 1 through 2^20 + 1 rows;
+the extra row detects an oversized complete snapshot. This is not history
+pagination or a member endpoint. The compatibility default returns
+`UnsupportedCapability`, never an empty community. Hosts opt in explicitly;
+the RAM adapter forwards to the maintained upstream store, and the application
+fixture forwards to its existing community-scoped indexed SQL transaction.
+The typed facade rejects malformed values without returning a partial snapshot.
+This port alone does not install an epoch or grant current-record authority.
+
 Fresh time-bounded operations also require the mandatory
 `AtomicTransaction::commit_before(&CommitDeadline)` port. The deadline contains
 the live trusted clock, a monotonic lower bound and exclusive expiry. The host
