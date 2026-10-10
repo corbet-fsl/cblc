@@ -23,6 +23,7 @@ export CBLC_LEDGER_FIXTURES="${CBLC_LEDGER_FIXTURES:-1}"
 node --version | grep -q '^v24\.' || { echo 'CI requires Node major 24' >&2; exit 2; }
 command -v jq >/dev/null || { echo 'missing jq' >&2; exit 2; }
 command -v wasm-pack >/dev/null || { echo 'missing wasm-pack' >&2; exit 2; }
+python3 -B .ci/test-proof-cache.py
 # Wasm target on stable is guaranteed by run-cached.sh (helper readiness +
 # exclusive provisioning); no toolchain mutation here under the shared lock.
 rustc --version
@@ -31,27 +32,33 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint
 npm ci --ignore-scripts --no-audit --no-fund
 npm test
-# CI caches .proof-test across runs (key proofs-v1-<os>-<hash of
-# experiments/private-accounting/account-state/**, runtime/accounting/**,
-# tests/real-proof.mjs, tests/holder/**, package*.json>); verify builds it
-# fresh every run.
-mkdir -p "$CBLC_PROOF_DIRECTORY"
-node tests/real-proof.mjs
-cargo test --locked --all-features --no-fail-fast -- --test-threads=2
-# CI caches .extension-test across runs (key extension-public-v1-<os>-<hash of
-# circuits/extensions/**, runtime/extensions/**, tests/extensions-proof.mjs,
-# tests/holder/extension-checkpoint.mjs, tests/common/mod.rs,
-# examples/extension_issuer.rs, package*.json>); verify runs the cache-miss
-# path fresh, then also replays the fixtures against the current issuer (the
-# cache-hit path both keeps validating the same fixtures).
-node runtime/extensions/compile.mjs
+# As in source CI, reuse only complete fictional public proof fixtures. The
+# stronger local key also binds all Rust code/locks and this cache machinery.
+# Cache entries contain no verification verdict: every current replay remains.
+test "$CBLC_PROOF_DIRECTORY" = "$PWD/.proof-test" || { echo 'Proof cache requires the job-local fixture directory' >&2; exit 2; }
+proof_fixture_cache="$ARTIFACT_ROOT/proof-fixtures-v1"
+proof_fixture_evidence="$(mktemp)"
+printf 'generation_commit=%s\n' "$CI_COMMIT_SHA" > "$proof_fixture_evidence"
+proof_cache_hit=false
+if python3 .ci/proof-cache.py restore --cache "$proof_fixture_cache"; then
+  proof_cache_hit=true
+else
+  proof_cache_status=$?
+  test "$proof_cache_status" -eq 3 || exit "$proof_cache_status"
+fi
+if ! "$proof_cache_hit"; then
+  mkdir -p "$CBLC_PROOF_DIRECTORY"
+  node tests/real-proof.mjs | tee -a "$proof_fixture_evidence"
+fi
+cargo test --locked --all-features --no-fail-fast -- --test-threads=2 | tee -a "$proof_fixture_evidence"
+if ! "$proof_cache_hit"; then
+  node runtime/extensions/compile.mjs
+fi
 CBLC_LAST_GATE="wasm-pack-build"
 wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
 CBLC_LAST_GATE="issuer-build"
 cargo build --locked --example extension_issuer
 mkdir -p .extension-test
-git rev-parse HEAD > .extension-test/source.txt
-sha256sum package-lock.json >> .extension-test/source.txt
 CBLC_LAST_GATE="proof"
 # The ci-job exports a persistent CARGO_TARGET_DIR (absolute); resolve it once
 # so the proof and replay use the actual `cargo build` output dir. Gate unchanged.
@@ -60,11 +67,19 @@ case "$cblc_target_dir" in
   /*) cblc_issuer="$cblc_target_dir/debug/examples/extension_issuer" ;;
   *) cblc_issuer="$PWD/$cblc_target_dir/debug/examples/extension_issuer" ;;
 esac
-CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mjs
+if ! "$proof_cache_hit"; then
+  git rev-parse HEAD > .extension-test/source.txt
+  sha256sum package-lock.json >> .extension-test/source.txt
+  CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mjs | tee -a "$proof_fixture_evidence"
+fi
 CBLC_LAST_GATE="replay"
-CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/replay-extensions.mjs
+node .ci/replay-account-proofs.ts
+CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/replay-extensions.mjs | tee -a "$proof_fixture_evidence"
 CBLC_LAST_GATE="adversaries"
-cargo run --locked --all-features --example extension_adversaries
+cargo run --locked --all-features --example extension_adversaries | tee -a "$proof_fixture_evidence"
+if ! "$proof_cache_hit"; then
+  python3 .ci/proof-cache.py publish --cache "$proof_fixture_cache" --evidence "$proof_fixture_evidence" --generation-commit "$CI_COMMIT_SHA"
+fi
 
 # --- audit job, deterministic part only (stable; CI needs: resolve, check) ---
 # The advisory DB gate (`cargo deny check advisories licenses`) is NOT run
@@ -108,6 +123,7 @@ source <("$NIGHTLY_CARGO" llvm-cov show-env --sh --branch --no-cfg-coverage --no
 "$NIGHTLY_CARGO" llvm-cov clean --workspace
 CBLC_LAST_GATE="nightly-tests"
 "$NIGHTLY_CARGO" test --locked --workspace --all-features -- --test-threads=2
+node .ci/replay-account-proofs.ts
 CBLC_LAST_GATE="instrumented-build"
 "$NIGHTLY_CARGO" build --locked --all-features --example extension_issuer --example extension_adversaries --message-format=json > instrumented-build.json
 CBLC_EXTENSION_ISSUER="$(jq -ers 'map(select(.reason == "compiler-artifact" and .target.name == "extension_issuer" and .executable != null)) | if length == 1 then .[0].executable else error("Expected exactly one issuer executable") end' instrumented-build.json)"
