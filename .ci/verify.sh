@@ -37,6 +37,7 @@ cargo test --locked --no-default-features --test contracts
 cargo test --locked --no-default-features --features schema --test contracts
 python3 -B .ci/test-commit-deadline-output.py
 python3 -B .ci/test-commit-deadline-regression.py
+python3 -B .ci/test-retain-record-fixture.py
 cargo test --locked --all-features --lib
 cargo build --locked --example czkp_bb_worker
 cblc_target_dir="${CARGO_TARGET_DIR:-target}"
@@ -112,6 +113,8 @@ CBLC_LAST_GATE="proof"
   node runtime/extensions/compile.mts --record-epoch
   CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mts --record-epoch-proofs | tee -a "$proof_fixture_evidence"
 )
+# Keep this genuine capture once under its own digest; consumers pin that digest.
+python3 -B .ci/retain-record-fixture.py
 CBLC_LAST_GATE="native-tests"
 # Native constructors authenticate extension artifacts at construction time.
 # Both account and extension fixtures must exist before the integration suite.
