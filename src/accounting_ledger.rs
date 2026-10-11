@@ -41,6 +41,7 @@ mod obligations;
 mod pin_change;
 pub mod record_epoch;
 mod rotation;
+mod settlement;
 use rotation::check_root;
 pub use rotation::{RootRotation, root_rotation_bytes};
 #[cfg(feature = "publication")]
@@ -93,6 +94,7 @@ pub struct AccountLedger<V: AccountProofVerifier> {
     verifier: V,
     operator: SigningKey,
     extensions: Option<Extensions>,
+    settlement: Option<settlement::Settlement>,
     observed_time: Arc<AtomicU64>,
 }
 
@@ -330,6 +332,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             verifier,
             operator,
             extensions: None,
+            settlement: None,
             observed_time: Arc::new(AtomicU64::new(0)),
         })
     }

@@ -138,11 +138,20 @@ At most 64 pending entries are stored per account, without a lifetime inbox
 sequence. Replay markers remain for the account lifetime. Backups and operator
 recordings are outside deletion guarantees.
 
-All outcomes share delayed Deposit envelopes. Release epochs must have arrived
-and batches meet a configured minimum of at least two. No single-deposit endpoint
-exists. Exact retries cannot append twice. The minimum is syntactic: retries and
-sparse traffic do not establish an anonymity set. Operators learn recipients.
-A relay mixing ordinary outcomes is still needed to reduce origin/timing linkage.
+All resolved contacts emit the same hidden-outcome Deposit envelope, whether
+ordinary or punitive. The product sends it anonymously without a member session
+on a separate Tor circuit, using an outcome-only blind rate token. No new relay
+or mixnet is required. The issuer's accepted residual is the resolved-contact
+count per member and epoch, not the counterparty or hidden outcome kind.
+
+The original `minimum_deposit_batch` remains part of the unchanged extension
+policy and proof bytes for compatibility. It is not a minimum at the daily cut:
+the Deposit relation has no aggregation count. A configured daily owner applies
+all due outcomes with the common G2 publication in one transaction, including
+zero or one outcome, without padding, omission or an extra delay. The legacy
+batch API remains partial compatibility behavior and refuses after daily mode
+is installed. Operators still learn the recipient's operational commitments;
+Tor and batching do not eliminate timing correlation by a global observer.
 
 Cheap syntax, recipient, replay and state checks precede anonymous verification;
 cthl and separate cvfy pools bound admitted work. Hosts must reuse limits and
@@ -151,3 +160,53 @@ check_record with independent context. A queued outcome cannot be omitted while
 obtaining a fresh action/record, but the library cannot force offline members to
 act or external consumers to check. Witness loss, dishonest certification and
 malicious wallet code remain explicit trust/availability boundaries.
+
+Daily settlement is a trusted host lifecycle. `SettlementConfig` requires the
+actual authenticated Policy epoch/quota, configured period and explicit pending
+fact/member-budget capacities. The product host supplies 86,400 seconds; this
+library has no default. Provision an outcome-only RSA key separate from every
+room key and supply the complete actual room-key inventory (which may be empty
+when rooms are unconfigured). Future room activation must reciprocally reject
+the installed outcome key. Restore that same provisioned key and exact durable
+issuer anchor; there is no private-key getter, generated replacement, budget
+refill or key derivation here. Losing the key prevents issuance for its epoch;
+existing token verification uses its public descriptor. The next epoch may use
+an independently provisioned distinct key without erasing old operational state.
+
+First daily activation requires the original fresh native ledger, before any
+account acceptance or operational clock commit. A previously populated legacy
+ledger has no implicit daily migration. Missing mode/issuer metadata on an
+observed ledger refuses, as do malformed rows or a budget sum that disagrees
+with the issued-count anchor. This availability limitation is explicit; it is
+never interpreted as fresh quota. Native bootstrap still verifies the original
+unchanged activation proof and requires the real fourth RecordEpoch artifact.
+
+`issue_settlement_pass_authorized` retains the actual member/Policy/device
+authority through its same-writer commit check. A blind signature escapes only
+after the exact response and counters commit. Anonymous `stage_settlement`
+requires both real dedicated-token verification and the configured native
+Deposit verifier before acknowledgement. It stores only the six original
+public Deposit commitments, immutable artifact/policy binding and eligible
+epoch, plus operational replay/capacity counters. It stores no proof, token,
+session, private key, source address or arrival timestamp. Staged means verified
+and durable, not yet applied to the inbox. Exact reconciliation reads the same
+original fact/effect rather than accepting new proof bytes.
+
+An ingress decision at time `t` selects `floor(t / P) + 1` with checked
+arithmetic. Release epochs must already have arrived under the original Deposit
+delay; no future release is accepted. Proof completion and logical commit must
+remain before the token's exclusive expiry and selected cut. At a cut the same
+owner prepares all due effects in an uncommitted overlay, rolls it back before
+encryption, then rechecks the complete due set and all account frontiers in one
+final transaction. Inbox effects, replay markers, full common object/lineage/
+anchor and deletion of all due facts commit together. Newly eligible later
+arrivals never modify a published cut. An uncertain committed response returns
+Storage for reconciliation. Legacy early batch application and separate freeze
+refuse after daily activation; publication dispatches to this atomic owner.
+
+The native daily owner tests use genuine existing four-artifact genesis and
+Deposit witness outputs. They cover zero/one/multiple outcomes and owner
+boundaries; they do not claim a newly proved changed-inbox R2 holder opening.
+This source stage has not been executed. The authenticated host publication,
+anonymous separate-Tor transport and Policy-derived issuance count composition
+remain required before end-to-end settlement qualification.

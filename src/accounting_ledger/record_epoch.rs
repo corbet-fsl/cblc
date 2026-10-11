@@ -17,6 +17,11 @@ const ANCHOR: &[u8] = b"record-epoch-anchor:v1";
 const OBJECT_PREFIX: &[u8] = b"cblc.record-witnesses.v2\0";
 const HPKE_INFO: &[u8] = b"cblc.record-witness.v2\0";
 const MAX_FRONTIERS: u32 = 1 << 20;
+mod install;
+mod prepare;
+pub(super) use install::{existing_in, install_in};
+pub(super) use prepare::{Inputs as EpochInputs, prepare_in};
+
 const ANCESTRY_PREFIX: &[u8] = b"record-ancestry-latest:v1:";
 
 // Attached to the current Frontier in the publication transaction. It can only move
@@ -373,7 +378,7 @@ impl RecordEpochPublication {
 }
 
 impl FrozenEpoch {
-    fn encrypt(
+    pub(super) fn encrypt(
         &self,
         issuer: &cssr::certificate::RecordIssuer,
     ) -> Result<RecordEpochPublication, Error> {
@@ -510,6 +515,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         period_seconds: u64,
         clock: impl Fn() -> u64,
     ) -> Result<RecordEpochPublication, Error> {
+        if self.settlement.is_some() {
+            return self.publish_daily_settlement(policy_epoch, period_seconds, clock);
+        }
         let clock = observed_clock(self.observed_time.clone(), clock);
         let frozen = self.freeze_record_epoch(policy_epoch, period_seconds, &clock)?;
         let record_issuer = cssr::certificate::RecordIssuer::new(&self.operator.to_bytes());
@@ -518,6 +526,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         let now = clock();
         check_time(now, frozen.0.frozen_at.max(clock_floor(&mut tx)?))?;
         published.descriptor.check_time(now)?;
+        super::settlement::legacy_fence(&mut tx)?;
         check_config(&mut tx, &self.config)?;
         check_extension_config(&mut tx, self.extensions.as_ref())?;
         if let Some(prior) = tx.get::<RecordEpochPublication>(PUBLISHED)? {
@@ -549,65 +558,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Ok(prior);
             }
         }
-        // Validate the complete snapshot after encryption. No owner addition,
-        // accepted state change, recipient change or late deposit may be missed.
-        let rows: Vec<(Vec<u8>, Frontier)> = tx.current_range(&[1], &[2], MAX_FRONTIERS + 1)?;
-        if rows.len() != frozen.0.frontiers.len() {
-            return Err(Error::Replay);
-        }
-        let mut leaves = frozen
-            .0
-            .frontiers
-            .iter()
-            .map(|frontier| frontier.leaf.commitment(&self.community, frozen.0.epoch))
-            .collect::<Result<Vec<_>, _>>()?;
-        leaves.resize(leaves.len().max(2).next_power_of_two(), [0; 32]);
-        let tree = rs_merkle::MerkleTree::<czkp::record::EpochTree>::from_leaves(&leaves);
-        if tree.root() != Some(published.descriptor.root) {
-            return Err(Error::Storage);
-        }
-        for (index, ((stored_key, mut current), snapshot)) in
-            rows.into_iter().zip(&frozen.0.frontiers).enumerate()
-        {
-            let leaf = &snapshot.leaf;
-            if stored_key != key(1, &[&leaf.owner])
-                || current.state != leaf.state
-                || current.version != leaf.version
-                || crate::extensions::inbox(&mut tx, &leaf.owner)?.root != leaf.required_inbox
-                || tx.get::<[u8; 32]>(&recipient_key(&leaf.owner))? != Some(snapshot.recipient_key)
-            {
-                return Err(Error::Replay);
-            }
-            current.record_ancestry = Some(Lineage {
-                epoch: frozen.0.epoch,
-                leaf: czkp::record::Leaf {
-                    owner: leaf.owner,
-                    version: leaf.version,
-                    state: leaf.state,
-                    required_inbox: leaf.required_inbox,
-                    blinding: leaf.blinding,
-                },
-                index: index as u32,
-                path: tree.proof(&[index]).proof_hashes().to_vec(),
-                consumed: crate::extensions::applied(&mut tx, &leaf.owner)?.root
-                    == leaf.required_inbox,
-                requires_descendant: crate::extensions::applied(&mut tx, &leaf.owner)?.root
-                    != leaf.required_inbox,
-            });
-            tx.put(&stored_key, &current)?;
-        }
-        tx.put(FROZEN, &frozen.0)?;
-        tx.put(PUBLISHED, &published)?;
-        tx.put(
-            ANCHOR,
-            &PublishedAnchor {
-                descriptor: published.descriptor.clone(),
-                period_seconds,
-                frozen_at: now,
-                configuration: frozen.0.configuration,
-                extension_configuration: frozen.0.extension_configuration,
-            },
-        )?;
+        install::install_in(&mut tx, &frozen, &published, now)?;
         tx.commit_before(&CommitDeadline::new(
             &clock,
             now,
@@ -690,6 +641,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         period_seconds: u64,
         clock: impl Fn() -> u64,
     ) -> Result<FrozenEpoch, Error> {
+        if self.settlement.is_some() {
+            return Err(Error::UnsupportedCapability);
+        }
         let clock = observed_clock(self.observed_time.clone(), clock);
         let now = clock();
         check_time(now, 0)?;
@@ -715,6 +669,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         extensions.verifier.require_record_epoch()?;
         let mut tx = self.connection.transaction()?;
         check_time(now, clock_floor(&mut tx)?)?;
+        super::settlement::legacy_fence(&mut tx)?;
         check_config(&mut tx, &self.config)?;
         check_extension_config(&mut tx, Some(extensions))?;
         if let Some(prior) = tx.get::<FrozenEpochState>(FROZEN)? {
@@ -739,61 +694,29 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Ok(FrozenEpoch(prior));
             }
         }
-        let rows: Vec<(Vec<u8>, Frontier)> = tx.current_range(&[1], &[2], MAX_FRONTIERS + 1)?;
-        if rows.is_empty() || rows.len() > MAX_FRONTIERS as usize {
-            return Err(Error::Capacity);
-        }
-        let mut frontiers = Vec::with_capacity(rows.len());
-        for (stored_key, frontier) in rows {
-            if stored_key.len() != 41 || stored_key[1..9] != 32_u64.to_be_bytes() {
-                return Err(Error::Storage);
-            }
-            let owner: [u8; 32] = stored_key[9..].try_into().map_err(|_| Error::Storage)?;
-            let recipient = tx
-                .get::<[u8; 32]>(&recipient_key(&owner))?
-                .ok_or(Error::Admission)?;
-            if recipient == [0; 32] {
-                return Err(Error::Storage);
-            }
-            let mut blinding = [0; 32];
-            getrandom::fill(&mut blinding).map_err(|_| Error::CryptoProvider)?;
-            let leaf = czkp::record::Leaf {
-                owner,
-                version: frontier.version,
-                state: frontier.state,
-                required_inbox: crate::extensions::inbox(&mut tx, &owner)?.root,
-                blinding,
-            };
-            leaf.commitment(&self.community, epoch)?;
-            frontiers.push(FrozenFrontier {
-                recipient_key: recipient,
-                leaf,
-            });
-        }
-        let completed = clock();
-        check_time(completed, now)?;
-        if completed / period_seconds != epoch {
-            return Err(Error::Expired);
-        }
-        let frozen = FrozenEpochState {
-            community: self.community,
-            issuer_key: self.operator.verifying_key().to_bytes(),
-            policy_epoch,
-            epoch,
-            period_seconds,
-            frozen_at: completed,
-            configuration: self.config.clone(),
-            extension_configuration: extensions.config.clone(),
-            proof_scope: extensions.verifier.scope(),
-            frontiers,
-        };
+        let frozen = prepare::prepare_in(
+            &mut tx,
+            &prepare::Inputs {
+                community: self.community,
+                issuer_key: self.operator.verifying_key().to_bytes(),
+                policy_epoch,
+                epoch,
+                period_seconds,
+                now,
+                configuration: &self.config,
+                extension_configuration: &extensions.config,
+                proof_scope: &extensions.verifier.scope(),
+            },
+            &clock,
+        )?;
+        let completed = frozen.0.frozen_at;
         tx.rollback()?;
         let returned = clock();
         check_time(returned, completed)?;
         if returned / period_seconds != epoch {
             return Err(Error::Expired);
         }
-        Ok(FrozenEpoch(frozen))
+        Ok(frozen)
     }
 }
 

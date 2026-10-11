@@ -9,6 +9,7 @@ pub mod admission;
 pub mod artifacts;
 pub mod enrollment;
 pub mod prepared;
+pub mod settlement;
 pub mod storage;
 pub use czkp::Error;
 pub mod extensions;

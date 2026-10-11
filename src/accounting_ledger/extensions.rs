@@ -167,6 +167,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         batch: &[(Deposit, Vec<u8>)],
         clock: impl Fn() -> u64,
     ) -> Result<(), Error> {
+        if self.settlement.is_some() {
+            return Err(Error::UnsupportedCapability);
+        }
         let clock = observed_clock(self.observed_time.clone(), clock);
         let extensions = self
             .extensions
@@ -198,6 +201,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         }
         // All cheap state/replay checks precede any expensive verification.
         let mut tx = self.connection.transaction()?;
+        super::settlement::legacy_fence(&mut tx)?;
         let locked = clock();
         check_time(locked, clock_floor(&mut tx)?.max(now))?;
         check_extension_config(&mut tx, Some(extensions))?;
@@ -222,6 +226,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         check_time(completed, locked)?;
         let mut tx = self.connection.transaction()?;
         let decision = clock();
+        super::settlement::legacy_fence(&mut tx)?;
         check_time(decision, clock_floor(&mut tx)?.max(completed))?;
         check_extension_config(&mut tx, Some(extensions))?;
         for (deposit, _) in batch {
@@ -431,7 +436,7 @@ pub(super) fn check_extension_config(
 fn deposit_digest(deposit: &Deposit) -> Result<[u8; 32], Error> {
     Ok(Sha256::digest(serde_json::to_vec(deposit).map_err(|_| Error::InvalidInput)?).into())
 }
-fn check_deposit(tx: &mut Transaction<'_>, deposit: &Deposit) -> Result<bool, Error> {
+pub(super) fn check_deposit(tx: &mut Transaction<'_>, deposit: &Deposit) -> Result<bool, Error> {
     if tx
         .get::<Frontier>(&key(1, &[&deposit.recipient]))?
         .is_none()

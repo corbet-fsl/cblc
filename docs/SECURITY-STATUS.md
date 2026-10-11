@@ -75,9 +75,12 @@ the verifier subprocess, and czkp wraps upstream proof/ABI operations.
 - **Privacy and availability:** named updates expose owner, commitment, version,
   marker and time; deliveries expose recipient and opaque replay markers.
   There is no public punishment tag, shared cross-owner event hash or lifetime
-  inbox sequence. Delay/batch size do not prove anonymity against timing analysis,
-  retries, sparse traffic or a global observer. A mixing relay with ordinary
-  outcomes is still required and is not implemented here. The 64-entry cap and
+  inbox sequence. Every resolved contact emits the same hidden-outcome envelope
+  through the original anonymous separate Tor circuit and outcome-only blind
+  rate token. There is no additional mixnet or relay requirement. All accepted
+  due outcomes enter the one daily G2 cut, including zero or one outcome.
+  Delay/batching do not prove anonymity against timing analysis, retries,
+  sparse traffic or a global observer. The 64-entry cap and
   finite verifier pools bound resources but do not eliminate denial of service.
   Lost private openings require client recovery; the issuer cannot recreate them.
 - **Retention and migration:** consumed pending rows are deleted atomically,
