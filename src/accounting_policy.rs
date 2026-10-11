@@ -127,29 +127,28 @@ impl AccountPolicy {
         Ok(())
     }
 
+    /// The policy fields as czkp's canonical statement encoder consumes them.
+    pub fn fields(&self) -> czkp::account::PolicyFields {
+        czkp::account::PolicyFields {
+            initial_credit: self.initial_credit,
+            maximum_available: self.maximum_available,
+            outgoing_reservation: self.outgoing_reservation,
+            incoming_reservation: self.incoming_reservation,
+            policy_revision: self.policy_revision,
+            policy_valid_from: self.policy_valid_from,
+            policy_valid_until: self.policy_valid_until,
+            newcomer_period: self.newcomer_period,
+            rate_window: self.rate_window,
+            newcomer_admissions: self.newcomer_admissions,
+            maximum_admissions: self.maximum_admissions,
+            refill_period: self.refill_period,
+            refill_units: self.refill_units,
+            abandon_after: self.abandon_after,
+        }
+    }
+
     pub(crate) fn append(&self, bytes: &mut Vec<u8>) {
-        for value in [
-            self.initial_credit,
-            self.maximum_available,
-            self.outgoing_reservation,
-            self.incoming_reservation,
-        ] {
-            bytes.extend_from_slice(&value.to_be_bytes());
-        }
-        for value in [
-            self.policy_revision,
-            self.policy_valid_from,
-            self.policy_valid_until,
-        ] {
-            bytes.extend_from_slice(&value.to_be_bytes());
-        }
-        bytes.extend_from_slice(&self.newcomer_period.to_be_bytes());
-        bytes.extend_from_slice(&self.rate_window.to_be_bytes());
-        bytes.extend_from_slice(&self.newcomer_admissions.to_be_bytes());
-        bytes.extend_from_slice(&self.maximum_admissions.to_be_bytes());
-        bytes.extend_from_slice(&self.refill_period.to_be_bytes());
-        bytes.extend_from_slice(&self.refill_units.to_be_bytes());
-        bytes.extend_from_slice(&self.abandon_after.to_be_bytes());
+        self.fields().append(bytes);
     }
 
     /// Stable state binding for live waiting-period tuning. Every economic and

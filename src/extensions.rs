@@ -73,7 +73,7 @@ impl StateCertificate {
         if self.accepted_at != accepted.accepted_at {
             return Err(Error::Replay);
         }
-        crate::certificates::AcceptedState::from_acceptance(accepted).verify(key, &signature)
+        crate::certificates::accepted_state(accepted).verify(key, &signature)
     }
 }
 /// Issuer evidence for an accepted extended request, returned with a status lookup

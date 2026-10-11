@@ -58,30 +58,29 @@ pub fn statement_bytes(value: &AccountStatement) -> Result<Vec<u8>, Error> {
     {
         return Err(Error::InvalidInput);
     }
-    let mut bytes = b"cfrm.account.statement.v2\0".to_vec();
-    bytes.extend_from_slice(&value.protocol_version.to_be_bytes());
-    for digest in [
-        value.community,
-        value.owner,
-        value.policy_digest,
-        value.enrollment_root,
-    ] {
-        bytes.extend_from_slice(&digest);
+    Ok(value.fields().bytes())
+}
+
+impl AccountStatement {
+    /// The statement fields as czkp's canonical transcript encoder consumes them.
+    pub fn fields(&self) -> czkp::account::StatementFields {
+        czkp::account::StatementFields {
+            protocol_version: self.protocol_version,
+            community: self.community,
+            owner: self.owner,
+            policy_digest: self.policy_digest,
+            enrollment_root: self.enrollment_root,
+            now: self.now,
+            valid_until: self.valid_until,
+            genesis: self.genesis,
+            previous_version: self.previous_version,
+            next_version: self.next_version,
+            previous_state: self.previous_state,
+            next_state: self.next_state,
+            settlement_marker: self.settlement_marker,
+            policy: self.policy.fields(),
+        }
     }
-    bytes.extend_from_slice(&value.now.to_be_bytes());
-    bytes.extend_from_slice(&value.valid_until.to_be_bytes());
-    bytes.push(u8::from(value.genesis));
-    bytes.extend_from_slice(&value.previous_version.to_be_bytes());
-    bytes.extend_from_slice(&value.next_version.to_be_bytes());
-    for digest in [
-        value.previous_state,
-        value.next_state,
-        value.settlement_marker,
-    ] {
-        bytes.extend_from_slice(&digest);
-    }
-    value.policy.append(&mut bytes);
-    Ok(bytes)
 }
 
 pub use czkp::ProofScope as AccountProofScope;
@@ -158,24 +157,24 @@ pub fn account_acceptance_bytes(value: &AccountAcceptance) -> Result<Vec<u8>, Er
     {
         return Err(Error::InvalidInput);
     }
-    let mut bytes = b"cfrm.account.acceptance.v1\0".to_vec();
-    bytes.extend_from_slice(&value.request_id);
-    bytes.extend_from_slice(&value.request_digest);
-    bytes.extend_from_slice(&value.proof_scope.circuit_digest);
-    bytes.extend_from_slice(&value.proof_scope.verifying_key_digest);
-    bytes.extend_from_slice(&value.accepted_at.to_be_bytes());
-    bytes.extend_from_slice(&Sha256::digest(statement_bytes(&value.statement)?));
-    Ok(bytes)
+    statement_bytes(&value.statement)?;
+    Ok(czkp::account::acceptance_bytes(
+        &value.request_id,
+        &value.request_digest,
+        &value.proof_scope,
+        value.accepted_at,
+        &value.statement.fields(),
+    ))
 }
 
 pub fn verify_account_acceptance(
     value: &AccountAcceptance,
     operator_key: &[u8; 32],
 ) -> Result<(), Error> {
-    signature(
-        &data_encoding::BASE64URL_NOPAD.encode(operator_key),
+    czkp::account::verify_acceptance(
         &account_acceptance_bytes(value)?,
-        &value.signature,
+        operator_key,
+        &decode::<64>(&value.signature)?,
     )
 }
 

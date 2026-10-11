@@ -508,8 +508,7 @@ pub(super) fn state_certificate(
     accepted: &AccountAcceptance,
     issuer: &cssr::certificate::CertificateIssuer,
 ) -> crate::extensions::StateCertificate {
-    let signature =
-        issuer.sign(&crate::certificates::AcceptedState::from_acceptance(accepted).bytes());
+    let signature = issuer.sign(&crate::certificates::accepted_state(accepted).bytes());
     crate::extensions::StateCertificate {
         accepted_at: accepted.accepted_at,
         signature: signature.to_vec(),
