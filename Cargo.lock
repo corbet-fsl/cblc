@@ -359,7 +359,7 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#30ba3b49ca2bb1dc52707296a67ec1ccb61b1732"
+source = "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#b00b4c8385d6a22f850987fc2d17d23043cfd2ac"
 dependencies = [
  "csgn",
  "serde",
@@ -737,7 +737,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cvfy?branch=main#f08e46235635c52dbb487b85a6ca356fdc3557be"
+source = "git+https://git.corbet.ch/corbet-foss/cvfy?branch=main#a17352654185c30a498fa80ffcb35c8953b674ac"
 dependencies = [
  "czkp",
  "data-encoding",
