@@ -327,9 +327,9 @@ fn submission(
 }
 fn activate(ledger: &mut Ledger, cfg: &SettlementConfig, next: bool, now: u64) {
     eprintln!(
-        "DIAG context={:?} issuer_ok={:?} keylen={}",
+        "DIAG context={:?} publen={} keylen={}",
         cfg.epoch.context().map(|_| ()),
-        cmbl::settlement::Issuer::from_pkcs1_der(cfg.epoch.clone(), private_key(next)).map(|_| ()),
+        cfg.epoch.public_key_der.len(),
         private_key(next).len(),
     );
     assert!(
