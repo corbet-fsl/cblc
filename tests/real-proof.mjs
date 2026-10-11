@@ -14,8 +14,10 @@ import { noirInput } from '../runtime/accounting/hashes.mjs';
 import { publicInputValues } from '../runtime/accounting/statement.mjs';
 import { createAccountVerifier } from '../runtime/accounting/runtime.mjs';
 import { nodeArtifactOptions } from '../runtime/accounting/node-verifier.mjs';
+import {selectedProducer} from './holder/prover-conformance.mts';
 
 const directory = resolve(process.env.CBLC_PROOF_DIRECTORY ?? '.proof-test');
+const producer = await selectedProducer();
 await mkdir(resolve(directory,'setup'),{recursive:true});
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const bytes = n => new Uint8Array(32).fill(n);
@@ -42,7 +44,7 @@ try {
   const backend=new UltraHonkBackend(compiled.program.bytecode,api);
   const verificationKey=await backend.getVerificationKey(OPTIONS);
   await writeFile(resolve(directory,'vk.bin'),verificationKey);
-  const manifest={version:1,compiler:'1.0.0-beta.26',backend:'5.0.0',verifierTarget:OPTIONS.verifierTarget,
+  const manifest={version:1,compiler:'1.0.0-beta.26',backend:producer.receipt.packageVersion,verifierTarget:OPTIONS.verifierTarget,
     accountingMode:'account-state-v2',hashScheme:'poseidon2-bn254-fixed-128-v1',numPoints:lock.numPoints,
     circuitSha256:digest(circuitBytes),vkSha256:digest(verificationKey),setup:lock.files};
   const manifestBytes=Buffer.from(JSON.stringify(manifest));

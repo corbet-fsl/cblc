@@ -64,6 +64,33 @@ fn options() -> NativeVerifierOptions {
 }
 
 #[test]
+fn concrete_backend_labels_require_a_separate_authenticated_manifest() {
+    let mut fixture = Fixture::new(true);
+    let original = serde_json::to_vec(&fixture.manifest).unwrap();
+    let original_pin: [u8; 32] = Sha256::digest(&original).into();
+    fixture.manifest["backend"] = json!("5.2.1");
+    let changed = serde_json::to_vec(&fixture.manifest).unwrap();
+    assert!(matches!(
+        ExtensionArtifacts::authenticate(ArtifactBytes {
+            manifest: &changed,
+            manifest_sha256: original_pin,
+            circuit: &fixture.circuit,
+            keys: &fixture.keys,
+            srs_g1: &fixture.g1,
+            srs_g2: &fixture.g2,
+        }),
+        Err(Error::PolicyMismatch)
+    ));
+    // Metadata authentication only; these synthetic points are never a proof.
+    assert!(fixture.extension().is_ok());
+    fixture.keys[0] ^= 1;
+    assert!(fixture.extension().is_err());
+    fixture.keys[0] ^= 1;
+    fixture.manifest["backend"] = json!("5.2.2");
+    assert!(fixture.extension().is_err());
+}
+
+#[test]
 fn authenticated_snapshots_bind_group_and_each_native_key_without_host_files() {
     let mut f = Fixture::new(true);
     let artifacts = f.extension().unwrap();

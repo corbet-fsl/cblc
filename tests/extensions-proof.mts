@@ -19,6 +19,7 @@ import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
 import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';
 import {ingestedRecordEpoch} from './holder/record-epoch-ingestion.mts';
 import {retainRecordStartup} from './holder/record-startup-artifacts.mts';
+import {selectedProducer, proveUpdateConformance, retainConformance} from './holder/prover-conformance.mts';
 const recordEpochArtifacts=process.argv.length===3&&process.argv[2]==='--record-epoch-artifacts';
 const recordEpochProofs=process.argv.length===3&&process.argv[2]==='--record-epoch-proofs';
 const recordEpochEnabled=recordEpochArtifacts||recordEpochProofs;
@@ -64,17 +65,24 @@ for(const f of lock.files){
   const data=Buffer.concat(chunks);assert.equal(data.length,f.bytes);assert.equal(sha(data).toString('hex'),f.sha256);
   setup[f.name]=data;await writeFile(resolve(directory,'setup',f.name),data);
 }
-const keyApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
+const producer=await selectedProducer();
+const keyApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true,bbPath:producer.bbPath});
 const keys={};
+let conformance;
 try{await keyApi.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2Point:setup['g2.dat']});
-  for(const kind of kinds)keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
+  keys.update=hex(await new UltraHonkBackend(programs.update.bytecode,keyApi).getVerificationKey(OPTIONS));
+  conformance=await proveUpdateConformance(keyApi,programs.update,Buffer.from(keys.update,'hex'),producer,transition);
+  // Only successful conformance permits this new, completely pinned corpus.
+  for(const kind of kinds.filter(kind=>kind!=='update'))keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
 }finally{await keyApi.destroy();}
 const keyBytes=Buffer.from(JSON.stringify(keys));await writeFile(resolve(directory,'keys.json'),keyBytes);
 const issuer=createECDH('prime256v1');issuer.setPrivateKey(Buffer.alloc(32,3));
-const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-beta.26',backend:'5.0.0',verifierTarget:OPTIONS.verifierTarget,
+const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-beta.26',backend:producer.receipt.packageVersion,verifierTarget:OPTIONS.verifierTarget,
   circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files,issuerKey:toArray(issuer.getPublicKey().subarray(1))};
 const manifestBytes=Buffer.from(JSON.stringify(manifest));await writeFile(resolve(directory,'manifest.json'),manifestBytes);
 const configPath=resolve(directory,'config.json');await writeFile(configPath,JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
+const encodeBundle=proofs=>Buffer.from(JSON.stringify({version:1,proofs})).toString('hex');
+await retainConformance(conformance,manifestBytes,await readFile(resolve(directory,'circuits.json')),keyBytes,encodeBundle);
 const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
 if(recordEpochArtifacts) {
   for(const kind of kinds) {
@@ -87,7 +95,7 @@ if(recordEpochArtifacts) {
   console.log('Generated authenticated original four-circuit artifacts; R2 proofs remain unqualified');
   process.exit(0);
 }
-const hashApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
+const hashApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true,bbPath:producer.bbPath});
 const hashes=extensionHashes(hashApi);
 const child=spawn(resolve(process.env.CBLC_EXTENSION_ISSUER??'target/debug/examples/extension_issuer'),[configPath,...(recordEpochProofs?['--record-epoch']:[])],{stdio:['pipe','pipe','inherit']});
 let pending;const lines=createInterface({input:child.stdout});
@@ -111,7 +119,6 @@ async function proof(kind,input,label,measure=false){
   console.log(`Generated and verified ${label}`);
   return chosen;
 }
-const encodeBundle=proofs=>Buffer.from(JSON.stringify({version:1,proofs})).toString('hex');
 let now=110;
 async function submit(member,candidates,label,measure=false,expected=true){
   const proofs=[];

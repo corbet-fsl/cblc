@@ -115,7 +115,7 @@ fn material(bytes: &ArtifactBytes<'_>, extension: bool) -> Result<(Material, Man
     };
     if manifest.version != 1
         || manifest.compiler != "1.0.0-beta.26"
-        || manifest.backend != "5.0.0"
+        || !matches!(manifest.backend.as_str(), "5.0.0" | "5.2.1")
         || manifest.verifier_target != "noir-recursive"
         || manifest.accounting_mode != mode
         || (!extension && manifest.hash_scheme.as_deref() != Some("poseidon2-bn254-fixed-128-v1"))

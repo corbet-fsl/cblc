@@ -10,7 +10,7 @@
     "test": "node --test ../../tests/holder/test/*.test.mjs"
   },
   "dependencies": {
-    "@aztec/bb.js": "5.0.0",
+    "@aztec/bb.js": "^5.2.1",
     "@noir-lang/noir_js": "1.0.0-beta.26",
     "@libsql/client": "0.18.0"
   },

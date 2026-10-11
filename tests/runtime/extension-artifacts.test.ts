@@ -48,6 +48,19 @@ test('extension artifact JSON is decoded from bounded bytes before selecting a c
     }
     assert.throws(() => loaded.artifacts('record_epoch'), /Record epoch circuit unavailable/);
     assert.throws(() => loaded.artifacts('other'), /Circuit domain/);
+    const changedManifest = Buffer.from(JSON.stringify({...manifest, backend: '5.2.1'}));
+    await writeFile(join(directory, 'manifest.json'), changedManifest);
+    // An old pinned corpus cannot acquire a new backend by changing its label.
+    await assert.rejects(loadArtifacts(configPath), /Manifest authentication/);
+    await writeFile(configPath, JSON.stringify({directory, manifestSha256: digest(changedManifest)}));
+    const separatelyPinned = await loadArtifacts(configPath);
+    assert.equal(separatelyPinned.manifest.backend, '5.2.1');
+    assert.equal(Buffer.from(separatelyPinned.scope.verifyingKeyDigest).toString('hex'), digest(keyBytes));
+    await writeFile(join(directory, 'keys.json'), JSON.stringify({...keys, update: '0304'}));
+    await assert.rejects(loadArtifacts(configPath), /Artifact authentication/);
+    await writeFile(join(directory, 'keys.json'), keyBytes);
+    await writeFile(join(directory, 'manifest.json'), manifestBytes);
+    await writeFile(configPath, JSON.stringify({directory, manifestSha256: digest(manifestBytes)}));
     await writeFile(join(directory, 'circuits.json'), '{}');
     await assert.rejects(loadArtifacts(configPath), /Artifact authentication/);
     await writeFile(join(directory, 'manifest.json'), '{}');
