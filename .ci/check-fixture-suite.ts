@@ -5,7 +5,14 @@ import {createRequire} from 'node:module';
 import {dirname, join} from 'node:path';
 
 const require = createRequire(import.meta.url);
-const suite = JSON.parse(readFileSync(new URL('../runtime/accounting/package.json', import.meta.url), 'utf8'));
+// Third-party dependencies are declared as semver ranges; exactness comes from the
+// lockfile. The installed SDK must equal the version the suite lockfile resolved.
+const lock = JSON.parse(readFileSync(new URL('../runtime/accounting/package-lock.json', import.meta.url), 'utf8'));
+const suite = {dependencies: Object.fromEntries(['@aztec/bb.js', '@noir-lang/noir_js'].map(name => {
+  const resolved = lock.packages?.[`node_modules/${name}`]?.version;
+  assert.ok(resolved, `${name} missing from the suite lockfile`);
+  return [name, resolved];
+}))};
 for (const origin of [import.meta.url,
   require.resolve('@corbet-labs/czkp/prove'),
   require.resolve('@corbet-labs/cwlt/extensions'),
