@@ -24,9 +24,10 @@ mkdir -p "$state/moon-cache/hashes" "$state/moon-cache/outputs" "$state/moon-hom
 mkdir -p .moon/cache
 # Tool installation is an explicit part of this job, in persistent CI storage.
 tool_source=github:NixOS/nixpkgs/b7c2ada94fe99c15b0dbcf4d11fd7850b957a436?narHash=sha256-IItrdb7Puk05RqOBWZYFC5X6Wl1sJmCfh5MWVHw5iMM=
-tool_paths=$(nix build --no-link --print-out-paths "$tool_source#moon" "$tool_source#proto" "$tool_source#nodejs" "$tool_source#python3" "$tool_source#cargo-deny" "$tool_source#cargo-llvm-cov" "$tool_source#wasm-pack" "$tool_source#jq" "$tool_source#pkg-config" "$tool_source#openssl.dev")
+tool_paths=$(nix build --no-link --print-out-paths "$tool_source#moon" "$tool_source#proto" "$tool_source#nodejs" "$tool_source#python3" "$tool_source#cargo-deny" "$tool_source#cargo-llvm-cov" "$tool_source#wasm-pack" "$tool_source#jq" "$tool_source#pkg-config" "$tool_source#openssl.dev" "$tool_source#openssl.out")
 for path in $tool_paths; do PATH="$path/bin:$PATH"; done
 for path in $tool_paths; do [ -d "$path/lib/pkgconfig" ] && PKG_CONFIG_PATH="$path/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"; done; export PKG_CONFIG_PATH
+for path in $tool_paths; do [ -e "$path/lib/libcrypto.so.3" ] && LD_LIBRARY_PATH="$path/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"; done; export LD_LIBRARY_PATH
 export PROTO_HOME="$toolchains/proto" RUSTUP_HOME="$toolchains/rustup"
 shared_cargo_home=${CARGO_HOME:-}
 export CARGO_HOME="$toolchains/cargo" MOON_HOME="$state/moon-home"
