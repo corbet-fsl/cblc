@@ -138,10 +138,7 @@ pub fn open_witness(
     let hash = leaf.commitment(&epoch.community, epoch.epoch).unwrap();
     let index = u32::from_be_bytes(bytes[136..140].try_into().unwrap()) as usize;
     let path = rs_merkle::MerkleProof::<czkp::record::EpochTree>::new(
-        bytes[140..bytes.len() - 64]
-            .chunks_exact(32)
-            .map(|b| b.try_into().unwrap())
-            .collect(),
+        bytes[140..bytes.len() - 64].as_chunks::<32>().0.to_vec(),
     );
     assert!(path.verify(
         epoch.root,

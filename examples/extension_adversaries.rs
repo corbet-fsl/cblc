@@ -4,6 +4,8 @@ mod common;
 #[path = "../tests/support/inspect.rs"]
 #[allow(dead_code)]
 mod inspection;
+#[path = "../tests/support/inspect_write.rs"]
+mod inspection_write;
 #[cfg(feature = "publication")]
 #[path = "../tests/support/publication.rs"]
 mod publication;

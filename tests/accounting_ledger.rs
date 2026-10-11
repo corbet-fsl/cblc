@@ -20,6 +20,10 @@ use data_encoding::BASE64URL_NOPAD as B64;
 use ed25519_dalek::{Signer, SigningKey};
 #[path = "support/inspect.rs"]
 mod inspection;
+#[path = "support/inspect_ledger.rs"]
+mod inspection_ledger;
+#[path = "support/inspect_write.rs"]
+mod inspection_write;
 use inspection::Connection;
 use sha2::{Digest, Sha256};
 use std::{
