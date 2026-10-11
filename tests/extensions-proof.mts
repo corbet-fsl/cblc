@@ -181,36 +181,43 @@ try{
     // journey. The issuer has already authenticated this original empty inbox.
     const initialInbox=await call({op:'inbox',member:7,owner:toArray(members[0].owner.member),now});
     assert.deepEqual(initialInbox,{root:{root:Array(32).fill(0)},entries:[]});
-    const {gatherFixture,...record}=await exactRecordEpoch({members,call,proof,artifacts,issuerKey:manifest.issuerKey,now,deferExpiry:true});
-    // Fictional presentation custody is explicitly separate from public proof
-    // cache/trace files. No opening, HPKE private key or real member state is kept.
-    const fixtureSource=process.env.CI_COMMIT_SHA;
-    if(process.env.ARTIFACT_ROOT&&!/^[0-9a-f]{40}$/.test(fixtureSource??''))
-      throw new Error('The actual fixture source identity is required for retained artifacts');
-    const fixtureBytes=JSON.stringify({...gatherFixture,fixtureSource,record:record.statement.record,proof:record.proof,
-      proofScope:record.proofScope,artifacts:'config.json'});
-    await writeFile(resolve(directory,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
-    if(process.env.ARTIFACT_ROOT) {
-      const retained=resolve(process.env.ARTIFACT_ROOT,'gather-record-fixture');
-      await mkdir(resolve(retained,'setup'),{recursive:true});
-      // Exact bounded original public artifact list, with its real manifest pin.
-      for(const name of ['circuits.json','keys.json','manifest.json',...lock.files.map(file=>`setup/${file.name}`)])
-        await copyFile(resolve(directory,name),resolve(retained,name));
-      // The consuming test rebases this portable path to its retained directory.
-      await writeFile(resolve(retained,'config.json'),JSON.stringify({directory:'.',manifestSha256:sha(manifestBytes).toString('hex')}));
-      await writeFile(resolve(retained,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
-      const metadata=JSON.parse(await readFile(resolve(retained,'worker.json')));
-      if(metadata.sourceCommit!==fixtureSource)throw new Error('Native worker and fixture source differ');
-      metadata.artifactFiles={};
-      for(const name of ['gather-record-fixture.json','config.json','circuits.json','keys.json','manifest.json',...lock.files.map(file=>`setup/${file.name}`)])
-        metadata.artifactFiles[name]=sha(await readFile(resolve(retained,name))).toString('hex');
-      const metadataBytes=JSON.stringify(metadata);
-      await writeFile(resolve(retained,'worker.json'),metadataBytes);
-      console.log(`CBLC_RECORD_ARTIFACT ${JSON.stringify({sourceCommit:fixtureSource,workerSha256:metadata.workerSha256,
-        metadataSha256:sha(metadataBytes).toString('hex'),fixtureSha256:sha(fixtureBytes).toString('hex')})}`);
-    }
-    await retainRecordStartup({initialize,scope:artifacts.scope,
-      manifestSha256:sha(manifestBytes).toString('hex'),sourceCommit:fixtureSource});
+    let retainedNativeFixture=false;
+    const retainNativeFixture=async output=>{
+      assert.equal(retainedNativeFixture,false,'The first native fixture snapshot is immutable');
+      retainedNativeFixture=true;
+      const {gatherFixture,...record}=output;
+      // Fictional presentation custody is explicitly separate from public proof
+      // cache/trace files. No opening, HPKE private key or real member state is kept.
+      const fixtureSource=process.env.CI_COMMIT_SHA;
+      if(process.env.ARTIFACT_ROOT&&!/^[0-9a-f]{40}$/.test(fixtureSource??''))
+        throw new Error('The actual fixture source identity is required for retained artifacts');
+      const fixtureBytes=JSON.stringify({...gatherFixture,fixtureSource,record:record.statement.record,proof:record.proof,
+        proofScope:record.proofScope,artifacts:'config.json'});
+      await writeFile(resolve(directory,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
+      if(process.env.ARTIFACT_ROOT) {
+        const retained=resolve(process.env.ARTIFACT_ROOT,'gather-record-fixture');
+        await mkdir(resolve(retained,'setup'),{recursive:true});
+        // Exact bounded original public artifact list, with its real manifest pin.
+        for(const name of ['circuits.json','keys.json','manifest.json',...lock.files.map(file=>`setup/${file.name}`)])
+          await copyFile(resolve(directory,name),resolve(retained,name));
+        // The consuming test rebases this portable path to its retained directory.
+        await writeFile(resolve(retained,'config.json'),JSON.stringify({directory:'.',manifestSha256:sha(manifestBytes).toString('hex')}));
+        await writeFile(resolve(retained,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
+        const metadata=JSON.parse(await readFile(resolve(retained,'worker.json')));
+        if(metadata.sourceCommit!==fixtureSource)throw new Error('Native worker and fixture source differ');
+        metadata.artifactFiles={};
+        for(const name of ['gather-record-fixture.json','config.json','circuits.json','keys.json','manifest.json',...lock.files.map(file=>`setup/${file.name}`)])
+          metadata.artifactFiles[name]=sha(await readFile(resolve(retained,name))).toString('hex');
+        const metadataBytes=JSON.stringify(metadata);
+        await writeFile(resolve(retained,'worker.json'),metadataBytes);
+        console.log(`CBLC_RECORD_ARTIFACT ${JSON.stringify({sourceCommit:fixtureSource,workerSha256:metadata.workerSha256,
+          metadataSha256:sha(metadataBytes).toString('hex'),fixtureSha256:sha(fixtureBytes).toString('hex')})}`);
+      }
+      await retainRecordStartup({initialize,scope:artifacts.scope,
+        manifestSha256:sha(manifestBytes).toString('hex'),sourceCommit:fixtureSource});
+    };
+    const {gatherFixture,...record}=await exactRecordEpoch({members,call,proof,artifacts,
+      issuerKey:manifest.issuerKey,now,deferExpiry:true,retainNativeFixture});
     // Preserve the successful first owner fixture even if a later
     // ingestion/race scenario fails. The complete proof report still requires
     // every original remaining scenario to finish successfully.

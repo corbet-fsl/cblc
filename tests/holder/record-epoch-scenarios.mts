@@ -5,10 +5,13 @@ import {generateKeyPairSync,sign} from 'node:crypto';
 import {prepareRecordEpoch} from './record-epoch.mts';
 import {recordPresentationBytes,verifyRecordPresentation} from './record-epoch-codec.mts';
 
-export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,now,deferExpiry=false}) {
+export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,now,deferExpiry=false,retainNativeFixture}) {
   for(let index=0;index<members.length;index++)await call({op:'recordRecipient',member:7+index,now});
   await call({op:'recordEpoch',now});
   await call({op:'recordEpoch',now}); // Original exact root/object survives retry.
+  // Check the actual export route/configuration before expensive proving.
+  // This material is not proof authority; the native owner check remains below.
+  const fixture=await call({op:'recordFixtureMaterial',now},true,false);
   // Private leaf/opening output never joins publicTrace or the report artifacts.
   const witness=await call({op:'recordWitness',member:7},true,false);
   const key=generateKeyPairSync('ed25519');
@@ -25,6 +28,13 @@ export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,n
   // The same genuine cached proof also crosses the storage-free relying owner
   // through actual issuer material and a configured, signed Balance publication.
   assert.equal(await call({op:'verifyPublishedRecord',presentation,now}),true);
+  // Explicit fictional test custody stays separate from publicTrace. Retain
+  // the actual first native success before later negative/replay checks can fail.
+  const presentationSeed=Array.from(Buffer.from(key.privateKey.export({format:'jwk'}).d,'base64url'));
+  assert.equal(presentationSeed.length,32);
+  const result={statement:candidate.statement,proof:framed,proofScope:artifacts.scope,
+    gatherFixture:{...fixture,presentationSeed}};
+  if(retainNativeFixture)await retainNativeFixture(result);
   await call({op:'issueRecordChallenge',owner:presentation.record.owner,context});
   const check=(value,expected=false,at=now)=>call({op:'checkEpochRecord',challenge:context.challenge,presentation:value,now:at},expected);
   for(const mutate of [
@@ -54,11 +64,6 @@ export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,n
   assert.equal(second.proof,presentation.proof); // No per-use expensive proof.
   await call({op:'issueRecordChallenge',owner:second.record.owner,context:contact});
   assert.equal(await call({op:'checkEpochRecord',challenge:contact.challenge,presentation:second,now}),null);
-  // Explicit fictional test custody only. Keep this seed out of publicTrace,
-  // public proof reports and their cache; the separate Gather fixture owns it.
-  const fixture=await call({op:'recordFixtureMaterial',now},true,false);
-  const presentationSeed=Array.from(Buffer.from(key.privateKey.export({format:'jwk'}).d,'base64url'));
-  assert.equal(presentationSeed.length,32);
   if(!deferExpiry) {
     const expiry={...context,challenge:Array(32).fill(221)};
     const expired=bind(expiry);
@@ -67,6 +72,5 @@ export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,n
     // The continued journey checks the exclusive boundary with its final epoch.
     await call({op:'checkEpochRecord',challenge:expiry.challenge,presentation:expired,now:expiry.expiresAt},false);
   }
-  return {statement:candidate.statement,proof:framed,proofScope:artifacts.scope,
-    gatherFixture:{...fixture,presentationSeed}};
+  return result;
 }
