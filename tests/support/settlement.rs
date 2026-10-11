@@ -326,6 +326,12 @@ fn submission(
     }
 }
 fn activate(ledger: &mut Ledger, cfg: &SettlementConfig, next: bool, now: u64) {
+    eprintln!(
+        "DIAG context={:?} issuer_ok={:?} keylen={}",
+        cfg.epoch.context().map(|_| ()),
+        cmbl::settlement::Issuer::from_pkcs1_der(cfg.epoch.clone(), private_key(next)).map(|_| ()),
+        private_key(next).len(),
+    );
     assert!(
         ledger
             .activate_daily_settlement(cfg.clone(), private_key(next), INCARNATION.into(), || now)
