@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 /// Original maintained opaque private issuer for trusted host transport.
 /// Construct it from provisioned bytes in a wiping loader, then discard those
 /// bytes before queueing. No private-key getter, serializer or clone is exposed.
+#[cfg(feature = "host")]
 pub use cmbl::settlement::issuer::Issuer as SettlementIssuer;
 
 /// Actual daily owner settings inside the existing signed Balance publication.
@@ -103,6 +104,7 @@ pub struct SettlementConfig {
     /// room-key inventory, never keys from an anonymous request.
     pub room_epochs: Vec<cmbl::passes::Epoch>,
 }
+#[cfg(feature = "host")]
 impl SettlementConfig {
     pub(crate) fn validate(&self, community: &str) -> Result<(), Error> {
         if self.epoch.community != community
@@ -235,6 +237,7 @@ pub(crate) fn milliseconds(seconds: u64) -> Result<u64, Error> {
     seconds.checked_mul(1000).ok_or(Error::InvalidInput)
 }
 
+#[cfg(feature = "host")]
 pub(crate) fn crypto_error(error: cmbl::Error) -> Error {
     match error {
         cmbl::Error::Invalid => Error::InvalidInput,

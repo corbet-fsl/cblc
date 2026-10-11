@@ -1,8 +1,8 @@
 //! Authenticated public policy and proof-artifact bindings. This is not a
 //! member-currentness, reservation, release or punishment capability.
 use crate::{
-    Error, accounting::AccountProofScope, accounting_ledger::AccountLedgerPolicy,
-    extensions::ExtensionPolicy,
+    Error, accounting::AccountProofScope, extensions::ExtensionPolicy,
+    ledger_policy::AccountLedgerPolicy,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

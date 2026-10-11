@@ -1,8 +1,9 @@
 //! Proof-gated extensions. V2 circuits cannot authorize any of these statements.
+#[cfg(feature = "host")]
+use crate::storage::{Transaction, key};
 use crate::{
     Error,
     accounting::{AccountProofScope, AccountStatement},
-    storage::{Transaction, key},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -85,6 +86,7 @@ pub struct EpochAncestryCertificate {
     /// Same private signed-leaf packet used by frozen and descendant records.
     pub record: czkp::record::SignedLeaf,
 }
+#[cfg(feature = "host")]
 impl EpochAncestryCertificate {
     /// Original fixed-width issuer transcript; no JSON is signed.
     pub fn body(&self) -> cssr::certificate::EpochAncestry {
@@ -147,11 +149,13 @@ pub use czkp::record::{Context as RecordContext, Use as RecordUse};
 /// One relying-party decision. Keep this value with the outstanding request;
 /// do not reconstruct it from member input. Successful verification consumes it.
 /// No persistent request or member-activity log is created.
+#[cfg(feature = "host")]
 pub struct RecordChallenge {
     pub(crate) owner: [u8; 32],
     pub(crate) context: RecordContext,
     pub(crate) consumed: bool,
 }
+#[cfg(feature = "host")]
 impl RecordChallenge {
     /// Bind a freshly issued random challenge to its expected owner and action.
     pub fn new(owner: [u8; 32], context: RecordContext) -> Result<Self, Error> {
@@ -204,6 +208,7 @@ pub enum ExtensionStatement {
         record: czkp::record::Record,
     },
 }
+#[cfg(feature = "host")]
 pub(crate) mod sealed {
     pub trait Sealed {}
 }
@@ -212,6 +217,7 @@ pub(crate) mod sealed {
 pub const EXTENSION_PROOF_BYTES: usize = 4 * 1024 * 1024;
 /// Backend for the complete extension relation. Only the shipped native adapter
 /// implements this sealed trait; a caller cannot substitute a signed verdict.
+#[cfg(feature = "host")]
 pub trait ExtensionVerifier: sealed::Sealed + Send {
     fn scope(&self) -> AccountProofScope;
     /// Withdraw execution from the same sealed native process owner.
@@ -229,6 +235,7 @@ pub struct ExtensionActivation {
     pub account: AccountStatement,
     pub proof: Vec<u8>,
 }
+#[cfg(feature = "host")]
 pub(crate) struct Extensions {
     pub artifact_binding: crate::artifacts::ArtifactBinding,
     pub activation_anchor: Vec<u8>,
@@ -237,12 +244,15 @@ pub(crate) struct Extensions {
     pub config: Vec<u8>,
     pub budget: crate::verification::Budget,
 }
+#[cfg(feature = "host")]
 pub(crate) fn inbox(tx: &mut Transaction<'_>, owner: &[u8; 32]) -> Result<Inbox, Error> {
     Ok(tx.get(&key(5, &[owner]))?.unwrap_or_default())
 }
+#[cfg(feature = "host")]
 pub(crate) fn applied(tx: &mut Transaction<'_>, owner: &[u8; 32]) -> Result<Inbox, Error> {
     Ok(tx.get(&key(7, &[owner]))?.unwrap_or_default())
 }
+#[cfg(feature = "host")]
 pub(crate) fn advance(previous: &Inbox, deposit: &Deposit) -> Result<Inbox, Error> {
     let mut hash = Sha256::new();
     hash.update(b"cblc.obligation-inbox.v2\0");

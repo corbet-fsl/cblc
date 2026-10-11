@@ -3,7 +3,9 @@
 mod checkpoint;
 mod delegation;
 mod publication;
+#[cfg(feature = "host")]
 mod service;
+#[cfg(feature = "host")]
 mod store;
 
 pub use checkpoint::EnrollmentTree;
@@ -13,7 +15,9 @@ pub use delegation::{
 pub use publication::{
     ENROLLMENT_DOMAIN, EnrollmentDelegation, EnrollmentEntry, EnrollmentPublication,
 };
+#[cfg(feature = "host")]
 pub use service::{EnrollmentService, InstalledCheckpoint, PendingCheckpoint};
+#[cfg(feature = "host")]
 pub use store::{EnrollmentConfig, EnrollmentStore, StoredEnrollment};
 
 /// Original maintained account relation's enrollment hash scheme.

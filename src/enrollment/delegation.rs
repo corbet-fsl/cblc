@@ -180,10 +180,12 @@ pub fn verify_delegation(
 
 // Historical correspondence is private to reconstruction of the actual
 // operator-authenticated original frozen slot. It is not current admission.
+#[cfg(feature = "host")]
 pub(super) struct HistoricalDelegation {
     pub(super) delegation: AccountingDelegation,
     pub(super) digest: [u8; 32],
 }
+#[cfg(feature = "host")]
 pub(super) fn verify_historical(
     d: &AccountingDelegation,
     expected: ExpectedAdmission<'_>,

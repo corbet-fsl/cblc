@@ -19,6 +19,21 @@ are submitted to the port; never balances, counterparties, private receipts,
 provider payloads, login dates or request history. The synchronous API belongs
 on a blocking thread outside Tokio. See [storage migration](docs/STORAGE.md).
 
+## Public contract selection
+
+The default `host` feature retains the native ledger, atomic storage ports,
+issuer and proof-verifier APIs. Consumers of authenticated public contracts can
+select `default-features = false`: admission and device signature checks,
+account and extension wire types, enrollment signatures and tree construction,
+and settlement public descriptors retain the same original encodings. This
+selection contains no ledger, native proof backend or private issuer.
+
+`publication` adds the existing signed Balance document integration. With
+`host`, it also exposes the native relying record verifier. Public material
+validation and signature checks establish only their documented public data
+relations; they do not establish a hidden account transition, live membership
+or an admitted record. Holder witness construction remains in `cwlt`.
+
 ## Dependency survey
 
 Surveyed registry packages and upstream repositories on 2026-09-30:

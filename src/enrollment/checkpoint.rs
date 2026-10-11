@@ -41,6 +41,7 @@ impl EnrollmentTree {
     }
     // This distinct internal input can only arise after authenticating the
     // original frozen object/context; it never escapes as current admission.
+    #[cfg(feature = "host")]
     pub(super) fn from_historical(
         values: &[super::delegation::HistoricalDelegation],
     ) -> Result<Self, Error> {
