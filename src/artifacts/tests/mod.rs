@@ -81,6 +81,7 @@ fn concrete_backend_labels_require_a_separate_authenticated_manifest() {
         }),
         Err(Error::PolicyMismatch)
     ));
+    fixture.manifest["backend"] = json!("5.2.1");
     // Metadata authentication only; these synthetic points are never a proof.
     assert!(fixture.extension().is_ok());
     fixture.keys[0] ^= 1;
