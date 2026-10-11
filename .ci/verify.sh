@@ -75,12 +75,12 @@ fi
     trap 'rm -rf -- "$compile_directory"' EXIT
     export CBLC_EXTENSION_DIRECTORY="$compile_directory"
   fi
-  node runtime/extensions/compile.mjs
+  node runtime/extensions/compile.mts
 )
 CBLC_LAST_GATE="wasm-pack-build"
 env -u RUSTFLAGS wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
 CBLC_LAST_GATE="issuer-build"
-cargo build --locked --example extension_issuer
+cargo build --locked --example extension_issuer --features publication
 mkdir -p .extension-test
 CBLC_LAST_GATE="proof"
 # The ci-job exports a persistent CARGO_TARGET_DIR (absolute); resolve it once
@@ -93,8 +93,15 @@ esac
 if ! "$proof_cache_hit"; then
   git rev-parse HEAD > .extension-test/source.txt
   sha256sum package-lock.json >> .extension-test/source.txt
-  CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mjs | tee -a "$proof_fixture_evidence"
+  CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mts | tee -a "$proof_fixture_evidence"
 fi
+# The original fourth relation has a distinct authenticated artifact group;
+# default three-circuit cache entries cannot substitute its actual proof journey.
+(
+  export CBLC_EXTENSION_DIRECTORY="$PWD/.record-epoch-test"
+  node runtime/extensions/compile.mts --record-epoch
+  CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mts --record-epoch-proofs | tee -a "$proof_fixture_evidence"
+)
 CBLC_LAST_GATE="native-tests"
 # Native constructors authenticate extension artifacts at construction time.
 # Both account and extension fixtures must exist before the integration suite.
