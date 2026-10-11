@@ -392,12 +392,15 @@ fn main() {
                         policy: policy.clone().unwrap(),
                     };
                     let token = tokens.get(&member).unwrap();
-                    let verified = pin_spend::exercise(
+                    pin_spend::exercise(
                         ledger.as_mut().unwrap(),
                         &change,
                         token,
                         policy.as_ref().unwrap(),
                     );
+                    let (returned, verified) =
+                        pin_spend::service(ledger.take().unwrap(), &change, token);
+                    ledger = Some(returned);
                     futures::executor::block_on(async {
                         verifier.verify_spent(&change, token).await.unwrap();
                         let wrong = HEXLOWER.encode(&[member + 1; 48]);

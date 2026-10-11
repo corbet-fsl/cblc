@@ -93,3 +93,46 @@ pub fn exercise<V: AccountProofVerifier>(
         .unwrap();
     verified
 }
+
+pub fn service<V: AccountProofVerifier>(
+    ledger: AccountLedger<V>,
+    change: &Change<'_>,
+    spent: &SpentChange,
+) -> (AccountLedger<V>, VerifiedPinChange) {
+    let body = serde_json::to_vec(&serde_json::json!({
+        "request": spent.request, "acceptance": spent.acceptance, "update": spent.update,
+    }))
+    .unwrap();
+    let limit = (body.len() * 2 + 1024).min(16 * 1024 * 1024);
+    let mut service =
+        cblc::accounting_service::AccountService::new(ledger, || spent.request.expires_at, limit)
+            .unwrap();
+    let verified = service.verify_completed_pin_change(change, &body).unwrap();
+    let oversized = vec![b' '; limit + 1];
+    assert!(
+        service
+            .verify_completed_pin_change(change, &oversized)
+            .is_err()
+    );
+    assert!(service.verify_completed_pin_change(change, b"{}").is_err());
+    // Duplicate and unknown fields must fail the maintained strict decoder;
+    // neither can select a different native verifier or original change.
+    let mut duplicate = body[..body.len() - 1].to_vec();
+    duplicate.extend_from_slice(b",\"request\":");
+    duplicate.extend_from_slice(&serde_json::to_vec(&spent.request).unwrap());
+    duplicate.push(b'}');
+    assert!(duplicate.len() <= limit);
+    assert!(
+        service
+            .verify_completed_pin_change(change, &duplicate)
+            .is_err()
+    );
+    duplicate = body[..body.len() - 1].to_vec();
+    duplicate.extend_from_slice(b",\"verifier\":\"accept\"}");
+    assert!(
+        service
+            .verify_completed_pin_change(change, &duplicate)
+            .is_err()
+    );
+    (service.into_ledger(), verified)
+}
