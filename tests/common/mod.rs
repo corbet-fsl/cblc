@@ -61,7 +61,8 @@ impl Fixture {
             expires_at: 1000,
             signature: String::new(),
         };
-        // Independent fixture construction: do not use the library encoder to sign.
+        // Preserve the independently constructed fixture transcript and require
+        // exact agreement with the owner encoder before signing.
         let bytes = serde_json::to_vec(&serde_json::json!([
             "cvld.admission.v3",
             grant.issuer_key_id,
@@ -76,7 +77,8 @@ impl Fixture {
             grant.expires_at
         ]))
         .unwrap();
-        grant.signature = self.sign_admission_payload(&bytes, grant.issued_at, grant.expires_at);
+        assert_eq!(cblc::admission::admission_bytes(&grant).unwrap(), bytes);
+        self.resign_grant(&mut grant);
         grant
     }
     pub fn sign_admission_payload(&self, bytes: &[u8], issued: u64, until: u64) -> String {
