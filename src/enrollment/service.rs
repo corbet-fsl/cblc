@@ -233,9 +233,26 @@ impl<C: Fn() -> u64> EnrollmentService<C> {
         let mut tx = self.store.storage.transaction()?;
         let now = clock();
         time(&mut tx, now)?;
-        config(&mut tx, &self.store.config)?;
         if slot > now / self.store.config.checkpoint_period_seconds {
             return Err(Error::InvalidInput);
+        }
+        let stored: Option<EnrollmentConfig> = tx.get(b"enrollment/config")?;
+        if let Some(stored) = stored {
+            if stored != self.store.config {
+                return Err(Error::PolicyMismatch);
+            }
+        } else {
+            // Fresh construction intentionally writes no configuration. Only
+            // an actually empty source namespace can mean absent history;
+            // missing configuration alongside ANY retained row is corruption.
+            if !tx
+                .current_range::<serde_json::Value>(b"enrollment/", b"enrollment0", 1)?
+                .is_empty()
+            {
+                return Err(Error::Storage);
+            }
+            tx.rollback_before(&CommitDeadline::new(&clock, now, czkp::MAX_INTEGER + 1))?;
+            return Ok(None);
         }
         let prior: Option<pending::Frozen> = tx.get(&pending::key(slot))?;
         let result = if let Some(prior) = prior {

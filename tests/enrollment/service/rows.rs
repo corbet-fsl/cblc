@@ -1,6 +1,109 @@
 use super::*;
 
 #[test]
+fn fresh_history_is_absent_only_for_the_actual_empty_namespace_without_any_write() {
+    use cblc::storage::{AccountStorage, MemoryStore};
+    let f = Fixture::new();
+    let mut shared = MemoryStore::default();
+    let mut publisher = EnrollmentService::new(
+        EnrollmentStore::new(shared.clone(), registry::config(&f)).unwrap(),
+        SigningKey::from_bytes(&[9; 32]),
+        || 150,
+    )
+    .unwrap();
+    assert!(publisher.checkpoint(1).unwrap().is_none());
+    assert!(matches!(publisher.checkpoint(2), Err(Error::InvalidInput)));
+    let mut tx = AccountStorage::transaction(&mut shared).unwrap();
+    assert!(
+        tx.get::<serde_json::Value>(b"enrollment/config")
+            .unwrap()
+            .is_none()
+    );
+    assert!(tx.get::<u64>(b"clock").unwrap().is_none());
+    assert!(
+        tx.current_range::<serde_json::Value>(b"enrollment/", b"enrollment0", 1)
+            .unwrap()
+            .is_empty()
+    );
+    tx.rollback().unwrap();
+
+    // A retained non-member key also makes missing configuration corruption.
+    let mut tx = AccountStorage::transaction(&mut shared).unwrap();
+    tx.put(
+        b"enrollment/pending/orphan",
+        &serde_json::json!({"orphan":true}),
+    )
+    .unwrap();
+    tx.commit().unwrap();
+    assert!(matches!(publisher.checkpoint(1), Err(Error::Storage)));
+    let mut tx = AccountStorage::transaction(&mut shared).unwrap();
+    assert_eq!(
+        tx.get::<serde_json::Value>(b"enrollment/pending/orphan")
+            .unwrap(),
+        Some(serde_json::json!({"orphan":true}))
+    );
+    assert!(tx.get::<u64>(b"clock").unwrap().is_none());
+    tx.rollback().unwrap();
+}
+
+#[test]
+fn missing_config_real_signed_member_malformed_row_and_clock_rollback_never_mean_absence() {
+    use cblc::storage::{AccountStorage, MemoryStore};
+    let f = Fixture::new();
+    let d = delegation(&f);
+    let limits = registry::config(&f);
+    let mut shared = MemoryStore::default();
+    let mut store = EnrollmentStore::new(shared.clone(), limits.clone()).unwrap();
+    let actual = registry::enroll(&mut store, &f, &d, 150).unwrap();
+    let mut tx = AccountStorage::transaction(&mut shared).unwrap();
+    tx.delete(b"enrollment/config").unwrap();
+    tx.commit().unwrap();
+    let mut publisher =
+        EnrollmentService::new(store, SigningKey::from_bytes(&[9; 32]), || 150).unwrap();
+    assert!(matches!(publisher.checkpoint(1), Err(Error::Storage)));
+    let mut key = b"enrollment/member/".to_vec();
+    key.extend_from_slice(actual.member_id.as_bytes());
+    let mut tx = AccountStorage::transaction(&mut shared).unwrap();
+    let retained: StoredEnrollment = tx.get(&key).unwrap().unwrap();
+    assert_eq!(retained.entry(), &actual);
+    assert!(
+        tx.get::<EnrollmentConfig>(b"enrollment/config")
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(tx.get::<u64>(b"clock").unwrap(), Some(150));
+    tx.rollback().unwrap();
+
+    let mut malformed = MemoryStore::default();
+    let mut tx = cssr::Storage::transaction(&mut malformed).unwrap();
+    tx.put(b"enrollment/pending/malformed", b"not-json")
+        .unwrap();
+    tx.commit().unwrap();
+    let mut publisher = EnrollmentService::new(
+        EnrollmentStore::new(malformed, limits.clone()).unwrap(),
+        SigningKey::from_bytes(&[9; 32]),
+        || 150,
+    )
+    .unwrap();
+    assert!(matches!(publisher.checkpoint(1), Err(Error::Storage)));
+
+    let mut rollback = MemoryStore::default();
+    let mut tx = AccountStorage::transaction(&mut rollback).unwrap();
+    tx.put(b"clock", &151_u64).unwrap();
+    tx.commit().unwrap();
+    let mut publisher = EnrollmentService::new(
+        EnrollmentStore::new(rollback.clone(), limits).unwrap(),
+        SigningKey::from_bytes(&[9; 32]),
+        || 150,
+    )
+    .unwrap();
+    assert!(matches!(publisher.checkpoint(1), Err(Error::ClockRollback)));
+    let mut tx = AccountStorage::transaction(&mut rollback).unwrap();
+    assert_eq!(tx.get::<u64>(b"clock").unwrap(), Some(151));
+    tx.rollback().unwrap();
+}
+
+#[test]
 fn malformed_expired_native_leaf_is_not_omitted_while_another_member_is_eligible() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("common.db");
