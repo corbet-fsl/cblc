@@ -39,6 +39,7 @@ cargo build --locked --example czkp_bb_worker
 cblc_target_dir="${CARGO_TARGET_DIR:-target}"
 export CBLC_BB="$(realpath "$cblc_target_dir/debug/examples/czkp_bb_worker")"
 test -x "$CBLC_BB"
+python3 -B .ci/record-worker.py export --worker "$CBLC_BB" --output "$ARTIFACT_ROOT/gather-record-fixture"
 cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint
 npm ci --ignore-scripts --no-audit --no-fund
 node .ci/check-fixture-suite.ts

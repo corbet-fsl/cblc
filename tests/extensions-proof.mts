@@ -183,7 +183,10 @@ try{
     const {gatherFixture,...record}=await exactRecordEpoch({members,call,proof,artifacts,issuerKey:manifest.issuerKey,now,deferExpiry:true});
     // Fictional presentation custody is explicitly separate from public proof
     // cache/trace files. No opening, HPKE private key or real member state is kept.
-    const fixtureBytes=JSON.stringify({...gatherFixture,record:record.statement.record,proof:record.proof,
+    const fixtureSource=process.env.CI_COMMIT_SHA;
+    if(process.env.ARTIFACT_ROOT&&!/^[0-9a-f]{40}$/.test(fixtureSource??''))
+      throw new Error('The actual fixture source identity is required for retained artifacts');
+    const fixtureBytes=JSON.stringify({...gatherFixture,fixtureSource,record:record.statement.record,proof:record.proof,
       proofScope:record.proofScope,artifacts:'config.json'});
     await writeFile(resolve(directory,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
     if(process.env.ARTIFACT_ROOT) {
@@ -195,6 +198,15 @@ try{
       // The consuming test rebases this portable path to its retained directory.
       await writeFile(resolve(retained,'config.json'),JSON.stringify({directory:'.',manifestSha256:sha(manifestBytes).toString('hex')}));
       await writeFile(resolve(retained,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
+      const metadata=JSON.parse(await readFile(resolve(retained,'worker.json')));
+      if(metadata.sourceCommit!==fixtureSource)throw new Error('Native worker and fixture source differ');
+      metadata.artifactFiles={};
+      for(const name of ['gather-record-fixture.json','config.json','circuits.json','keys.json','manifest.json',...lock.files.map(file=>`setup/${file.name}`)])
+        metadata.artifactFiles[name]=sha(await readFile(resolve(retained,name))).toString('hex');
+      const metadataBytes=JSON.stringify(metadata);
+      await writeFile(resolve(retained,'worker.json'),metadataBytes);
+      console.log(`CBLC_RECORD_ARTIFACT ${JSON.stringify({sourceCommit:fixtureSource,workerSha256:metadata.workerSha256,
+        metadataSha256:sha(metadataBytes).toString('hex'),fixtureSha256:sha(fixtureBytes).toString('hex')})}`);
     }
     // Preserve the successful first owner fixture even if a later
     // ingestion/race scenario fails. The complete proof report still requires
