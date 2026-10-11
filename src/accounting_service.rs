@@ -271,6 +271,16 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
             .publish_record_epoch(policy_epoch, period_seconds, &self.clock)
     }
 
+    /// Privileged original delayed settlement batch, absent from member DTOs.
+    /// The configured native ledger owns all proof, replay, delay and commit rules.
+    pub fn deposit_batch(
+        &mut self,
+        batch: &[(crate::extensions::Deposit, Vec<u8>)],
+    ) -> Result<(), Error> {
+        self.ledger.reload_policy()?;
+        self.ledger.deposit_batch(batch, &self.clock)
+    }
+
     /// Trusted local administration, absent from AccountServiceRequest.
     /// Independently verify the common enrollment tree before calling this.
     pub fn publish_verified_checkpoint(&mut self, slot: u64, root: [u8; 32]) -> Result<(), Error> {
