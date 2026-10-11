@@ -1,8 +1,7 @@
 //! Serde-compatible owner schemas projected into the maintained OpenAPI model.
 //! Utoipa's tagged-enum derive loses container `deny_unknown_fields`; Schemars
 //! reads those annotations from the canonical types instead of copied DTOs.
-#[cfg(feature = "host")]
-use crate::accounting_service::{AccountServiceRequest, AccountServiceResponse};
+use crate::contracts::{AccountServiceRequest, AccountServiceResponse};
 use schemars::{JsonSchema, generate::SchemaSettings, transform};
 use serde_json::Value;
 use utoipa::openapi::{RefOr, Schema};
@@ -31,22 +30,18 @@ fn schema<T: JsonSchema>() -> RefOr<Schema> {
         .expect("canonical accounting schemas require lossless OpenAPI projection")
 }
 
-#[cfg(feature = "host")]
 impl utoipa::PartialSchema for AccountServiceRequest {
     fn schema() -> RefOr<Schema> {
         schema::<Self>()
     }
 }
-#[cfg(feature = "host")]
 impl utoipa::ToSchema for AccountServiceRequest {}
 
-#[cfg(feature = "host")]
 impl utoipa::PartialSchema for AccountServiceResponse {
     fn schema() -> RefOr<Schema> {
         schema::<Self>()
     }
 }
-#[cfg(feature = "host")]
 impl utoipa::ToSchema for AccountServiceResponse {}
 
 #[cfg(feature = "publication")]

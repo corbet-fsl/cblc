@@ -6,12 +6,12 @@ use crate::{
     Error,
     accounting::{
         AccountAcceptance, AccountPolicy, AccountProofScope, AccountProofVerifier, AccountRequest,
-        AccountStatement, AccountStatusRequest, AccountStatusResponse,
+        AccountStatement,
     },
     accounting_ledger::{AccountLedger, WaitingPeriodTuning},
     admission::{AdmissionGrant, DeviceAuthorization},
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 mod admission_keys;
 mod authority;
 mod enrollment;
@@ -61,61 +61,7 @@ impl AccountProofVerifier for NativeAccountVerifier {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
-pub enum AccountServiceRequest {
-    RegisterRecordRecipient {
-        grant: AdmissionGrant,
-        authorization: DeviceAuthorization,
-        request: crate::accounting_ledger::record_epoch::RecipientRequest,
-    },
-    Apply {
-        grant: AdmissionGrant,
-        authorization: DeviceAuthorization,
-        request: Box<AccountRequest>,
-    },
-    ApplyExtended {
-        grant: AdmissionGrant,
-        authorization: DeviceAuthorization,
-        request: Box<AccountRequest>,
-        update: crate::extensions::ExtendedUpdate,
-    },
-    Obligations {
-        grant: AdmissionGrant,
-        authorization: DeviceAuthorization,
-        request: AccountStatusRequest,
-    },
-    Status {
-        grant: AdmissionGrant,
-        authorization: DeviceAuthorization,
-        request: AccountStatusRequest,
-    },
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(
-    tag = "action",
-    content = "value",
-    rename_all = "camelCase",
-    deny_unknown_fields
-)]
-pub enum AccountServiceResponse {
-    /// Completion of the actual durable registration; never record authority.
-    RecordRecipient {
-        recipient_key: [u8; 32],
-    },
-    Apply(AccountAcceptance),
-    Status(AccountStatusResponse),
-    ApplyExtended {
-        acceptance: AccountAcceptance,
-        certificate: crate::extensions::StateCertificate,
-        /// Original ancestry issued only in this acceptance's verified CAS.
-        ancestry: Option<Box<crate::extensions::EpochAncestryCertificate>>,
-    },
-    Obligations(crate::obligations::ObligationsResponse),
-}
+pub use crate::contracts::{AccountServiceRequest, AccountServiceResponse};
 
 /// Hosts supply their own trusted clock, HTTP/onion transport and access control
 /// for local administration. Settlement ingress is not a member operation.

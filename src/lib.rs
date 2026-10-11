@@ -12,6 +12,7 @@ pub mod accounting_service;
 pub mod admission;
 #[cfg(feature = "host")]
 pub mod artifacts;
+pub mod contracts;
 pub mod enrollment;
 #[cfg(feature = "host")]
 pub mod prepared;
@@ -26,7 +27,6 @@ pub mod pins;
 #[cfg(feature = "host")]
 pub mod verification;
 
-#[cfg(feature = "host")]
 pub mod obligations;
 
 #[cfg(feature = "publication")]
@@ -35,5 +35,5 @@ pub mod publication;
 #[cfg(all(feature = "host", feature = "publication"))]
 pub mod record_verifier;
 
-#[cfg(all(feature = "schema", any(feature = "host", feature = "publication")))]
+#[cfg(feature = "schema")]
 mod schema;
