@@ -48,14 +48,21 @@ test('extension artifact JSON is decoded from bounded bytes before selecting a c
     }
     assert.throws(() => loaded.artifacts('record_epoch'), /Record epoch circuit unavailable/);
     assert.throws(() => loaded.artifacts('other'), /Circuit domain/);
-    const changedManifest = Buffer.from(JSON.stringify({...manifest, backend: '5.2.1'}));
+    const changedManifest = Buffer.from(JSON.stringify({...manifest, backend: '5.2.2'}));
     await writeFile(join(directory, 'manifest.json'), changedManifest);
     // An old pinned corpus cannot acquire a new backend by changing its label.
     await assert.rejects(loadArtifacts(configPath), /Manifest authentication/);
-    await writeFile(configPath, JSON.stringify({directory, manifestSha256: digest(changedManifest)}));
-    const separatelyPinned = await loadArtifacts(configPath);
-    assert.equal(separatelyPinned.manifest.backend, '5.2.1');
-    assert.equal(Buffer.from(separatelyPinned.scope.verifyingKeyDigest).toString('hex'), digest(keyBytes));
+    // One prover version: any other label is refused even when separately pinned,
+    // including the retired 5.0.0 key group.
+    for (const label of ['5.2.2', '5.0.0']) {
+      const relabelled = Buffer.from(JSON.stringify({...manifest, backend: label}));
+      await writeFile(join(directory, 'manifest.json'), relabelled);
+      await writeFile(configPath, JSON.stringify({directory, manifestSha256: digest(relabelled)}));
+      await assert.rejects(loadArtifacts(configPath), /Extension artifact suite/);
+    }
+    await writeFile(join(directory, 'manifest.json'), manifestBytes);
+    await writeFile(configPath, JSON.stringify({directory, manifestSha256: digest(manifestBytes)}));
+    assert.equal(Buffer.from((await loadArtifacts(configPath)).scope.verifyingKeyDigest).toString('hex'), digest(keyBytes));
     await writeFile(join(directory, 'keys.json'), JSON.stringify({...keys, update: '0304'}));
     await assert.rejects(loadArtifacts(configPath), /Artifact authentication/);
     await writeFile(join(directory, 'keys.json'), keyBytes);
