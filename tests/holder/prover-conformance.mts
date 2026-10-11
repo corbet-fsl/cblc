@@ -103,13 +103,10 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
     assert(proof.publicInputs.every((n, i) => BigInt(n) === BigInt(expected[i])));
     const verifier = new UltraHonkVerifierBackend(api);
     stage = 'native-js-positive';
-    assert(await verifier.verifyProof({...proof, verificationKey}, OPTIONS));
+    assert.equal(await verifier.verifyProof({...proof, verificationKey}, OPTIONS), true);
     const refuses = async changed => {
       assert.equal(await verifier.verifyProof(changed, OPTIONS), false);
     };
-    const corrupt = new Uint8Array(proof.proof); corrupt[corrupt.length - 1] ^= 1;
-    stage = 'native-js-proof-negative';
-    await refuses({...proof, proof: corrupt, verificationKey});
     const changed = [...proof.publicInputs]; changed[0] = '0x' + (BigInt(changed[0]) ^ 1n).toString(16).padStart(64, '0');
     stage = 'native-js-public-negative';
     await refuses({...proof, publicInputs: changed, verificationKey});
@@ -122,7 +119,6 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
       await refuses({...proof, verificationKey: foreignKey});
       stage = 'original-raw-native-verification';
       nativeVerification = await verifyOriginalNative(proof, verificationKey, nativeSetup.setup, nativeSetup.circuitDigest);
-      nativeVerification.proofMutation = 'native-js-verified-false';
       nativeVerification.publicInputMutation = 'native-js-verified-false';
       nativeVerification.foreignVerificationKey = 'native-js-verified-false';
     }
@@ -134,13 +130,38 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
     // after every key and the honest manifest have been generated successfully.
     return {receipt, communityId: target?.community ?? 'alpha', policy, extension,
       ...(target ? {configuration: target} : {}),
-      account: candidate.statement, proof: hex(proof.proof)};
+      account: candidate.statement, proof: hex(proof.proof), publicInputs: proof.publicInputs};
   } catch {
     // Only fixed public stage labels escape, never an upstream error or witness.
     throw new Error(`Original native producer conformance refused: ${stage}`);
   } finally {
     secret.fill(0);
     witness?.fill(0);
+  }
+}
+
+// Both buffers are real canonical proofs already verified for their own public
+// statement. Substitution tests the cryptographic relation without corrupting
+// an upstream curve-point encoding or interpreting an API exception as false.
+export async function verifyConformanceSubstitution(api, verificationKey, first, second) {
+  try {
+    assert.equal(first.receipt.verificationKeySha256, sha(verificationKey));
+    assert.equal(second.receipt.verificationKeySha256, sha(verificationKey));
+    assert.equal(first.receipt.compressedBytecodeSha256, second.receipt.compressedBytecodeSha256);
+    assert.notDeepEqual(first.publicInputs, second.publicInputs);
+    assert.notEqual(first.receipt.proofSha256, second.receipt.proofSha256);
+    const verifier = new UltraHonkVerifierBackend(api);
+    for (const [statement, alternate] of [[first, second], [second, first]]) {
+      assert.equal(await verifier.verifyProof({publicInputs: statement.publicInputs,
+        proof: unhex(alternate.proof), verificationKey}, OPTIONS), false);
+    }
+    first.receipt.nativeVerification.proofSubstitution = 'native-js-verified-false';
+    second.receipt.nativeVerification.proofSubstitution = 'native-js-verified-false';
+    for (const [value, alternate] of [[first, second], [second, first]]) {
+      (value.receipt.nativeVerification.proofSubstitutionPeers ??= []).push(alternate.receipt.proofSha256);
+    }
+  } catch {
+    throw new Error('Original native producer conformance refused: native-js-proof-substitution');
   }
 }
 
@@ -155,9 +176,10 @@ export async function retainConformance(value, manifestBytes, circuitBytes, keyB
     throw new Error('Conformance group association differs');
   }
   const manifestSha256 = sha(manifestBytes);
+  assert(['alpha', 'omega'].includes(value.communityId));
   const activation = {account: value.account, proof: encodeBundle([{state: value.account.nextState,
     inbox: Array(32).fill(0), proof: value.proof}])};
-  const output = {version: 1, use: 'alpha-startup-activation-probe', authority: 'none',
+  const output = {version: 1, use: `${value.communityId}-startup-activation-probe`, authority: 'none',
     communityId: value.communityId, policy: value.policy, extension: value.extension, activation,
     ...(value.configuration ? {configuration: value.configuration} : {}),
     manifestSha256, proofScope: {circuitDigest: Array.from(Buffer.from(manifest.circuitSha256, 'hex')),
@@ -170,7 +192,7 @@ export async function retainConformance(value, manifestBytes, circuitBytes, keyB
   if (!process.env.ARTIFACT_ROOT.startsWith('/')) {
     throw new Error('Public activation destination unavailable');
   }
-  const file = `alpha-activation-${manifestSha256}-${value.receipt.proofSha256}.json`;
+  const file = `${value.communityId}-activation-${manifestSha256}-${value.receipt.proofSha256}.json`;
   const path = resolve(process.env.ARTIFACT_ROOT, file);
   try { await writeFile(path, bytes, {flag: 'wx', mode: 0o644}); }
   catch (error) {
@@ -178,7 +200,7 @@ export async function retainConformance(value, manifestBytes, circuitBytes, keyB
     const existing = await boundedFile(path, 4 * 1024 * 1024);
     if (!Buffer.from(existing).equals(bytes)) throw new Error('Retained activation differs');
   }
-  console.log(`ALPHA_ACTIVATION_ARTIFACT ${JSON.stringify({file, sha256: sha(bytes), manifestSha256})}`);
+  console.log(`SCOPED_ACTIVATION_ARTIFACT ${JSON.stringify({communityId: value.communityId, file, sha256: sha(bytes), manifestSha256})}`);
   return output;
 }
 
@@ -196,5 +218,21 @@ export async function alphaStartupRequest() {
   assert.equal(request.observation, 1800000000);
   assert.equal(request.policyEpoch, 4);
   assert.equal(createHash('sha256').update(Buffer.from(request.member)).digest('base64url'), request.accountMemberId);
+  return request;
+}
+
+// Separately reviewed historical omega startup data. This creates no member or
+// authority and must never relabel the alpha proof or renew its configured time.
+export async function omegaStartupRequest() {
+  const bytes = await boundedFile('tests/holder/fixtures/omega-native-request.json', 65536);
+  if (sha(bytes) !== '782f779ccc6cbcfca4ab651f7fe2cd584391b8659c0ee59a94f307af457ee139') {
+    throw new Error('Reviewed omega fixture configuration differs');
+  }
+  const request = json(bytes);
+  assert.equal(request.purpose, 'cmsg.omega-native-fixture-request.v1');
+  assert.equal(request.community, 'omega');
+  assert.equal(request.observation, 1791717800);
+  assert.equal(request.accountPolicy.policyValidUntil, 1791804200);
+  assert.equal(createHash('sha256').update(Buffer.alloc(48, 7)).digest('base64url'), request.accountMemberId);
   return request;
 }

@@ -44,36 +44,47 @@ def sha(data):
 
 destination = Path(sys.argv[1])
 manifest_sha = sha(bounded(destination / "manifest.json", 65536))
-request_bytes = bounded(Path("tests/holder/fixtures/alpha-native-request.json"), 65536)
-request_sha = sha(request_bytes)
-if request_sha != "197281e27a68c485c51d556b1d10cbefdd21b0ba471b9c5a03afa86d4af0c897":
-    raise ValueError("Reviewed alpha configuration differs")
-request = json.loads(request_bytes)
-matches = []
-for count, path in enumerate(Path(os.environ["ARTIFACT_ROOT"]).glob(f"alpha-activation-{manifest_sha}-*.json")):
-    if count >= 8:
-        raise ValueError("Public activation selection bound")
-    data = bounded(path, 4 * 1024 * 1024)
-    value = json.loads(data)
-    if value.get("configuration") != request:
-        continue
-    if value.get("manifestSha256") != manifest_sha or value.get("authority") != "none":
-        raise ValueError("Public activation association differs")
-    if value["producer"]["nativeVerification"]["positiveVerdict"] is not True:
-        raise ValueError("Original native verification missing")
-    matches.append((path.name, data))
-if len(matches) != 1:
-    raise ValueError("Exact configured activation unavailable")
-name, data = matches[0]
-(destination / name).write_bytes(data)
+activations = {}
+for community, expected in (
+    ("alpha", "197281e27a68c485c51d556b1d10cbefdd21b0ba471b9c5a03afa86d4af0c897"),
+    ("omega", "782f779ccc6cbcfca4ab651f7fe2cd584391b8659c0ee59a94f307af457ee139"),
+):
+    request_bytes = bounded(Path(f"tests/holder/fixtures/{community}-native-request.json"), 65536)
+    request_sha = sha(request_bytes)
+    if request_sha != expected:
+        raise ValueError("Reviewed scoped configuration differs")
+    request = json.loads(request_bytes)
+    matches = []
+    for count, path in enumerate(Path(os.environ["ARTIFACT_ROOT"]).glob(f"{community}-activation-{manifest_sha}-*.json")):
+        if count >= 8:
+            raise ValueError("Public activation selection bound")
+        data = bounded(path, 4 * 1024 * 1024)
+        value = json.loads(data)
+        if value.get("configuration") != request:
+            continue
+        if (value.get("manifestSha256") != manifest_sha or value.get("authority") != "none"
+                or value.get("communityId") != community
+                or value.get("use") != f"{community}-startup-activation-probe"):
+            raise ValueError("Public activation association differs")
+        native = value["producer"]["nativeVerification"]
+        if (native["positiveVerdict"] is not True
+                or native["proofSubstitution"] != "native-js-verified-false"
+                or native["publicInputMutation"] != "native-js-verified-false"
+                or native["foreignVerificationKey"] != "native-js-verified-false"):
+            raise ValueError("Original native verification missing")
+        matches.append((path.name, data))
+    if len(matches) != 1:
+        raise ValueError("Exact configured activation unavailable")
+    name, data = matches[0]
+    (destination / name).write_bytes(data)
+    activations[community] = {"file": name, "sha256": sha(data), "configurationSha256": request_sha}
 # Preserve the original retained portable convention. A trusted consumer must
 # rebase directory under this exact manifest pin before calling loadArtifacts.
 (destination / "config.json").write_text(json.dumps({"directory": ".", "manifestSha256": manifest_sha}) + "\n")
 (destination / "index.json").write_text(json.dumps({
     "version": 1, "purpose": "original-artifact-conformance", "authority": "none",
     "manifestSha256": manifest_sha,
-    "configurationSha256": request_sha,
-    "activation": {"file": name, "sha256": sha(data)},
+    "activations": activations,
     "workerReceiptSha256": sha(bounded(destination / "worker-receipt.json", 65536)),
 }, sort_keys=True) + "\n")
 PY
