@@ -25,9 +25,9 @@ CONTROLS = (
     ),
     (
         "src/storage.rs",
-        "storage::tests::late_successful_commit_is_expired_fresh_authority_and_keeps_committed_state",
+        "storage::tests::late_successful_commit_reports_reconciliation_and_keeps_committed_state",
         "tests/internal/storage.rs",
-        b"self.0.commit_before(deadline)?;\n        deadline.check()?;",
+        b"self.0.commit_before(deadline)?;\n        deadline.check().map_err(|_| Error::Storage)?;",
         b"self.0.commit_before(deadline)?;",
         "fresh return check",
     ),
