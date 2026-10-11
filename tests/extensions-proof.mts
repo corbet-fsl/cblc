@@ -17,6 +17,7 @@ import {receiptDigest} from '@corbet-labs/cwlt/hashes';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
 import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';
+import {ingestedRecordEpoch} from './holder/record-epoch-ingestion.mts';
 const recordEpochArtifacts=process.argv.length===3&&process.argv[2]==='--record-epoch-artifacts';
 const recordEpochProofs=process.argv.length===3&&process.argv[2]==='--record-epoch-proofs';
 const recordEpochEnabled=recordEpochArtifacts||recordEpochProofs;
@@ -175,8 +176,10 @@ try{
   await call(initialize);
   for(let i=0;i<4;i++)members[i]=(await submit(7+i,[genesis[i]],'genesis')).next;
   if(recordEpochProofs) {
-    const record=await exactRecordEpoch({members,call,proof,artifacts,issuerKey:manifest.issuerKey,now});
-    await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify([record]));
+    const record=await exactRecordEpoch({members,call,proof,artifacts,issuerKey:manifest.issuerKey,now,deferExpiry:true});
+    const ingested=await ingestedRecordEpoch({members,call,submit,anonymous,proof,artifacts,
+      issuerKey:manifest.issuerKey,now,programs,hashes,community,signing,extension});
+    await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify([record,...ingested]));
   } else {
   const record=async(index,label,measure=false)=>anonymous(members[index].record({purpose:'forumListing',challenge:toArray(bytes(now%255)),expiresAt:now+90}),label,measure);
   const stale=await record(0,'record-below-quorum');

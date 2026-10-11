@@ -5,7 +5,7 @@ import {generateKeyPairSync,sign} from 'node:crypto';
 import {prepareRecordEpoch} from './record-epoch.mts';
 import {recordPresentationBytes,verifyRecordPresentation} from './record-epoch-codec.mts';
 
-export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,now}) {
+export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,now,deferExpiry=false}) {
   for(let index=0;index<members.length;index++)await call({op:'recordRecipient',member:7+index,now});
   await call({op:'recordEpoch',now});
   await call({op:'recordEpoch',now}); // Original exact root/object survives retry.
@@ -54,11 +54,13 @@ export async function exactRecordEpoch({members,call,proof,artifacts,issuerKey,n
   assert.equal(second.proof,presentation.proof); // No per-use expensive proof.
   await call({op:'issueRecordChallenge',owner:second.record.owner,context:contact});
   assert.equal(await call({op:'checkEpochRecord',challenge:contact.challenge,presentation:second,now}),null);
-  const expiry={...context,challenge:Array(32).fill(221)};
-  const expired=bind(expiry);
-  await call({op:'issueRecordChallenge',owner:expired.record.owner,context:expiry});
-  // Main's observed clock cannot return from a future expiry to earlier success.
-  // Exercise the exact boundary last, then end this bounded fixture journey.
-  await call({op:'checkEpochRecord',challenge:expiry.challenge,presentation:expired,now:expiry.expiresAt},false);
+  if(!deferExpiry) {
+    const expiry={...context,challenge:Array(32).fill(221)};
+    const expired=bind(expiry);
+    await call({op:'issueRecordChallenge',owner:expired.record.owner,context:expiry});
+    // Main's observed clock cannot return from a future expiry to earlier success.
+    // The continued journey checks the exclusive boundary with its final epoch.
+    await call({op:'checkEpochRecord',challenge:expiry.challenge,presentation:expired,now:expiry.expiresAt},false);
+  }
   return {statement:candidate.statement,proof:framed,proofScope:artifacts.scope};
 }
