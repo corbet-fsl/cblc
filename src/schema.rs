@@ -3,7 +3,18 @@
 //! reads those annotations from the canonical types instead of copied DTOs.
 use crate::accounting_service::{AccountServiceRequest, AccountServiceResponse};
 use schemars::{JsonSchema, generate::SchemaSettings, transform};
+use serde_json::Value;
 use utoipa::openapi::{RefOr, Schema};
+
+fn lossless(value: Value) -> Option<RefOr<Schema>> {
+    let projected: RefOr<Schema> = serde_json::from_value(value.clone()).ok()?;
+    // Deserialization can ignore unsupported JSON Schema keywords. Refuse a
+    // projection that changes any annotation, bound, or nested constraint.
+    if serde_json::to_value(&projected).ok()? != value {
+        return None;
+    }
+    Some(projected)
+}
 
 fn schema<T: JsonSchema>() -> RefOr<Schema> {
     let schema = SchemaSettings::draft2020_12()
@@ -15,8 +26,8 @@ fn schema<T: JsonSchema>() -> RefOr<Schema> {
         .with_transform(transform::ReplaceUnevaluatedProperties::default())
         .into_generator()
         .into_root_schema_for::<T>();
-    serde_json::from_value(schema.into())
-        .expect("canonical accounting schemas use supported OpenAPI vocabulary")
+    lossless(schema.into())
+        .expect("canonical accounting schemas require lossless OpenAPI projection")
 }
 
 impl utoipa::PartialSchema for AccountServiceRequest {
@@ -41,3 +52,7 @@ impl utoipa::PartialSchema for crate::publication::PublicVerifierMaterial {
 }
 #[cfg(feature = "publication")]
 impl utoipa::ToSchema for crate::publication::PublicVerifierMaterial {}
+
+#[cfg(test)]
+#[path = "../tests/internal/schema_projection.rs"]
+mod tests;
