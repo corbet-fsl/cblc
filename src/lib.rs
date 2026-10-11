@@ -12,6 +12,7 @@ pub mod accounting_service;
 pub mod admission;
 #[cfg(feature = "host")]
 pub mod artifacts;
+pub mod certificates;
 pub mod contracts;
 pub mod enrollment;
 #[cfg(feature = "host")]

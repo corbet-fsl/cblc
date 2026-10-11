@@ -169,12 +169,8 @@ pub(super) fn recover(
         {
             return Err(Error::Storage);
         }
-        let signature = certificate
-            .signature
-            .as_slice()
-            .try_into()
-            .map_err(|_| Error::Storage)?;
-        cssr::certificate::verify_ancestry(&issuer.public_key(), &certificate.body(), signature)
+        certificate
+            .verify(&issuer.public_key())
             .map_err(|_| Error::Storage)?;
         if certificate.record.leaf.owner != certificate.owner
             || certificate.record.leaf.version > certificate.version
@@ -289,8 +285,12 @@ pub(super) fn certify(
         record,
     };
     certificate.signature = issuer
-        .issue_ancestry(&certificate.body())
-        .map_err(|_| Error::CryptoProvider)?
+        .sign(
+            &certificate
+                .body()
+                .bytes()
+                .map_err(|_| Error::CryptoProvider)?,
+        )
         .to_vec();
     Ok(Some(certificate))
 }

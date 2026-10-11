@@ -293,7 +293,7 @@ fn recovery_binds_real_signatures_to_only_the_original_acceptance() {
                 .to_vec(),
         },
     };
-    certificate.signature = issuer.issue_ancestry(&certificate.body()).unwrap().to_vec();
+    certificate.signature = issuer.sign(&certificate.body().bytes().unwrap()).to_vec();
     let mut store = MemoryStore::default();
     let mut tx = AccountStorage::transaction(&mut store).unwrap();
     retain(&mut tx, &accepted.statement.owner, Some(&certificate)).unwrap();

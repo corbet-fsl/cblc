@@ -141,19 +141,7 @@ fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recov
         &SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes(),
     )
     .unwrap();
-    cssr::certificate::verify(
-        &issuer_key,
-        &cssr::certificate::AcceptedState {
-            community: request.statement.community,
-            owner: request.statement.owner,
-            state: request.statement.next_state,
-            scope: request.proof_scope.circuit_digest,
-            version: request.statement.next_version,
-            accepted_at: acceptance.accepted_at,
-        },
-        certificate.signature.as_slice().try_into().unwrap(),
-    )
-    .unwrap();
+    certificate.verify(acceptance, &issuer_key).unwrap();
     let committed = stored.snapshot();
     assert_ne!(committed, before);
     let retried = correct.handle_for_member(&[7; 48], operation).unwrap();

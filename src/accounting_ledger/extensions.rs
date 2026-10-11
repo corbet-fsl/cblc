@@ -25,18 +25,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         {
             return Err(Error::PolicyMismatch);
         }
-        let signature = issuer.issue(&cssr::certificate::AcceptedState {
-            community: self.community,
-            owner: accepted.statement.owner,
-            state: accepted.statement.next_state,
-            scope: accepted.proof_scope.circuit_digest,
-            version: accepted.statement.next_version,
-            accepted_at: accepted.accepted_at,
-        });
-        Ok(crate::extensions::StateCertificate {
-            accepted_at: accepted.accepted_at,
-            signature: signature.to_vec(),
-        })
+        Ok(state_certificate(accepted, issuer))
     }
     /// Pin a separate complete extension relation. Legacy handles then fail closed.
     /// Only host configuration may call this; never accept a verifier from a request.
@@ -512,3 +501,17 @@ pub(super) fn read_obligations(
 #[cfg(test)]
 #[path = "../../tests/internal/extension_storage.rs"]
 mod tests;
+
+/// Sign the accepted-state transcript that cblc's `AcceptedState` encodes. Callers
+/// have already verified the acceptance and its community and proof scope.
+pub(super) fn state_certificate(
+    accepted: &AccountAcceptance,
+    issuer: &cssr::certificate::CertificateIssuer,
+) -> crate::extensions::StateCertificate {
+    let signature =
+        issuer.sign(&crate::certificates::AcceptedState::from_acceptance(accepted).bytes());
+    crate::extensions::StateCertificate {
+        accepted_at: accepted.accepted_at,
+        signature: signature.to_vec(),
+    }
+}

@@ -226,7 +226,13 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                 request,
             } => self
                 .ledger
-                .status(&grant, &authorization, &request, &self.clock)
+                .status_with_evidence(
+                    &grant,
+                    &authorization,
+                    &request,
+                    self.extension_issuer.as_ref(),
+                    &self.clock,
+                )
                 .map(AccountServiceResponse::Status),
         }
     }

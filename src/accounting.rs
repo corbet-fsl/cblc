@@ -224,6 +224,12 @@ pub struct AccountStatusResponse {
     pub status_request_digest: [u8; 32],
     pub observed_at: u64,
     pub acceptance: Option<AccountAcceptance>,
+    /// Issuer evidence of the same accepted extended request, so a returning holder
+    /// can rebuild the full response. Not covered by `signature`: both parts carry
+    /// their own issuer signature that the holder verifies against the acceptance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<Object>))]
+    pub extended: Option<crate::extensions::ExtendedEvidence>,
     pub signature: String,
 }
 

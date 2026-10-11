@@ -615,6 +615,20 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         request: &AccountStatusRequest,
         clock: impl Fn() -> u64,
     ) -> Result<AccountStatusResponse, Error> {
+        self.status_with_evidence(grant, authorization, request, None, clock)
+    }
+
+    /// Status that, for an accepted EXTENDED request, also returns the issuer's
+    /// state certificate and original ancestry, produced by the same calls the exact
+    /// retry path uses. Nothing new is issued and no balance or history is returned.
+    pub fn status_with_evidence(
+        &mut self,
+        grant: &AdmissionGrant,
+        authorization: &DeviceAuthorization,
+        request: &AccountStatusRequest,
+        issuer: Option<&cssr::certificate::CertificateIssuer>,
+        clock: impl Fn() -> u64,
+    ) -> Result<AccountStatusResponse, Error> {
         let clock = observed_clock(self.observed_time.clone(), clock);
         let bytes = account_status_bytes(request)?;
         if request.community != self.community
@@ -661,12 +675,31 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             })
             .transpose()?
             .flatten();
+        let extended = match (&result, issuer, self.extensions.as_ref()) {
+            (Some(accepted), Some(issuer), Some(extensions))
+                if accepted.statement.community == self.community
+                    && accepted.proof_scope == extensions.verifier.scope() =>
+            {
+                let ancestry = record_epoch::recover(
+                    &mut transaction,
+                    accepted,
+                    Some(issuer),
+                    &self.operator.verifying_key().to_bytes(),
+                )?;
+                Some(crate::extensions::ExtendedEvidence {
+                    certificate: extensions::state_certificate(accepted, issuer),
+                    ancestry: ancestry.map(Box::new),
+                })
+            }
+            _ => None,
+        };
         let mut signed_request = bytes;
         signed_request.extend_from_slice(&decode::<64>(&request.signature)?);
         let mut response = AccountStatusResponse {
             status_request_digest: Sha256::digest(signed_request).into(),
             observed_at: now,
             acceptance: result,
+            extended,
             signature: String::new(),
         };
         response.signature = BASE64URL_NOPAD.encode(

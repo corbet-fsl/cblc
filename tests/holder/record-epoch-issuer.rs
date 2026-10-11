@@ -52,12 +52,7 @@ pub fn check_certificate(
     let key = cssr::certificate::CertificateIssuer::new(&[3; 32])
         .unwrap()
         .public_key();
-    cssr::certificate::verify_ancestry(
-        &key,
-        &certificate.body(),
-        certificate.signature.as_slice().try_into().unwrap(),
-    )
-    .unwrap();
+    certificate.verify(&key).unwrap();
     let record_leaf = certificate
         .record
         .leaf

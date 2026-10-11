@@ -50,12 +50,48 @@ pub struct PendingObligation {
     pub commitment: [u8; 32],
 }
 /// Private input to a delayed deposit proof, returned only to the accepting holder.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StateCertificate {
     pub accepted_at: u64,
     pub signature: Vec<u8>,
+}
+impl StateCertificate {
+    /// Verify this certificate for exactly the given operator acceptance: its time
+    /// must be the acceptance time and the signature must cover the accepted state.
+    pub fn verify(
+        &self,
+        accepted: &crate::accounting::AccountAcceptance,
+        key: &[u8; 64],
+    ) -> Result<(), Error> {
+        let signature: [u8; 64] = self
+            .signature
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::Signature)?;
+        if self.accepted_at != accepted.accepted_at {
+            return Err(Error::Replay);
+        }
+        crate::certificates::AcceptedState::from_acceptance(accepted).verify(key, &signature)
+    }
+}
+/// Issuer evidence for an accepted extended request, returned with a status lookup
+/// so a holder can recover the full response. It carries no balance and no history;
+/// both parts are individually issuer-signed and verified by the holder.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtendedEvidence {
+    /// Accepted-state certificate of the exact acceptance in the same response.
+    pub certificate: StateCertificate,
+    /// Original ancestry, present only when issued in that acceptance's CAS.
+    pub ancestry: Option<Box<EpochAncestryCertificate>>,
+}
+impl std::fmt::Debug for ExtendedEvidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ExtendedEvidence([redacted])")
+    }
 }
 /// Private ancestry witness returned only on the authenticated account response.
 /// It must never be projected into a listing or contact's public record inputs.
@@ -86,11 +122,10 @@ pub struct EpochAncestryCertificate {
     /// Same private signed-leaf packet used by frozen and descendant records.
     pub record: czkp::record::SignedLeaf,
 }
-#[cfg(feature = "host")]
 impl EpochAncestryCertificate {
     /// Original fixed-width issuer transcript; no JSON is signed.
-    pub fn body(&self) -> cssr::certificate::EpochAncestry {
-        cssr::certificate::EpochAncestry {
+    pub fn body(&self) -> crate::certificates::EpochAncestryBody {
+        crate::certificates::EpochAncestryBody {
             community: self.community,
             owner: self.owner,
             epoch: self.epoch,
@@ -102,6 +137,16 @@ impl EpochAncestryCertificate {
             verifying_key_digest: self.proof_scope.verifying_key_digest,
             issued_at: self.issued_at,
         }
+    }
+
+    /// Verify this certificate's own issuer signature under the issuer's key.
+    pub fn verify(&self, key: &[u8; 64]) -> Result<(), Error> {
+        let signature: [u8; 64] = self
+            .signature
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::Signature)?;
+        self.body().verify(key, &signature)
     }
 }
 /// Coherent result of one committed extended update, including its original
