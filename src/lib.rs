@@ -7,6 +7,7 @@ mod accounting_policy;
 pub mod accounting_service;
 pub mod admission;
 pub mod artifacts;
+pub mod enrollment;
 pub mod prepared;
 pub mod storage;
 pub use czkp::Error;
