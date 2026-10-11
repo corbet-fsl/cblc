@@ -17,7 +17,7 @@ struct Budget {
     receipts: BTreeMap<String, Receipt>,
 }
 
-fn budgets(
+pub(super) fn budgets(
     tx: &mut Transaction<'_>,
     settlement: &Settlement,
     anchor: &IssuerAnchor,

@@ -55,6 +55,7 @@ fn material() -> PublicVerifierMaterial {
             .unwrap()
             .public_key()
             .to_vec(),
+        settlement: None,
         record_epoch: Some(Epoch {
             purpose: czkp::record::Purpose::RecordEpochV3,
             community: community_hash,
@@ -219,6 +220,61 @@ fn withdrawal_preserves_balance_and_policy_floors_without_granting_epoch_authori
     assert_eq!(
         current.observe(&rolled_back, bounds(), 110),
         Err(Error::Replay)
+    );
+}
+
+#[test]
+fn current_signed_balance_reendorses_exact_frozen_epoch_without_changing_provenance() {
+    let original = material();
+    let mut signer = signer();
+    let old = signed(&mut signer, &original, 900);
+    let mut current = view(&original);
+    current.observe(&old, bounds(), 110).unwrap();
+    let frozen = serde_json::to_vec(original.record_epoch.as_ref().unwrap()).unwrap();
+    let mut newer = original.clone();
+    newer.policy_epoch = 2;
+    newer.revision = 2;
+    let publication = signed(&mut signer, &newer, 180);
+    let charter = CharterBounds {
+        policy_epoch: 2,
+        ..bounds()
+    };
+    assert_eq!(
+        current.observe(&publication, charter, 110),
+        Ok(newer.clone())
+    );
+    assert_eq!(
+        serde_json::to_vec(current.epoch.as_ref().unwrap()).unwrap(),
+        frozen
+    );
+    assert_eq!(
+        view(&original).observe(&old, charter, 110),
+        Err(Error::PolicyMismatch)
+    );
+    assert_eq!(current.observe(&old, bounds(), 110), Err(Error::Replay));
+    assert_eq!(
+        current.observe(&publication, charter, 180),
+        Err(Error::Expired)
+    );
+
+    for policy_epoch in [0, 3, czkp::MAX_INTEGER + 1] {
+        let mut invalid = newer.clone();
+        invalid.record_epoch.as_mut().unwrap().policy_epoch = policy_epoch;
+        assert!(invalid.validate(&invalid.community).is_err());
+        let authenticated = signed(&mut signer, &invalid, 180);
+        assert!(
+            view(&original)
+                .observe(&authenticated, charter, 110)
+                .is_err()
+        );
+    }
+    let mut changed = newer;
+    changed.revision = 3;
+    changed.record_epoch.as_mut().unwrap().policy_epoch = 2;
+    let changed = signed(&mut signer, &changed, 180);
+    assert_eq!(
+        current.observe(&changed, charter, 110),
+        Err(Error::PolicyMismatch)
     );
 }
 

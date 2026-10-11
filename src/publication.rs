@@ -37,7 +37,12 @@ pub struct PublicVerifierMaterial {
     pub account_response_key: [u8; 32],
     /// Uncompressed affine coordinates, matching the existing manifest encoding.
     pub certificate_key: Vec<u8>,
-    /// Current common minimum-frontier descriptor, authenticated with this material.
+    /// Original common outcome context and effective current issuance authority.
+    /// Missing legacy data confers no G5 capability; configured hosts require it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement: Option<crate::settlement::SettlementCapability>,
+    /// Still-valid frozen minimum frontier, re-endorsed by this current material.
+    /// Its original Policy epoch and packet/proof bytes never change on refresh.
     /// Absence does not authorize a mandatory record decision.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record_epoch: Option<czkp::record::Epoch>,
@@ -48,6 +53,9 @@ impl PublicVerifierMaterial {
     /// the independently configured publication ring. No member fact is returned.
     pub fn validate_at(&self, issuer: &str, now: u64) -> Result<(), Error> {
         self.validate(issuer)?;
+        if let Some(settlement) = &self.settlement {
+            settlement.check_time(now)?;
+        }
         self.policy.account.proof_valid_until(now)?;
         Ok(())
     }
@@ -75,6 +83,9 @@ impl PublicVerifierMaterial {
             return Err(Error::PolicyMismatch);
         }
         self.extension_policy.validate()?;
+        if let Some(settlement) = &self.settlement {
+            settlement.validate(&self.community, self.policy_epoch)?;
+        }
         if let Some(record) = &self.record_epoch {
             // The descriptor cannot choose the relying owner's authenticated period.
             let period = record
@@ -82,7 +93,10 @@ impl PublicVerifierMaterial {
                 .checked_sub(record.starts_at)
                 .ok_or(Error::InvalidInput)?;
             record.validate(&community, period)?;
-            if record.policy_epoch != self.policy_epoch || record.proof_scope != self.proof_scope {
+            if record.policy_epoch == 0
+                || record.policy_epoch > self.policy_epoch
+                || record.proof_scope != self.proof_scope
+            {
                 return Err(Error::PolicyMismatch);
             }
         }

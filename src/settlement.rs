@@ -5,6 +5,78 @@ use crate::{Error, admission::MAX_INTEGER, extensions::Deposit};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// Actual daily owner settings inside the existing signed Balance publication.
+/// The original common cryptographic context is independent of the effective
+/// Policy epoch. This data is not a verified token, Deposit or member authority.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SettlementCapability {
+    /// Original outcome-only public key, purpose and common epoch window.
+    pub epoch: cmbl::settlement::Epoch,
+    /// Effective Policy authority; advancing it does not rewrite the context.
+    pub policy_epoch: u64,
+    /// Explicit configured period, in seconds.
+    pub period_seconds: u64,
+    /// Authenticated per-member allowance for this common epoch.
+    pub quota: u16,
+}
+impl std::fmt::Debug for SettlementCapability {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SettlementCapability")
+            .field("epoch", &self.epoch.epoch)
+            .field("policy_epoch", &self.policy_epoch)
+            .field("period_seconds", &self.period_seconds)
+            .field("quota", &self.quota)
+            .finish_non_exhaustive()
+    }
+}
+impl SettlementCapability {
+    /// Check descriptor semantics against independently authenticated owners.
+    /// This does not verify a token, signature, Deposit or member eligibility.
+    pub fn validate(&self, community: &str, policy_epoch: u64) -> Result<(), Error> {
+        if self.epoch.community != community
+            || self.epoch.context().is_err()
+            || self.policy_epoch == 0
+            || self.policy_epoch > MAX_INTEGER
+            || self.policy_epoch != policy_epoch
+            || self.period_seconds == 0
+            || self.period_seconds > MAX_INTEGER
+            || !(1..=1024).contains(&self.quota)
+        {
+            return Err(Error::PolicyMismatch);
+        }
+        let start = self
+            .epoch
+            .epoch
+            .checked_mul(self.period_seconds)
+            .filter(|value| *value <= MAX_INTEGER)
+            .ok_or(Error::InvalidInput)?;
+        let end = self
+            .epoch
+            .epoch
+            .checked_add(1)
+            .and_then(|value| value.checked_mul(self.period_seconds))
+            .filter(|value| *value <= MAX_INTEGER)
+            .ok_or(Error::InvalidInput)?;
+        if self.epoch.valid_from != milliseconds(start)?
+            || self.epoch.valid_until != milliseconds(end)?
+        {
+            return Err(Error::PolicyMismatch);
+        }
+        Ok(())
+    }
+    /// Check the original common window at a seconds-based owner observation.
+    pub fn check_time(&self, now: u64) -> Result<(), Error> {
+        let now = milliseconds(now)?;
+        if now < self.epoch.valid_from || now >= self.epoch.valid_until {
+            return Err(Error::Expired);
+        }
+        Ok(())
+    }
+}
+
 /// Explicit trusted host settings and original provisioned common descriptor.
 /// No defaults, private key, verifier callback or member-controlled quota exist.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]

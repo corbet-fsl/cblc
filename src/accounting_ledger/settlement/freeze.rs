@@ -68,6 +68,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             .ok_or(Error::UnsupportedCapability)?;
         if policy_epoch == 0
             || policy_epoch > MAX_INTEGER
+            || policy_epoch != settlement.config.policy_epoch
             || period_seconds != settlement.config.period_seconds
         {
             return Err(Error::PolicyMismatch);

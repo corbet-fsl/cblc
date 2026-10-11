@@ -30,6 +30,9 @@ use zeroize::Zeroizing;
 
 #[path = "settlement/cuts.rs"]
 mod cuts;
+#[cfg(feature = "publication")]
+#[path = "settlement/publication.rs"]
+mod publication;
 
 type Ledger = AccountLedger<RealVerifier>;
 const PERIOD: u64 = 100;
@@ -321,11 +324,11 @@ fn submission(
     }
 }
 fn activate(ledger: &mut Ledger, cfg: &SettlementConfig, next: bool, now: u64) {
-    assert_eq!(
+    assert!(
         ledger
             .activate_daily_settlement(cfg.clone(), private_key(next), INCARNATION.into(), || now)
-            .unwrap(),
-        cfg.epoch
+            .unwrap()
+            == cfg.epoch
     );
 }
 
@@ -337,7 +340,7 @@ fn actual_three_key_group_cannot_activate_a_daily_queue() {
     let path = temp.path().join("legacy.db");
     let mut ledger = inputs.open(&path, &fixture);
     let before = inspection::Connection::open(&path).unwrap().snapshot();
-    assert_eq!(
+    assert!(matches!(
         ledger.activate_daily_settlement(
             config(1, false, 8, 8),
             private_key(false),
@@ -345,7 +348,7 @@ fn actual_three_key_group_cannot_activate_a_daily_queue() {
             || 100
         ),
         Err(Error::UnsupportedCapability)
-    );
+    ));
     assert_eq!(
         inspection::Connection::open(&path).unwrap().snapshot(),
         before

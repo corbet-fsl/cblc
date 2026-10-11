@@ -134,6 +134,33 @@ fn anchor(tx: &mut Transaction<'_>, settlement: &Settlement) -> Result<IssuerAnc
     Ok(anchor)
 }
 
+#[cfg(feature = "publication")]
+pub(super) fn public_settings(
+    tx: &mut Transaction<'_>,
+    settlement: Option<&Settlement>,
+    policy_epoch: u64,
+) -> Result<Option<crate::settlement::SettlementCapability>, Error> {
+    match (tx.get::<Mode>(MODE)?, settlement) {
+        (None, None) => {
+            legacy_fence(tx)?;
+            Ok(None)
+        }
+        (None, Some(_)) => Err(Error::Storage),
+        (Some(_), None) => Err(Error::UnsupportedCapability),
+        (Some(_), Some(settlement)) => {
+            anchor(tx, settlement)?;
+            let settings = crate::settlement::SettlementCapability {
+                epoch: settlement.config.epoch.clone(),
+                policy_epoch: settlement.config.policy_epoch,
+                period_seconds: settlement.config.period_seconds,
+                quota: settlement.config.quota,
+            };
+            settings.validate(&settlement.config.epoch.community, policy_epoch)?;
+            Ok(Some(settings))
+        }
+    }
+}
+
 impl<V: AccountProofVerifier> AccountLedger<V> {
     /// Install the original provisioned outcome-only key and immutable daily
     /// mode. The host must hold current Policy/configuration authority across
@@ -161,6 +188,51 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         incarnation: String,
         clock: impl Fn() -> u64,
     ) -> Result<cmbl::settlement::Epoch, Error> {
+        self.install_daily_settlement(config, provisioned_key, incarnation, clock, None)
+    }
+
+    /// Reopen/catch up only to the independently held current Policy. The real
+    /// owner is checked inside the existing native writer, including initial
+    /// installation and exact retries. No member DTO selects this operation.
+    /// A same-day advance changes effective authority, never the common key,
+    /// quota, receipt fingerprint, issued total or replay namespace.
+    pub fn reconcile_daily_settlement(
+        &mut self,
+        config: SettlementConfig,
+        provisioned_key: &[u8],
+        incarnation: String,
+        authority: Arc<dyn crate::storage::CommitAuthority>,
+        clock: impl Fn() -> u64,
+    ) -> Result<cmbl::settlement::Epoch, Error> {
+        self.install_daily_settlement(config, provisioned_key, incarnation, clock, Some(authority))
+    }
+
+    /// A cold owner remains quarantined until the real current Policy callback
+    /// acknowledges this exact native configuration and any monotonic advance.
+    pub fn with_reconciled_daily_settlement(
+        mut self,
+        config: SettlementConfig,
+        provisioned_key: &[u8],
+        incarnation: String,
+        authority: Arc<dyn crate::storage::CommitAuthority>,
+        clock: impl Fn() -> u64,
+    ) -> Result<Self, Error> {
+        self.reconcile_daily_settlement(config, provisioned_key, incarnation, authority, clock)?;
+        Ok(self)
+    }
+
+    fn install_daily_settlement(
+        &mut self,
+        config: SettlementConfig,
+        provisioned_key: &[u8],
+        incarnation: String,
+        clock: impl Fn() -> u64,
+        authority: Option<Arc<dyn crate::storage::CommitAuthority>>,
+    ) -> Result<cmbl::settlement::Epoch, Error> {
+        let _current = authority
+            .as_ref()
+            .map(|owner| self.authority.enter(owner.clone()))
+            .transpose()?;
         config.validate(&self.trust.community_id)?;
         let extensions = self
             .extensions
@@ -209,7 +281,34 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::ClockRollback);
             }
             if prior.epoch == settlement.config.epoch.epoch {
-                anchor(&mut tx, &settlement)?;
+                if prior.context != context {
+                    return Err(Error::PolicyMismatch);
+                }
+                let mut installed: IssuerAnchor =
+                    tx.get(&epoch_key(prior.epoch))?.ok_or(Error::Storage)?;
+                if installed.format != "cblc.settlement.issuer.v1"
+                    || installed.descriptor != settlement.config.epoch
+                    || installed.quota != settlement.config.quota
+                    || installed.incarnation != settlement.incarnation
+                    || installed.policy_epoch == 0
+                    || installed.policy_epoch > MAX_INTEGER
+                    || installed.issued > MAX_INTEGER
+                {
+                    return Err(Error::PolicyMismatch);
+                }
+                if installed.policy_epoch > settlement.config.policy_epoch {
+                    return Err(Error::ClockRollback);
+                }
+                if installed.policy_epoch != settlement.config.policy_epoch {
+                    // Only the typed retained owner can authorize this advance.
+                    // Its actual check runs at commit_record under THIS writer.
+                    authority.as_ref().ok_or(Error::Admission)?;
+                    issuance::budgets(&mut tx, &settlement, &installed)?;
+                    installed.policy_epoch = settlement.config.policy_epoch;
+                    tx.put(&epoch_key(prior.epoch), &installed)?;
+                } else {
+                    anchor(&mut tx, &settlement)?;
+                }
             } else {
                 let old: IssuerAnchor = tx.get(&epoch_key(prior.epoch))?.ok_or(Error::Storage)?;
                 if old.format != "cblc.settlement.issuer.v1"

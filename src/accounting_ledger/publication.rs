@@ -32,6 +32,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             &self.config,
             &extensions.config,
         )?;
+        let settlement = super::settlement::public_settings(
+            &mut transaction,
+            self.settlement.as_ref(),
+            policy_epoch,
+        )?;
         transaction.rollback()?;
         let material = PublicVerifierMaterial {
             purpose: Purpose::PublicVerifierV2,
@@ -46,6 +51,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             manifest_sha256: binding.manifest_sha256,
             account_response_key: self.operator.verifying_key().to_bytes(),
             certificate_key: binding.certificate_key.to_vec(),
+            settlement,
             record_epoch,
         };
         material.validate(&self.trust.community_id)?;

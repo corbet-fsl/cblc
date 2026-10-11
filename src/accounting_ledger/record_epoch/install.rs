@@ -23,7 +23,8 @@ pub(in crate::accounting_ledger) fn existing_in(
         .validate(&inputs.community, inputs.period_seconds)?;
     let anchor: PublishedAnchor = tx.get(ANCHOR)?.ok_or(Error::Storage)?;
     tuning::check_epoch_config_in(tx, &anchor.configuration, inputs.configuration)?;
-    if prior.descriptor.policy_epoch != inputs.policy_epoch
+    if prior.descriptor.policy_epoch == 0
+        || prior.descriptor.policy_epoch > inputs.policy_epoch
         || &prior.descriptor.proof_scope != inputs.proof_scope
         || anchor.descriptor != prior.descriptor
         || anchor.extension_configuration != inputs.extension_configuration

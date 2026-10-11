@@ -79,7 +79,8 @@ pub(super) fn public_descriptor(
     }
     tuning::check_epoch_config_in(tx, &anchor.configuration, configuration)?;
     if anchor.extension_configuration != extension_configuration
-        || anchor.descriptor.policy_epoch != policy_epoch
+        || anchor.descriptor.policy_epoch == 0
+        || anchor.descriptor.policy_epoch > policy_epoch
         || &anchor.descriptor.proof_scope != proof_scope
     {
         return Err(Error::PolicyMismatch);
@@ -538,7 +539,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 let anchor: PublishedAnchor = tx.get(ANCHOR)?.ok_or(Error::Storage)?;
                 tuning::check_epoch_config_in(&mut tx, &anchor.configuration, &self.config)?;
                 tuning::check_epoch_config_in(&mut tx, &frozen.0.configuration, &self.config)?;
-                if prior.descriptor.policy_epoch != policy_epoch
+                if prior.descriptor.policy_epoch == 0
+                    || prior.descriptor.policy_epoch > policy_epoch
                     || prior.descriptor.proof_scope != frozen.0.proof_scope
                     || anchor.descriptor != prior.descriptor
                     || anchor.extension_configuration != frozen.0.extension_configuration
@@ -679,7 +681,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             if prior.epoch == epoch {
                 tuning::check_epoch_config_in(&mut tx, &prior.configuration, &self.config)?;
                 if prior.community != self.community
-                    || prior.policy_epoch != policy_epoch
+                    || prior.policy_epoch == 0
+                    || prior.policy_epoch > policy_epoch
                     || prior.period_seconds != period_seconds
                     || prior.extension_configuration != extensions.config
                 {

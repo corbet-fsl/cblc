@@ -5,6 +5,24 @@ use crate::storage::CommitAuthority;
 use std::sync::Arc;
 
 impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
+    /// Trusted Policy-currentness reconciliation on the SAME native service.
+    /// The supplied actual owner survives cancellation and final writer checks.
+    pub fn reconcile_daily_settlement(
+        &mut self,
+        config: crate::settlement::SettlementConfig,
+        provisioned_key: &[u8],
+        incarnation: String,
+        authority: Arc<dyn CommitAuthority>,
+    ) -> Result<cmbl::settlement::Epoch, Error> {
+        self.ledger.reload_policy()?;
+        self.ledger.reconcile_daily_settlement(
+            config,
+            provisioned_key,
+            incarnation,
+            authority,
+            &self.clock,
+        )
+    }
     /// Production member issuance retains and rechecks the actual facade's
     /// current member/device/Policy owners inside the original native writer.
     pub fn issue_settlement_pass_authorized(
