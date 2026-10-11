@@ -18,6 +18,7 @@ import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/ext
 import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
 import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';
 import {ingestedRecordEpoch} from './holder/record-epoch-ingestion.mts';
+import {retainRecordStartup} from './holder/record-startup-artifacts.mts';
 const recordEpochArtifacts=process.argv.length===3&&process.argv[2]==='--record-epoch-artifacts';
 const recordEpochProofs=process.argv.length===3&&process.argv[2]==='--record-epoch-proofs';
 const recordEpochEnabled=recordEpochArtifacts||recordEpochProofs;
@@ -208,6 +209,8 @@ try{
       console.log(`CBLC_RECORD_ARTIFACT ${JSON.stringify({sourceCommit:fixtureSource,workerSha256:metadata.workerSha256,
         metadataSha256:sha(metadataBytes).toString('hex'),fixtureSha256:sha(fixtureBytes).toString('hex')})}`);
     }
+    await retainRecordStartup({initialize,scope:artifacts.scope,
+      manifestSha256:sha(manifestBytes).toString('hex'),sourceCommit:fixtureSource});
     // Preserve the successful first owner fixture even if a later
     // ingestion/race scenario fails. The complete proof report still requires
     // every original remaining scenario to finish successfully.
