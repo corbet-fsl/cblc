@@ -5,10 +5,12 @@ import { AccountWitness } from '../index.mjs';
 import { accountHashes, checkpointFromVerified } from '../../../runtime/accounting/hashes.mjs';
 import { fieldBytes } from '@corbet-labs/czkp/primitives';
 import { hex } from '@corbet-labs/czkp/encoding';
+import { registerNativeAccountVectors } from './native-account-vectors.test.ts';
 
 // Use the maintained native Poseidon2 engine for every persisted commitment.
 const hashApi = await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true});
 after(async () => { await hashApi.destroy(); });
+registerNativeAccountVectors(hashApi);
 const storageHashes = () => accountHashes(hashApi);
 const bytes = n => new Uint8Array(32).fill(n);
 const limits = { maxBytes: 65536, maxMapEntries: 16, maxSlots: 8 };
