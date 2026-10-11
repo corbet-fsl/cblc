@@ -44,8 +44,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             &decode::<32>(&authorization.root_public_key)?,
         )?;
         let result = read(&mut tx, &self.operator, now)?;
-        tx.rollback()?;
-        CommitDeadline::new(&clock, now, request.expires_at).check()?;
+        tx.rollback_before(&CommitDeadline::new(&clock, now, request.expires_at))?;
         Ok(result)
     }
 

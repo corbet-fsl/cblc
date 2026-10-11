@@ -81,6 +81,7 @@ impl AccountLedgerPolicy {
 
 pub struct AccountLedger<V: AccountProofVerifier> {
     connection: Box<dyn AccountStorage>,
+    pub(crate) authority: crate::storage::authority::AuthorityScope,
     trust: AdmissionTrust,
     admission_bootstrap: Option<AdmissionKeyState>,
     community: [u8; 32],
@@ -260,7 +261,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         operator: SigningKey,
         keys: Option<AdmissionKeyState>,
     ) -> Result<Self, Error> {
-        let mut connection: Box<dyn AccountStorage> = Box::new(store);
+        let (mut connection, authority) = crate::storage::authority::AuthorityScope::wrap(store);
         if !crate::admission::scope(&trust.community_id) {
             return Err(Error::InvalidInput);
         }
@@ -317,6 +318,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         transaction.commit()?;
         Ok(Self {
             connection,
+            authority,
             trust,
             admission_bootstrap,
             community,

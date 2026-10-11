@@ -2,6 +2,8 @@
 use crate::Error;
 pub use cssr::{CurrentRecord, MemoryStore};
 use serde::{Serialize, de::DeserializeOwned};
+pub(crate) mod authority;
+pub use authority::CommitAuthority;
 /// A store that supplies atomic issuer transactions.
 pub trait AccountStorage: Send {
     fn transaction(&mut self) -> Result<Transaction<'_>, Error>;
@@ -36,6 +38,12 @@ pub trait AtomicTransaction {
     /// of the chosen state and clock record may finish after that decision.
     fn commit_before(self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error>;
     fn rollback(self: Box<Self>) -> Result<(), Error>;
+    /// Authorize a read result while this transaction still owns its writer
+    /// barrier, then release that barrier without changing durable records.
+    fn rollback_before(self: Box<Self>, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
+        deadline.authorize()?;
+        self.rollback()
+    }
 }
 
 /// A live trusted clock and exclusive authority window for one atomic operation.
@@ -45,6 +53,8 @@ pub struct CommitDeadline<'a> {
     clock: &'a dyn Fn() -> u64,
     observed: std::cell::Cell<u64>,
     expires_at: u64,
+    authority: Option<&'a dyn CommitAuthority>,
+    authorized: std::cell::Cell<bool>,
 }
 impl<'a> CommitDeadline<'a> {
     /// Construct a deadline from the caller's clock and already validated bounds.
@@ -53,6 +63,8 @@ impl<'a> CommitDeadline<'a> {
             clock,
             observed: std::cell::Cell::new(observed),
             expires_at,
+            authority: None,
+            authorized: std::cell::Cell::new(false),
         }
     }
     /// Resample the trusted clock. Check this immediately at the host's commit
@@ -76,8 +88,22 @@ impl<'a> CommitDeadline<'a> {
     /// and completion remain. The record preserves the actual observation for
     /// another ledger handle or a restart, rather than an earlier sampled time.
     pub fn commit_record(&self) -> Result<(&'static [u8], Vec<u8>), Error> {
-        let now = self.check()?;
+        let now = self.authorize()?;
         Ok((b"clock", now.to_string().into_bytes()))
+    }
+
+    fn authorize(&self) -> Result<u64, Error> {
+        let now = self.check()?;
+        if let Some(authority) = self.authority {
+            authority.check(now)?;
+            // Scheduled restrictions can change without a database writer.
+            // A second crossed during owner reads requires a fresh operation.
+            if self.check()? != now {
+                return Err(Error::Expired);
+            }
+        }
+        self.authorized.set(true);
+        Ok(now)
     }
 }
 
@@ -175,6 +201,13 @@ impl<'a> Transaction<'a> {
     }
     pub fn rollback(self) -> Result<(), Error> {
         self.0.rollback()
+    }
+    /// Release an authenticated read only after the original current owner
+    /// check under this same transaction. No clock record is persisted.
+    pub fn rollback_before(self, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
+        self.0.rollback_before(deadline)?;
+        deadline.check()?;
+        Ok(())
     }
 }
 pub(crate) fn key(kind: u8, parts: &[&[u8]]) -> Vec<u8> {
