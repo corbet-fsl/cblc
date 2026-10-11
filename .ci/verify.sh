@@ -95,6 +95,12 @@ if ! "$proof_cache_hit"; then
   sha256sum package-lock.json >> .extension-test/source.txt
   CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mts | tee -a "$proof_fixture_evidence"
 fi
+# This original native owner test needs only the original three artifacts.
+# Retain its actual signed current material before the longer fourth fixture.
+CBLC_LAST_GATE="adversaries"
+cargo run --locked --all-features --example extension_adversaries | tee -a "$proof_fixture_evidence"
+cp .extension-test/publication.json "$ARTIFACT_ROOT/balance-publication.json"
+CBLC_LAST_GATE="proof"
 # The original fourth relation has a distinct authenticated artifact group;
 # default three-circuit cache entries cannot substitute its actual proof journey.
 (
@@ -112,7 +118,6 @@ CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/replay-extensions.mjs | tee -a "
 CBLC_LAST_GATE="adversaries"
 python3 -B .ci/test-extension-scope-output.py
 python3 -B .ci/test-extension-scope-regression.py
-cargo run --locked --all-features --example extension_adversaries | tee -a "$proof_fixture_evidence"
 if ! "$proof_cache_hit"; then
   python3 .ci/proof-cache.py publish --cache "$proof_fixture_cache" --evidence "$proof_fixture_evidence" --generation-commit "$CI_COMMIT_SHA"
 fi
