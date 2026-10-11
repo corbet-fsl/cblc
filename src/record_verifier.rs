@@ -20,7 +20,9 @@ use czkp::record::{Epoch, Presentation, Record};
 use sha2::{Digest, Sha256};
 
 mod cached;
+mod epoch;
 pub use cached::VerifiedCachedRecord;
+pub use epoch::VerifiedRecordEpoch;
 
 /// Trusted bounds from the application's current verified Charter, in seconds.
 /// These must not be copied from the submitted presentation or decoded material.
