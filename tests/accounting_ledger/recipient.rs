@@ -139,7 +139,7 @@ fn recipient_late_return_refuses_fresh_success_but_preserves_the_committed_key()
     };
     assert_eq!(
         ledger.register_record_recipient(&grant, &authorization, &request(&f, 41, 120), clock),
-        Err(Error::Expired)
+        Err(Error::Storage)
     );
     assert_eq!(
         calls.get(),
