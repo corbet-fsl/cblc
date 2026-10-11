@@ -210,3 +210,26 @@ boundaries; they do not claim a newly proved changed-inbox R2 holder opening.
 This source stage has not been executed. The authenticated host publication,
 anonymous separate-Tor transport and Policy-derived issuance count composition
 remain required before end-to-end settlement qualification.
+
+The same writer also binds SHA-256 of the maintained canonical RSA public DER
+to its original epoch/context in a minimal `settlement-key:v1:` index. Within
+this retained community/native storage namespace, no later epoch may reuse a
+historical key, including an A/B/A sequence. This cannot detect reuse by an
+independent issuer, store or community: the original provisioner must supply a
+fresh purpose key per context and preserve its custody policy. The blind
+issuer checks advertised request context but cannot inspect the context inside
+the blinded RSA message; reusing a future key could otherwise let an earlier
+allowance sign a future-context token. Exact same-epoch restore and Policy
+re-endorsement preserve this binding and all original budgets. Missing,
+conflicting or orphan key bindings refuse, never initialize replacement state.
+These public bindings contain no private key, token, proof or member identity;
+their historical entries must remain available for the anti-replay check.
+The private required Mode v2 count binds both complete retained issuer-anchor
+and key-index inventories. The same writer scans each with one extra sentinel
+and refuses missing, malformed, extra or conflicting entries before mutation.
+The original range port bounds this inventory at 2^20 contexts; exhaustion
+refuses new contexts without pruning history or resetting allowance. Exact
+same-context retries do not increase the count. Existing v1 daily state or
+state without the required count/index has no implicit migration.
+The real-signature adversary and native restore/refusal tests are authored;
+their runtime qualification remains pending the existing native check route.

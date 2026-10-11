@@ -7,6 +7,7 @@ use cmbl::settlement::issuer::Issuer;
 mod freeze;
 mod ingress;
 mod issuance;
+mod keys;
 
 enum KeySource<'a> {
     Encoded(&'a [u8]),
@@ -40,6 +41,7 @@ struct Mode {
     binding: [u8; 32],
     epoch: u64,
     context: [u8; 32],
+    key_count: u32,
 }
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -110,7 +112,7 @@ pub(super) fn legacy_fence(tx: &mut Transaction<'_>) -> Result<(), Error> {
 
 fn check_mode(tx: &mut Transaction<'_>, settlement: &Settlement) -> Result<(), Error> {
     let mode: Mode = tx.get(MODE)?.ok_or(Error::Storage)?;
-    if mode.format != "cblc.settlement.mode.v1"
+    if mode.format != "cblc.settlement.mode.v2"
         || mode.binding != settlement.binding
         || mode.period_seconds != settlement.config.period_seconds
         || mode.pending_capacity != settlement.config.pending_capacity
@@ -120,6 +122,7 @@ fn check_mode(tx: &mut Transaction<'_>, settlement: &Settlement) -> Result<(), E
     {
         return Err(Error::PolicyMismatch);
     }
+    keys::history(tx, mode.key_count, mode.epoch, settlement)?;
     Ok(())
 }
 fn anchor(tx: &mut Transaction<'_>, settlement: &Settlement) -> Result<IssuerAnchor, Error> {
@@ -136,6 +139,7 @@ fn anchor(tx: &mut Transaction<'_>, settlement: &Settlement) -> Result<IssuerAnc
     {
         return Err(Error::PolicyMismatch);
     }
+    keys::check(tx, &anchor.descriptor)?;
     Ok(anchor)
 }
 
@@ -315,7 +319,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         }
         let prior: Option<Mode> = tx.get(MODE)?;
         if let Some(prior) = &prior {
-            if prior.format != "cblc.settlement.mode.v1"
+            if prior.format != "cblc.settlement.mode.v2"
                 || prior.binding != binding
                 || prior.period_seconds != settlement.config.period_seconds
                 || prior.pending_capacity != settlement.config.pending_capacity
@@ -323,6 +327,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             {
                 return Err(Error::PolicyMismatch);
             }
+            keys::history(&mut tx, prior.key_count, prior.epoch, &settlement)?;
             if prior.epoch > settlement.config.epoch.epoch {
                 return Err(Error::ClockRollback);
             }
@@ -342,6 +347,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 {
                     return Err(Error::PolicyMismatch);
                 }
+                keys::check(&mut tx, &installed.descriptor)?;
                 if installed.policy_epoch > settlement.config.policy_epoch {
                     return Err(Error::ClockRollback);
                 }
@@ -364,6 +370,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 {
                     return Err(Error::PolicyMismatch);
                 }
+                keys::check(&mut tx, &old.descriptor)?;
             }
         } else {
             // An orphan namespace cannot be interpreted as a fresh activation.
@@ -380,6 +387,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::Storage);
             }
         }
+        // Any earlier use of this RSA key binds it to that original context.
+        // Hidden blind messages cannot be restricted to the advertised epoch.
+        let key_count = keys::install(
+            &mut tx,
+            &settlement.config.epoch,
+            prior.as_ref().map_or(0, |mode| mode.key_count),
+        )?;
         let existing: Option<IssuerAnchor> = tx.get(&epoch_key(settlement.config.epoch.epoch))?;
         if prior
             .as_ref()
@@ -403,13 +417,14 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.put(
             MODE,
             &Mode {
-                format: "cblc.settlement.mode.v1".into(),
+                format: "cblc.settlement.mode.v2".into(),
                 period_seconds: settlement.config.period_seconds,
                 pending_capacity: settlement.config.pending_capacity,
                 issuance_members_capacity: settlement.config.issuance_members_capacity,
                 binding,
                 epoch: settlement.config.epoch.epoch,
                 context,
+                key_count,
             },
         )?;
         if prior.is_none() {

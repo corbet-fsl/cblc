@@ -30,6 +30,8 @@ use zeroize::Zeroizing;
 
 #[path = "settlement/cuts.rs"]
 mod cuts;
+#[path = "settlement/key_inventory.rs"]
+mod key_inventory;
 #[cfg(feature = "publication")]
 #[path = "settlement/publication.rs"]
 mod publication;
