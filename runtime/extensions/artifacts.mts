@@ -11,7 +11,7 @@ export async function loadArtifacts(configPath) {
   const manifestBytes=await bounded(resolve(config.directory,'manifest.json'),65536);
   if(digest(manifestBytes)!==config.manifestSha256)throw new Error('Manifest authentication');
   const manifest=json(manifestBytes);
-  if(manifest.version!==1||manifest.accountingMode!=='account-extension-v1'||manifest.compiler!=='1.0.0-beta.26'||!['5.0.0','5.2.1'].includes(manifest.backend)||manifest.verifierTarget!=='noir-recursive')throw new Error('Extension artifact suite');
+  if(manifest.version!==1||manifest.accountingMode!=='account-extension-v1'||manifest.compiler!=='1.0.0-beta.26'||manifest.backend!=='5.2.1'||manifest.verifierTarget!=='noir-recursive')throw new Error('Extension artifact suite');
   const circuitBytes=await bounded(resolve(config.directory,'circuits.json'),64*1024*1024),vkBytes=await bounded(resolve(config.directory,'keys.json'),1024*1024);
   if(digest(circuitBytes)!==manifest.circuitSha256||digest(vkBytes)!==manifest.vkSha256)throw new Error('Artifact authentication');
   const setup={};

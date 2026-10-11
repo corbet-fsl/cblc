@@ -18,7 +18,7 @@ test('extension artifact JSON is decoded from bounded bytes before selecting a c
   const keyBytes = Buffer.from(JSON.stringify(keys));
   const g1 = new Uint8Array(32), g2 = new Uint8Array(128);
   const manifest = {version: 1, accountingMode: 'account-extension-v1',
-    compiler: '1.0.0-beta.26', backend: '5.0.0', verifierTarget: 'noir-recursive',
+    compiler: '1.0.0-beta.26', backend: '5.2.1', verifierTarget: 'noir-recursive',
     numPoints: 1, circuitSha256: digest(circuitBytes), vkSha256: digest(keyBytes),
     setup: [
       {name: 'g1.dat', bytes: g1.length, sha256: digest(g1)},
@@ -87,7 +87,7 @@ test('optional record epoch artifacts require one authenticated circuit and key 
     const circuitBytes = Buffer.from(JSON.stringify(programs));
     const keyBytes = Buffer.from(JSON.stringify(verificationKeys));
     const manifest = {version: 1, accountingMode: 'account-extension-v1',
-      compiler: '1.0.0-beta.26', backend: '5.0.0', verifierTarget: 'noir-recursive',
+      compiler: '1.0.0-beta.26', backend: '5.2.1', verifierTarget: 'noir-recursive',
       numPoints: 1, circuitSha256: digest(circuitBytes), vkSha256: digest(keyBytes),
       setup: [
         {name: 'g1.dat', bytes: g1.length, sha256: digest(g1)},

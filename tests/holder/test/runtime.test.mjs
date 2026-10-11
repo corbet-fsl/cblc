@@ -28,7 +28,7 @@ function key() { const pair=generateKeyPairSync('ed25519'); return {...pair,
 test('artifact loading pins manifest and every byte, bounds cumulative bytes and rejects duplicate setup', async () => {
   const files={'circuit.json':text(JSON.stringify({bytecode:'test'})),'vk.bin':new Uint8Array([1]),
     'setup/g1.dat':new Uint8Array(32),'setup/g2.dat':new Uint8Array([2])};
-  const manifest={version:1,compiler:'1.0.0-beta.26',backend:'5.0.0',verifierTarget:'noir-recursive',accountingMode:'account-state-v2',hashScheme:'poseidon2-bn254-fixed-128-v1',numPoints:1,
+  const manifest={version:1,compiler:'1.0.0-beta.26',backend:'5.2.1',verifierTarget:'noir-recursive',accountingMode:'account-state-v2',hashScheme:'poseidon2-bn254-fixed-128-v1',numPoints:1,
     circuitSha256:hex(await sha(files['circuit.json'])),vkSha256:hex(await sha(files['vk.bin'])),setup:[]};
   for(const name of ['g1.dat','g2.dat'])manifest.setup.push({name,bytes:files['setup/'+name].length,sha256:hex(await sha(files['setup/'+name]))});
   const make=async()=>{const manifestBytes=text(JSON.stringify(manifest));return {manifestBytes,manifestSha256:hex(await sha(manifestBytes)),readArtifact:async name=>files[name]};};
@@ -44,7 +44,7 @@ test('manifest and artifact bytes are snapshotted before asynchronous digest che
   const files={'circuit.json':text(JSON.stringify({bytecode:'verified-bytecode'})),'vk.bin':new Uint8Array([1,2,3]),
     'setup/g1.dat':new Uint8Array(32),'setup/g2.dat':new Uint8Array([2]),
     'barretenberg-threads.wasm':new Uint8Array([0,97,115,109,1,0,0,0,0,1,0])};
-  const manifest={version:1,compiler:'1.0.0-beta.26',backend:'5.0.0',verifierTarget:'noir-recursive',
+  const manifest={version:1,compiler:'1.0.0-beta.26',backend:'5.2.1',verifierTarget:'noir-recursive',
     accountingMode:'account-state-v2',hashScheme:'poseidon2-bn254-fixed-128-v1',numPoints:1,
     circuitSha256:hex(await sha(files['circuit.json'])),vkSha256:hex(await sha(files['vk.bin'])),setup:[],wasm:[]};
   for(const name of ['g1.dat','g2.dat'])manifest.setup.push({name,bytes:files['setup/'+name].length,sha256:hex(await sha(files['setup/'+name]))});

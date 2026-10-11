@@ -117,7 +117,7 @@ export function registerNativeAccountVectors(hashApi: Parameters<typeof extensio
           sources.map(async path => [path, digest(await readFile(path))]),
         ));
         const bb = JSON.parse((await readFile('node_modules/@aztec/bb.js/package.json')).toString('utf8'));
-        assert.equal(bb.version, '5.0.0');
+        assert.equal(bb.version, '5.2.1');
         const output = JSON.stringify({
           schema: 'cwlt.native-account-vectors.v1',
           producer: { commit, packageLockSha256: digest(lock), bbPackageVersion: bb.version,

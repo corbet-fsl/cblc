@@ -23,7 +23,7 @@ impl Fixture {
         };
         let g1 = vec![7; 4 * 1024 * 1024];
         let g2 = vec![8; 128];
-        let manifest = json!({"version":1,"compiler":"1.0.0-beta.26","backend":"5.0.0",
+        let manifest = json!({"version":1,"compiler":"1.0.0-beta.26","backend":"5.2.1",
             "verifierTarget":"noir-recursive","accountingMode":if extension {"account-extension-v1"} else {"account-state-v2"},
             "hashScheme":"poseidon2-bn254-fixed-128-v1","numPoints":131072,
             "circuitSha256":hash(&circuit),"vkSha256":hash(&keys),"issuerKey":vec![9;64],
@@ -68,7 +68,7 @@ fn concrete_backend_labels_require_a_separate_authenticated_manifest() {
     let mut fixture = Fixture::new(true);
     let original = serde_json::to_vec(&fixture.manifest).unwrap();
     let original_pin: [u8; 32] = Sha256::digest(&original).into();
-    fixture.manifest["backend"] = json!("5.2.1");
+    fixture.manifest["backend"] = json!("5.2.2");
     let changed = serde_json::to_vec(&fixture.manifest).unwrap();
     assert!(matches!(
         ExtensionArtifacts::authenticate(ArtifactBytes {
@@ -86,8 +86,12 @@ fn concrete_backend_labels_require_a_separate_authenticated_manifest() {
     fixture.keys[0] ^= 1;
     assert!(fixture.extension().is_err());
     fixture.keys[0] ^= 1;
-    fixture.manifest["backend"] = json!("5.2.2");
-    assert!(fixture.extension().is_err());
+    // One prover version: the retired 5.0.0 key group and any other label are refused
+    // even when the manifest is independently pinned.
+    for label in ["5.2.2", "5.0.0"] {
+        fixture.manifest["backend"] = json!(label);
+        assert!(fixture.extension().is_err());
+    }
 }
 
 #[test]

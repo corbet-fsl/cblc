@@ -21,7 +21,7 @@ export async function loadArtifacts({ manifestBytes, manifestSha256, readArtifac
   const manifestSnapshot = new Uint8Array(manifestBytes);
   if (hex(await sha(manifestSnapshot)) !== manifestSha256) throw new Error('Manifest pin mismatch');
   const manifest = JSON.parse(new TextDecoder().decode(manifestSnapshot));
-  if (manifest.version !== 1 || manifest.compiler !== '1.0.0-beta.26' || !['5.0.0','5.2.1'].includes(manifest.backend)
+  if (manifest.version !== 1 || manifest.compiler !== '1.0.0-beta.26' || manifest.backend !== '5.2.1'
       || manifest.verifierTarget !== 'noir-recursive'
       || manifest.accountingMode !== 'account-state-v2' || manifest.hashScheme !== 'poseidon2-bn254-fixed-128-v1'
       || !Number.isSafeInteger(manifest.numPoints) || manifest.numPoints <= 0 || manifest.numPoints > 9 * 131072

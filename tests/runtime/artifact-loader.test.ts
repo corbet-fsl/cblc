@@ -15,7 +15,7 @@ function fixture() {
     ['peer-reservation/vk.bin', new Uint8Array([3, 4])], ['barretenberg-threads.wasm', new Uint8Array(9)],
   ]);
   const pin = name => ({ sha256: digest(files.get(name)), bytes: files.get(name).length });
-  const manifest = { version: 1, compiler: '1.0.0-beta.26', backend: '5.0.0', verifierTarget: 'noir-recursive',
+  const manifest = { version: 1, compiler: '1.0.0-beta.26', backend: '5.2.1', verifierTarget: 'noir-recursive',
     accountingMode: 'account-state-v2', hashScheme: 'poseidon2-bn254-fixed-128-v1', numPoints: 2,
     circuitSha256: pin('circuit.json').sha256, vkSha256: pin('vk.bin').sha256,
     setup: ['g1.dat', 'g2.dat'].map(name => ({ name, ...pin('setup/' + name) })),
