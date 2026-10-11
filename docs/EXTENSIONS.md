@@ -1,11 +1,11 @@
 # Extension proof contract
 
 The relation is implemented in circuits/extensions/{update,deposit,record}, with
-shared policy constraints in core. Its historical reference artifacts use Noir
-1.0.0-beta.26 and Barretenberg 5.0.0 UltraHonk (noir-recursive target), upstream
-SHA-256/Poseidon2 and standard P-256 verification. CI retains that coherent
-test-only generator graph and verifies its proofs with the current compatible
-native Rust SDK. Safe Rust public-input preparation is in cblc; native execution
+shared policy constraints in core. Its reference artifacts use Noir
+1.0.0-beta.26 and Barretenberg 5.2.1 UltraHonk (noir-recursive target), upstream
+SHA-256/Poseidon2 and standard P-256 verification: one prover version across
+server, wallet and browser. CI generates them with that graph and verifies the
+proofs with the same native Rust SDK. Safe Rust public-input preparation is in cblc; native execution
 is in cvfy/czkp. Member witnesses are in cwlt. No opening enters the server API.
 
 The real-proof integration suite passed on 2026-09-30; see

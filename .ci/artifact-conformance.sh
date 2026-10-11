@@ -11,6 +11,17 @@ export CBLC_EXTENSION_DIRECTORY="$PWD/.artifact-conformance"
 test ! -e "$CBLC_EXTENSION_DIRECTORY" || { echo 'Existing conformance output refuses overwrite' >&2; exit 2; }
 node runtime/extensions/compile.mts --record-epoch
 node tests/extensions-proof.mts --record-epoch-artifacts
+# The JS prover that this job installs (the one browsers use) must derive exactly the
+# verification keys the server accepts: one prover version, one key identity.
+python3 -B - "$CBLC_EXTENSION_DIRECTORY/keys.json" <<'PY'
+import hashlib
+import sys
+ACCEPTED_KEY_GROUP_SHA256 = "3b0c627844f05d0c9f295a987a4125d21dfb693498614d11f09a1119c5c09993"
+with open(sys.argv[1], "rb") as stream:
+    data = stream.read(1024 * 1024 + 1)
+if len(data) > 1024 * 1024 or hashlib.sha256(data).hexdigest() != ACCEPTED_KEY_GROUP_SHA256:
+    raise SystemExit("JS prover verification keys differ from the server's accepted identity")
+PY
 # Only public files exist here; private witnesses never enter this directory.
 : "${CI_COMMIT_SHA:?Missing original source identity}"
 case "$CI_COMMIT_SHA" in *[!0-9a-f]*|'') exit 2;; esac

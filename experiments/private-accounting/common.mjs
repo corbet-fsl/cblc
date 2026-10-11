@@ -1,6 +1,6 @@
 // Shared byte encodings only. The verifier never receives these private openings.
 export const COMMUNITY_NAME = 'synthetic-accounting-community';
-export const OPTIONS = Object.freeze({ verifierTarget: 'noir-recursive' }); // ZK enabled in pinned bb.js5.0.0.
+export const OPTIONS = Object.freeze({ verifierTarget: 'noir-recursive' }); // ZK enabled in pinned bb.js 5.2.1.
 export const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 export const unhex = text => {
   if (typeof text !== 'string' || text.length % 2 || !/^[0-9a-f]*$/.test(text)) throw new Error('Noncanonical hex');

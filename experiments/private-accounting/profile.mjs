@@ -18,7 +18,7 @@ await mkdir(outputDir, { recursive: true });
 const started = performance.now();
 let api;
 const evidence = { version: 1, ok: false, circuitPath, expectedHash,
-  backend: '5.0.0', threads: 1, maximumWasmBytes: 32768 * 65536,
+  backend: '5.2.1', threads: 1, maximumWasmBytes: 32768 * 65536,
   provingPerformed: false, setupInitialized: false, witnessRead: false };
 
 try {

@@ -47,7 +47,7 @@ try {
     settings: { ipaAccumulation: false, oracleHashType: 'poseidon2', disableZk: false, optimizedSolidityVerifier: false } });
   // Persist compiler/backend evidence before setup can fail. These fields are
   // public circuit metadata; there is no witness or successful-proof claim.
-  const circuitStats = { version: 1, accountingMode, hashScheme, compiler: '1.0.0-beta.26', backend: '5.0.0',
+  const circuitStats = { version: 1, accountingMode, hashScheme, compiler: '1.0.0-beta.26', backend: '5.2.1',
     circuitSha256: hash(await readFile('public/circuit.json')), stats };
   await writeFile('public/circuit-stats.json', JSON.stringify(circuitStats, null, 2) + '\n');
   const requiredPoints = Number(stats.numGatesDyadic) + 1;
@@ -138,7 +138,7 @@ try {
     await writeFile('public/' + name + '.wasm', data);
     wasm.push({ name: name + '.wasm', bytes: data.length, sha256: hash(data) });
   }
-  const manifest = { version: 1, compiler: '1.0.0-beta.26', backend: '5.0.0', verifierTarget: OPTIONS.verifierTarget,
+  const manifest = { version: 1, compiler: '1.0.0-beta.26', backend: '5.2.1', verifierTarget: OPTIONS.verifierTarget,
     hashScheme, accountingMode, accountPolicy, peerReservation, poseidonSource: hashScheme === POSEIDON_SCHEME ? POSEIDON_SOURCE : null,
     circuitSha256: hash(await readFile('public/circuit.json')), vkSha256: hash(vk),
     circuitSourceSha256: hash(await readFile(circuitDir + '/src/main.nr')), requiredPoints, pointsPerChunk, numPoints, setup, wasm,

@@ -128,7 +128,7 @@ not been substituted to improve the benchmark.
 
 ## Existing primitives and exact pins
 
-- Noir compiler/JS `1.0.0-beta.26` and Barretenberg `5.0.0`, the exact pair used
+- Noir compiler/JS `1.0.0-beta.26` and Barretenberg `5.2.1` (the repository pin; the upstream example used 5.0.0), the pair used
   by the [upstream Noir browser example](https://github.com/noir-lang/noir/blob/v1.0.0-beta.26/examples/browser/package.json).
 - Noir's [built-in constrained P-256 verifier](https://github.com/noir-lang/noir/blob/v1.0.0-beta.26/noir_stdlib/src/ecdsa_secp256r1.nr),
   with WebCrypto signatures and its required standard low-S normalization.

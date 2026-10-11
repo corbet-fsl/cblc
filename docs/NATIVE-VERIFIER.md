@@ -120,8 +120,8 @@ must pass through the native Rust adapters in both ordinary and instrumented
 tests. Pure field-order and malformed-artifact tests complement those real
 proof checks; synthetic metadata is never described as a verified proof.
 
-CI selects one coherent historical fixture SDK (Barretenberg5.0.0 and
-Noir1.0.0-beta.26) explicitly in the private validation package. It asserts the
+CI selects one coherent fixture SDK (Barretenberg 5.2.1 and
+Noir 1.0.0-beta.26) explicitly in the private validation package. It asserts the
 actual resolved versions at the generator, maintained prover, holder and fixture
 adapter import locations. This creates real reference proofs for cross-version
 native verification; those JavaScript packages are not Rust production
