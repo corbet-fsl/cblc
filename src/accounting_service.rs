@@ -12,6 +12,7 @@ use crate::{
     admission::{AdmissionGrant, DeviceAuthorization},
 };
 use serde::{Deserialize, Serialize};
+mod admission_keys;
 mod pin_change;
 /// Adapter connecting policy public inputs to the generic proof verifier leaf.
 #[derive(Clone)]
