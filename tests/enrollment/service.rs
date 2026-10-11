@@ -27,8 +27,9 @@ struct Current {
 }
 impl CommitAuthority for Current {
     fn check(&self, now: u64) -> Result<(), Error> {
+        let delegation = self.delegation.lock().map_err(|_| Error::Storage)?;
         verify_delegation(
-            &self.delegation.lock().map_err(|_| Error::Storage)?,
+            &delegation,
             ExpectedAdmission {
                 trust: &self.trust,
                 policy_epoch: self.epoch.load(Ordering::Acquire),
