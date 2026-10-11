@@ -176,10 +176,11 @@ try{
   await call(initialize);
   for(let i=0;i<4;i++)members[i]=(await submit(7+i,[genesis[i]],'genesis')).next;
   if(recordEpochProofs) {
+    // Check the actual current owner projection before the expensive R2 proof
+    // journey. The issuer has already authenticated this original empty inbox.
+    const initialInbox=await call({op:'inbox',member:7,owner:toArray(members[0].owner.member),now});
+    assert.deepEqual(initialInbox,{root:{root:Array(32).fill(0)},entries:[]});
     const {gatherFixture,...record}=await exactRecordEpoch({members,call,proof,artifacts,issuerKey:manifest.issuerKey,now,deferExpiry:true});
-    const ingested=await ingestedRecordEpoch({members,call,submit,anonymous,proof,artifacts,
-      issuerKey:manifest.issuerKey,now,programs,hashes,community,signing,extension});
-    await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify([record,...ingested]));
     // Fictional presentation custody is explicitly separate from public proof
     // cache/trace files. No opening, HPKE private key or real member state is kept.
     const fixtureBytes=JSON.stringify({...gatherFixture,record:record.statement.record,proof:record.proof,
@@ -195,6 +196,12 @@ try{
       await writeFile(resolve(retained,'config.json'),JSON.stringify({directory:'.',manifestSha256:sha(manifestBytes).toString('hex')}));
       await writeFile(resolve(retained,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
     }
+    // Preserve the successful first owner fixture even if a later
+    // ingestion/race scenario fails. The complete proof report still requires
+    // every original remaining scenario to finish successfully.
+    const ingested=await ingestedRecordEpoch({members,call,submit,anonymous,proof,artifacts,
+      issuerKey:manifest.issuerKey,now,programs,hashes,community,signing,extension});
+    await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify([record,...ingested]));
   } else {
   const record=async(index,label,measure=false)=>anonymous(members[index].record({purpose:'forumListing',challenge:toArray(bytes(now%255)),expiresAt:now+90}),label,measure);
   const stale=await record(0,'record-below-quorum');

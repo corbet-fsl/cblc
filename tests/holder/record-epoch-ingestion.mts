@@ -52,7 +52,7 @@ export async function ingestedRecordEpoch({members,call,submit,anonymous,proof,a
   await call({op:'recordEpoch',now});
   const frozen=members.map(member=>member.clone());
   const witness=await call({op:'recordWitness',member:7},true,false);
-  assert.deepEqual(witness.leaf.requiredInbox,queued.inbox.root);
+  assert.deepEqual(witness.leaf.requiredInbox,queued.root.root);
   assert.notDeepEqual(toArray(frozen[0].opening.inbox),witness.leaf.requiredInbox);
   const key=generateKeyPairSync('ed25519');
   const publicKey=toArray(key.publicKey.export({type:'spki',format:'der'}).subarray(-32));
@@ -78,7 +78,7 @@ export async function ingestedRecordEpoch({members,call,submit,anonymous,proof,a
   await call({op:'deposit',batch:[{deposit:lateProof.statement.deposit,proof:lateProof.proof},batch[1]],now});
   const all=await call({op:'inbox',member:7,owner,now});
   assert.equal(all.entries.length,2);
-  assert.notDeepEqual(all.inbox.root,witness.leaf.requiredInbox);
+  assert.notDeepEqual(all.root.root,witness.leaf.requiredInbox);
   let holder=members[0];const steps=[];
   for(const [index,entry] of all.entries.entries()) {
     const consumed=await holder.consume(entry,now);steps.push(consumed);holder=consumed.next;
@@ -92,7 +92,7 @@ export async function ingestedRecordEpoch({members,call,submit,anonymous,proof,a
   const acceptedWitness=await call({op:'recordWitness',member:7},true,false);
   assert(acceptedWitness.ancestry,'Actual certified service result required');
   assert.equal(acceptedWitness.ancestry.record.leaf.version,Number(descendant.version));
-  assert.deepEqual(acceptedWitness.ancestry.record.leaf.requiredInbox,all.inbox.root);
+  assert.deepEqual(acceptedWitness.ancestry.record.leaf.requiredInbox,all.root.root);
   const minimum=await prepareRecordEpoch(descendant,publicKey,acceptedWitness,artifacts.scope,issuerKey,
     {frozenHolder:frozen[0]});
   assert.deepEqual(minimum.statement.record.shares,[0,0,10000]);
