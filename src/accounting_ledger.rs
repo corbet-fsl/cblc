@@ -33,6 +33,7 @@ use std::sync::{
 #[path = "../tests/internal/ledger_clock.rs"]
 mod clock_tests;
 
+mod extension_activation;
 mod extensions;
 mod obligations;
 pub mod record_epoch;

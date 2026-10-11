@@ -96,6 +96,22 @@ updates and anonymous deposits/record checks. The extension trait is sealed;
 activation accepts the shipped native adapter and a real genesis probe. Host
 configuration of the executable and artifacts remains trusted.
 
+The first activation atomically pins one fixed private commitment to its original
+ledger configuration, canonical public statement/proof hashes, and authenticated
+manifest/certificate key beside the existing extension tuple. No raw proof,
+wallet state or member history is stored. Reopening re-verifies that exact
+unchanged historical native proof. The original configuration-successor check
+permits only an already-authorized waiting-period revision; all fresh operations
+still use the actual current policy. Changing the probe, artifacts, trust ring or
+another policy term refuses. Configuration and both activation rows are checked
+again in the installation transaction after native verification.
+
+A legacy unanchored tuple cannot authorize a stale probe after tuning. An
+explicit genuine probe of its current policy may install the missing anchor
+without erasing or recreating the ledger. A failed or uncertain storage commit
+returns an error and exposes no configured handle; retry reopens the original
+durable state. Verified trust-ring succession remains a separate owner port.
+
 `pins::change_binding` length-prefixes community, canonical cpsd member hex and
 field, followed by the old revision and both 32-byte fingerprints, under a
 versioned SHA-256 domain. `PinSpendVerifier` verifies a completed cblc acceptance,

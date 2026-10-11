@@ -1,4 +1,6 @@
 //! Public-proof fixture run explicitly after generation and under instrumentation.
+#[path = "../tests/support/activation.rs"]
+mod activation_probe;
 #[path = "../tests/common/mod.rs"]
 mod common;
 #[path = "../tests/support/inspect.rs"]
@@ -146,6 +148,7 @@ fn main() {
         checkpoint_period_seconds: 1000,
     };
     let fixture = Fixture::new();
+    activation_probe::exercise(&fixture, &settings, &extension, &scope, &directory, init);
     // The authenticated native scope stays honest. Only this refusal fixture
     // misconfigures the host's legacy side with that same scope. Cryptography
     // still delegates to the real verifier if legacy verification is requested.

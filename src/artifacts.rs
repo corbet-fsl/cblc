@@ -209,7 +209,6 @@ pub struct ExtensionArtifacts {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ArtifactBinding {
-    #[cfg(feature = "publication")]
     pub manifest_sha256: [u8; 32],
     pub certificate_key: [u8; 64],
 }
@@ -262,7 +261,6 @@ impl ExtensionArtifacts {
     }
     pub(crate) fn binding(&self) -> ArtifactBinding {
         ArtifactBinding {
-            #[cfg(feature = "publication")]
             manifest_sha256: self.manifest_sha256(),
             certificate_key: self.issuer,
         }

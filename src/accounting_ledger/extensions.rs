@@ -1,4 +1,5 @@
 //! Atomic extension operations. Only the configured backend can authorize effects.
+use super::extension_activation::ActivationAnchor;
 use super::*;
 use crate::extensions::{
     self, Deposit, ExtendedUpdate, ExtensionPolicy, ExtensionStatement, ExtensionVerifier,
@@ -56,13 +57,41 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         if self.policy.max_proof_bytes < extensions::EXTENSION_PROOF_BYTES
             || !activation.account.genesis
             || activation.account.community != self.community
-            || activation.account.policy != self.policy.account
             || activation.proof.is_empty()
             || activation.proof.len() > self.policy.max_proof_bytes
         {
             return Err(Error::InvalidInput);
         }
         crate::accounting::statement_bytes(&activation.account)?;
+        let artifact_binding = verifier.artifact_binding.clone();
+        let config =
+            serde_json::to_vec(&(policy.clone(), &scope)).map_err(|_| Error::InvalidInput)?;
+        let mut tx = self.connection.transaction()?;
+        check_config(&mut tx, &self.config)?;
+        let previous: Option<Vec<u8>> = tx.get(b"extensions")?;
+        if previous.as_ref().is_some_and(|value| value != &config) {
+            return Err(Error::PolicyMismatch);
+        }
+        let anchored: Option<ActivationAnchor> = tx.get(b"extension-activation")?;
+        let anchor = match &anchored {
+            Some(anchor) => {
+                if previous.is_none() {
+                    return Err(Error::Storage);
+                }
+                anchor.check(&self.config, &activation, &artifact_binding)?;
+                anchor.clone()
+            }
+            None => {
+                // A legacy tuple supplies no historical activation authority.
+                // Explicit reanchoring still requires a genuine current-policy
+                // genesis proof; it never erases or recreates the ledger.
+                if activation.account.policy != self.policy.account {
+                    return Err(Error::InvalidInput);
+                }
+                ActivationAnchor::new(&self.config, &activation, &artifact_binding)?
+            }
+        };
+        tx.rollback()?;
         verifier.verify(
             &ExtensionStatement::Update {
                 policy: policy.clone(),
@@ -75,15 +104,15 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             },
             &activation.proof,
         )?;
-        let artifact_binding = verifier.artifact_binding.clone();
-        let config =
-            serde_json::to_vec(&(policy.clone(), &scope)).map_err(|_| Error::InvalidInput)?;
         let mut tx = self.connection.transaction()?;
+        check_config(&mut tx, &self.config)?;
         let old: Option<Vec<u8>> = tx.get(b"extensions")?;
-        if old.as_ref().is_some_and(|v| v != &config) {
+        let current: Option<ActivationAnchor> = tx.get(b"extension-activation")?;
+        if old != previous || current != anchored {
             return Err(Error::PolicyMismatch);
         }
         tx.put(b"extensions", &config)?;
+        tx.put(b"extension-activation", &anchor)?;
         tx.commit()?;
         self.extensions = Some(Extensions {
             artifact_binding,
