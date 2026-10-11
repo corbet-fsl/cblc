@@ -231,6 +231,7 @@ pub struct ExtensionActivation {
 }
 pub(crate) struct Extensions {
     pub artifact_binding: crate::artifacts::ArtifactBinding,
+    pub activation_anchor: Vec<u8>,
     pub policy: ExtensionPolicy,
     pub verifier: Box<dyn ExtensionVerifier>,
     pub config: Vec<u8>,

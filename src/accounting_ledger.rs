@@ -36,6 +36,7 @@ mod clock_tests;
 mod extension_activation;
 mod extensions;
 mod obligations;
+mod pin_change;
 pub mod record_epoch;
 mod rotation;
 use rotation::check_root;

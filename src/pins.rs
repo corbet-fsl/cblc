@@ -27,7 +27,7 @@ pub fn change_binding(change: &Change<'_>) -> Result<[u8; 32], Error> {
     hash.update(change.replacement.as_bytes());
     Ok(hash.finalize().into())
 }
-fn owner(member: &str) -> Result<[u8; 32], Error> {
+pub(crate) fn owner(member: &str) -> Result<[u8; 32], Error> {
     let bytes = data_encoding::HEXLOWER
         .decode(member.as_bytes())
         .map_err(|_| Error::InvalidInput)?;
@@ -41,6 +41,29 @@ pub struct SpentChange {
     pub acceptance: AccountAcceptance,
     pub request: AccountRequest,
     pub update: ExtendedUpdate,
+}
+/// A completed native spend for one exact CPNS change. This conveys no current
+/// membership or device authority, and cannot authorize another account spend.
+/// The pin owner must separately check current authority at its atomic CAS.
+pub struct VerifiedPinChange {
+    binding: [u8; 32],
+}
+impl VerifiedPinChange {
+    pub(crate) fn new(binding: [u8; 32]) -> Self {
+        Self { binding }
+    }
+    pub fn check_change(&self, change: &Change<'_>) -> Result<(), Error> {
+        if change_binding(change)? != self.binding {
+            return Err(Error::Replay);
+        }
+        Ok(())
+    }
+}
+impl ChangeTokenVerifier for VerifiedPinChange {
+    type Token = ();
+    async fn verify_spent(&self, change: &Change<'_>, _: &()) -> Result<(), TokenRejected> {
+        self.check_change(change).map_err(|_| TokenRejected)
+    }
 }
 /// Pin this adapter to the issuer, complete extension relation and policy.
 pub struct PinSpendVerifier {

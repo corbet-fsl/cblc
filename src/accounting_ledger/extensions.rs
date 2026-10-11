@@ -116,6 +116,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.commit()?;
         self.extensions = Some(Extensions {
             artifact_binding,
+            activation_anchor: serde_json::to_vec(&anchor).map_err(|_| Error::Storage)?,
             policy,
             budget,
             verifier: Box::new(verifier),

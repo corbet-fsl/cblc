@@ -59,6 +59,19 @@ Extension issuer APIs (`with_extensions`, `apply_extended`, `deposit_batch`,
 `obligations`, `public_record`) and their activation boundary are specified in
 [EXTENSIONS.md](EXTENSIONS.md). They are not enabled by the legacy v2 verifier.
 
+`verify_completed_pin_change` returns a sealed permission for the exact original
+CPNS community, member, field, revision, fingerprint and replacement. It verifies
+the operator's original committed receipt and rechecks its full native Update
+proof under the activated artifact/scope/operator, with the stored activation
+anchor and current configuration checked before and after proof execution. Only
+the original durable waiting-period policy field may differ from the historical
+signed receipt. An expired request remains historical evidence of a completed
+spend; this path never submits another spend or creates a new acceptance. The
+capability retains no receipt or member history. Current membership, key/legal
+authority and expiry must still be verified by the consuming owner at its exact
+revision/fingerprint CAS. The signature-only `PinSpendVerifier` does not replace
+this native verification boundary.
+
 Account database format v3 binds the owner to `SHA-256(cpsd::Pseudonym::to_bytes())`,
 encoded as unpadded base64url in the signed admission. cmty must verify cpsd before
 issuing that admission; cblc never infers identity from a root. `member_id` is only

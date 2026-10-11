@@ -270,7 +270,7 @@ try{
   const badOwner=structuredClone(change.input);badOwner.owner=members[2].owner.member;
   await assert.rejects(new Noir(programs.update).execute(witnessInputs(programs.update,badOwner)));
   const spent=await submit(7,[change],'change-token');members[0]=spent.next;
-  await call({op:'pins',member:7});
+  now=Math.max(now,await call({op:'pins',member:7}));
   await call(spent.request,false); // Same predecessor/marker cannot authorize a new request.
   // A genuine counterpart Answer supplies the second counted first contact.
   const acceptedContact=await contact(0,2);

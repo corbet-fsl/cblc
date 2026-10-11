@@ -1,6 +1,8 @@
 //! CI-only interactive issuer fixture. All inputs are public statements/proofs.
 #[path = "../tests/common/mod.rs"]
 mod common;
+#[path = "../tests/support/pin_spend.rs"]
+mod pin_spend;
 #[path = "../tests/holder/record-epoch-issuer.rs"]
 mod records;
 use cblc::{
@@ -390,6 +392,12 @@ fn main() {
                         policy: policy.clone().unwrap(),
                     };
                     let token = tokens.get(&member).unwrap();
+                    let verified = pin_spend::exercise(
+                        ledger.as_mut().unwrap(),
+                        &change,
+                        token,
+                        policy.as_ref().unwrap(),
+                    );
                     futures::executor::block_on(async {
                         verifier.verify_spent(&change, token).await.unwrap();
                         let wrong = HEXLOWER.encode(&[member + 1; 48]);
@@ -468,7 +476,7 @@ fn main() {
                             assert!(verifier.verify_spent(&change, &damaged).await.is_err());
                         }
                         let store = MemoryStore::new("community.example").unwrap();
-                        let pins = Pins::new(store, verifier);
+                        let pins = Pins::new(store, verified);
                         pins.pin(change.member, change.field, change.expected.fingerprint)
                             .await
                             .unwrap();
@@ -478,7 +486,7 @@ fn main() {
                                 change.field,
                                 change.expected,
                                 change.replacement,
-                                token,
+                                &(),
                             )
                             .await
                             .unwrap();
@@ -489,13 +497,13 @@ fn main() {
                                 change.field,
                                 change.expected,
                                 change.replacement,
-                                token
+                                &()
                             )
                             .await
                             .is_err()
                         );
                     });
-                    Ok(json!(true))
+                    Ok(json!(token.request.expires_at))
                 }
                 _ => Err(Error::InvalidInput),
             }
