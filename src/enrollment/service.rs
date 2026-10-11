@@ -1,5 +1,6 @@
 //! Original common checkpoint publisher, using the caller's actual atomic port.
 use super::*;
+use crate::Error;
 use crate::storage::{CommitAuthority, CommitDeadline, Transaction};
 use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};
