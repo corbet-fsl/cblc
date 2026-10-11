@@ -2,8 +2,23 @@
   "schema": 1,
   "generator": "ccid render v1",
   "tool_revision": "e38f347d6941aa105ac4b55a0d4b8fec2ef22433",
-  "manifest_sha256": "944e804689894f51f0ce8ad4a2def4a8cff60d2a90c6dec22e6723bcc634bf10",
+  "manifest_sha256": "d82d8c53db02530a06d35a3225ec2448965f6de996d784b9681c02e55ca3ac71",
   "jobs": {
+    "artifact-conformance": {
+      "job": "artifact-conformance",
+      "scheduler": "crow",
+      "checks": [
+        "artifact-conformance"
+      ],
+      "workflow": "repository-jobs",
+      "command": [
+        "bash",
+        ".ci/run-cached.sh"
+      ],
+      "environment": {
+        "CI_TIMEOUT": "7200"
+      }
+    },
     "resolve-dependencies": {
       "job": "resolve-dependencies",
       "scheduler": "crow",

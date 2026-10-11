@@ -1,6 +1,21 @@
 schema = 1
 project = "cblc"
 
+# Bounded original public artifact relation. This does not compile or qualify
+# the current Rust issuer, production host, accepted account or enrollment.
+[checks.artifact-conformance]
+kind = "commands"
+commands = [["bash", ".ci/artifact-conformance.sh"]]
+cache_pure = false
+cache_outputs = ["artifact-conformance-worker.json"]
+
+[jobs.artifact-conformance]
+environment = { CI_TIMEOUT = "7200" }
+scheduler = "crow"
+checks = ["artifact-conformance"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
+
 # All Linux verification gates from .github/workflows/ci.yml (jobs check,
 # audit, dependency-policy, coverage) are ported into .ci/verify.sh in CI
 # ordering. kind="cargo" is not used: gates need --locked/--all-features/

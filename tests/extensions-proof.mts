@@ -19,7 +19,7 @@ import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
 import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';
 import {ingestedRecordEpoch} from './holder/record-epoch-ingestion.mts';
 import {retainRecordStartup} from './holder/record-startup-artifacts.mts';
-import {selectedProducer, proveUpdateConformance, retainConformance} from './holder/prover-conformance.mts';
+import {selectedProducer, proveUpdateConformance, retainConformance, alphaStartupRequest} from './holder/prover-conformance.mts';
 const recordEpochArtifacts=process.argv.length===3&&process.argv[2]==='--record-epoch-artifacts';
 const recordEpochProofs=process.argv.length===3&&process.argv[2]==='--record-epoch-proofs';
 const recordEpochEnabled=recordEpochArtifacts||recordEpochProofs;
@@ -68,10 +68,13 @@ for(const f of lock.files){
 const producer=await selectedProducer();
 const keyApi=await Barretenberg.new({backend:BackendType.NativeUnixSocket,threads:1,skipSrsInit:true,bbPath:producer.bbPath});
 const keys={};
-let conformance;
+let conformance, alphaConformance;
+const rawNative=recordEpochArtifacts && process.env.CBLC_CONFORMANCE_NATIVE_WORKER ? {setup,circuitDigest:sha(await readFile(resolve(directory,'circuits.json')))} : undefined;
+const alphaRequest=rawNative ? await alphaStartupRequest() : undefined;
 try{await keyApi.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2Point:setup['g2.dat']});
   keys.update=hex(await new UltraHonkBackend(programs.update.bytecode,keyApi).getVerificationKey(OPTIONS));
-  conformance=await proveUpdateConformance(keyApi,programs.update,Buffer.from(keys.update,'hex'),producer,transition);
+  conformance=await proveUpdateConformance(keyApi,programs.update,Buffer.from(keys.update,'hex'),producer,transition,rawNative);
+  if(rawNative) alphaConformance=await proveUpdateConformance(keyApi,programs.update,Buffer.from(keys.update,'hex'),producer,transition,rawNative,alphaRequest);
   // Only successful conformance permits this new, completely pinned corpus.
   for(const kind of kinds.filter(kind=>kind!=='update'))keys[kind]=hex(await new UltraHonkBackend(programs[kind].bytecode,keyApi).getVerificationKey(OPTIONS));
 }finally{await keyApi.destroy();}
@@ -83,6 +86,7 @@ const manifestBytes=Buffer.from(JSON.stringify(manifest));await writeFile(resolv
 const configPath=resolve(directory,'config.json');await writeFile(configPath,JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
 const encodeBundle=proofs=>Buffer.from(JSON.stringify({version:1,proofs})).toString('hex');
 await retainConformance(conformance,manifestBytes,await readFile(resolve(directory,'circuits.json')),keyBytes,encodeBundle);
+if(alphaConformance) await retainConformance(alphaConformance,manifestBytes,await readFile(resolve(directory,'circuits.json')),keyBytes,encodeBundle);
 const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
 if(recordEpochArtifacts) {
   for(const kind of kinds) {
