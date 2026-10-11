@@ -2,7 +2,7 @@
 // No member opening is written to disk or passed to the issuer process.
 import assert from 'node:assert/strict';
 import {createHash,createECDH,createPrivateKey,generateKeyPairSync,sign} from 'node:crypto';
-import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -176,10 +176,25 @@ try{
   await call(initialize);
   for(let i=0;i<4;i++)members[i]=(await submit(7+i,[genesis[i]],'genesis')).next;
   if(recordEpochProofs) {
-    const record=await exactRecordEpoch({members,call,proof,artifacts,issuerKey:manifest.issuerKey,now,deferExpiry:true});
+    const {gatherFixture,...record}=await exactRecordEpoch({members,call,proof,artifacts,issuerKey:manifest.issuerKey,now,deferExpiry:true});
     const ingested=await ingestedRecordEpoch({members,call,submit,anonymous,proof,artifacts,
       issuerKey:manifest.issuerKey,now,programs,hashes,community,signing,extension});
     await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify([record,...ingested]));
+    // Fictional presentation custody is explicitly separate from public proof
+    // cache/trace files. No opening, HPKE private key or real member state is kept.
+    const fixtureBytes=JSON.stringify({...gatherFixture,record:record.statement.record,proof:record.proof,
+      proofScope:record.proofScope,artifacts:'config.json'});
+    await writeFile(resolve(directory,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
+    if(process.env.ARTIFACT_ROOT) {
+      const retained=resolve(process.env.ARTIFACT_ROOT,'gather-record-fixture');
+      await mkdir(resolve(retained,'setup'),{recursive:true});
+      // Exact bounded original public artifact list, with its real manifest pin.
+      for(const name of ['circuits.json','keys.json','manifest.json',...lock.files.map(file=>`setup/${file.name}`)])
+        await copyFile(resolve(directory,name),resolve(retained,name));
+      // The consuming test rebases this portable path to its retained directory.
+      await writeFile(resolve(retained,'config.json'),JSON.stringify({directory:'.',manifestSha256:sha(manifestBytes).toString('hex')}));
+      await writeFile(resolve(retained,'gather-record-fixture.json'),fixtureBytes,{mode:0o600});
+    }
   } else {
   const record=async(index,label,measure=false)=>anonymous(members[index].record({purpose:'forumListing',challenge:toArray(bytes(now%255)),expiresAt:now+90}),label,measure);
   const stale=await record(0,'record-below-quorum');

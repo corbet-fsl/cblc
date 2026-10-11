@@ -146,6 +146,35 @@ impl RecordVerifier {
         })
     }
 
+    /// Bound an application-generated challenge using the actual authenticated
+    /// publication policy and epoch. The returned original context is data,
+    /// never native proof, device authority or a challenge-consumption receipt.
+    pub fn bounded_context(
+        &mut self,
+        balance: &Balance,
+        current: CharterBounds,
+        mut requested: RecordContext,
+        now: u64,
+    ) -> Result<RecordContext, Error> {
+        let now = self.view.observe_time(now)?;
+        let material = self.view.observe(balance, current, now)?;
+        let epoch = material
+            .record_epoch
+            .as_ref()
+            .ok_or(Error::UnsupportedCapability)?;
+        if requested.challenge == [0; 32] {
+            return Err(Error::InvalidInput);
+        }
+        requested.expires_at = requested
+            .expires_at
+            .min(authority_until(balance, current, &material, epoch))
+            .min(now.saturating_add(material.policy.max_authorization_seconds));
+        if requested.expires_at <= now {
+            return Err(Error::Expired);
+        }
+        Ok(requested)
+    }
+
     /// Recheck against the actual current sealed publication, not echoed fields.
     /// Call after acquiring the application's current Charter/pending-operation
     /// guard. That guard must remain current through the atomic storage commit.

@@ -177,6 +177,16 @@ impl Records {
         ledger: &mut Option<AccountLedger<V>>,
     ) -> Result<Value, Error> {
         match v["op"].as_str().unwrap() {
+            "recordFixtureMaterial" => {
+                #[cfg(feature = "publication")]
+                {
+                    relying::export(v, fixture, ledger.as_mut().unwrap())
+                }
+                #[cfg(not(feature = "publication"))]
+                {
+                    Err(Error::UnsupportedCapability)
+                }
+            }
             "verifyPublishedRecord" => {
                 #[cfg(feature = "publication")]
                 {

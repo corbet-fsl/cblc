@@ -10,14 +10,19 @@ use cblc::{
 use csgn::{Kind, SecretKey, Signer};
 use std::{num::NonZeroUsize, path::PathBuf, time::Duration};
 
-pub fn check<V: AccountProofVerifier>(
-    input: &Value,
+fn publication<V: AccountProofVerifier>(
     fixture: &crate::common::Fixture,
     ledger: &mut AccountLedger<V>,
-) -> Result<Value, Error> {
-    let now = input["now"].as_u64().unwrap();
-    let presentation: czkp::record::Presentation =
-        serde_json::from_value(input["presentation"].clone()).unwrap();
+    now: u64,
+) -> Result<
+    (
+        cblc::publication::PublicVerifierMaterial,
+        CharterBounds,
+        Signer,
+        Balance,
+    ),
+    Error,
+> {
     let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
     // These publication settings and the expected principal/context belong to
     // this host fixture; none are selected by the submitted record descriptor.
@@ -25,12 +30,6 @@ pub fn check<V: AccountProofVerifier>(
     let bounds = CharterBounds {
         policy_epoch: 1,
         valid_until: 500,
-    };
-    let owner: [u8; 32] = sha2::Sha256::digest([7; 48]).into();
-    let expected = RecordContext {
-        purpose: RecordUse::ForumListing,
-        challenge: [193; 32],
-        expires_at: (now + 50).min(200),
     };
     let mut signer = Signer::new(
         &fixture.trust.community_id,
@@ -48,6 +47,44 @@ pub fn check<V: AccountProofVerifier>(
         )
         .unwrap();
     let balance = Balance::verify(signer.key_ring(), &signed, 1, 1, now).unwrap();
+    Ok((material, bounds, signer, balance))
+}
+
+/// Explicit fictional fixture material, not a public service response or verdict.
+pub fn export<V: AccountProofVerifier>(
+    input: &Value,
+    fixture: &crate::common::Fixture,
+    ledger: &mut AccountLedger<V>,
+) -> Result<Value, Error> {
+    let now = input["now"].as_u64().unwrap();
+    let (material, bounds, signer, balance) = publication(fixture, ledger, now)?;
+    let owner: [u8; 32] = sha2::Sha256::digest([7; 48]).into();
+    Ok(json!({
+        "material": material,
+        "signedBalance": balance.signed_bytes(),
+        "trustedKeyRing": signer.key_ring().to_cbor(),
+        "trustedPeriodSeconds": 100,
+        "trustedCharter": {"policyEpoch": bounds.policy_epoch, "validUntil": bounds.valid_until},
+        "trustedOwner": owner,
+        "now": now,
+    }))
+}
+
+pub fn check<V: AccountProofVerifier>(
+    input: &Value,
+    fixture: &crate::common::Fixture,
+    ledger: &mut AccountLedger<V>,
+) -> Result<Value, Error> {
+    let now = input["now"].as_u64().unwrap();
+    let presentation: czkp::record::Presentation =
+        serde_json::from_value(input["presentation"].clone()).unwrap();
+    let (material, bounds, mut signer, balance) = publication(fixture, ledger, now)?;
+    let owner: [u8; 32] = sha2::Sha256::digest([7; 48]).into();
+    let expected = RecordContext {
+        purpose: RecordUse::ForumListing,
+        challenge: [193; 32],
+        expires_at: (now + 50).min(200),
+    };
     let config = PathBuf::from(std::env::args().nth(1).unwrap());
     let artifacts = crate::common::native::extension_config(&config)?;
     let options = crate::common::native::options(1024 * 1024);
@@ -63,6 +100,23 @@ pub fn check<V: AccountProofVerifier>(
             maximum_keys: NonZeroUsize::new(32).unwrap(),
         },
     )?;
+    let mut requested = expected.clone();
+    requested.expires_at = now + material.policy.max_authorization_seconds + 1;
+    let bounded = verifier.bounded_context(&balance, bounds, requested.clone(), now)?;
+    assert_eq!(bounded.purpose, requested.purpose);
+    assert_eq!(bounded.challenge, requested.challenge);
+    let epoch = material.record_epoch.as_ref().unwrap();
+    assert_eq!(
+        bounded.expires_at,
+        requested
+            .expires_at
+            .min(balance.valid_until())
+            .min(bounds.valid_until)
+            .min(material.policy.account.policy_valid_until)
+            .min(epoch.expires_at)
+            .min(now + material.policy.max_authorization_seconds)
+    );
+    assert!(bounded.expires_at < requested.expires_at);
     let verified = verifier.verify(&balance, bounds, &owner, &expected, &presentation, || now)?;
     assert_eq!(verified.record(), &presentation.record);
     assert_eq!(verified.context(), &expected);
