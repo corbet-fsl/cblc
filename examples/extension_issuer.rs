@@ -189,6 +189,7 @@ fn main() {
                 | "issueRecordChallenge"
                 | "checkEpochRecord"
                 | "verifyPublishedRecord"
+                | "recordFixtureMaterial"
                     if record_epochs =>
                 {
                     records.handle(&v, &fixture, &mut ledger)
