@@ -111,7 +111,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             tx.rollback()?;
             let returned = clock();
             check_time(returned, now)?;
-            prior.descriptor.check_time(returned)?;
+            prior.descriptor().check_time(returned)?;
             return Ok(prior);
         }
         apply_facts(&mut tx, &selected)?;
@@ -121,7 +121,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         let published = frozen.encrypt(&issuer)?;
         let completed = clock();
         check_time(completed, now)?;
-        published.descriptor.check_time(completed)?;
+        published.descriptor().check_time(completed)?;
         let mut tx = self.connection.transaction()?;
         let decision = clock();
         check_time(decision, completed.max(clock_floor(&mut tx)?))?;
@@ -146,7 +146,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             tx.rollback()?;
             let returned = clock();
             check_time(returned, decision)?;
-            prior.descriptor.check_time(returned)?;
+            prior.descriptor().check_time(returned)?;
             return Ok(prior);
         }
         if current != selected {
