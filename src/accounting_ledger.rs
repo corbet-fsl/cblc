@@ -203,6 +203,11 @@ fn check_pending(
 }
 
 impl<V: AccountProofVerifier> AccountLedger<V> {
+    /// Immutable community bound to the ledger's admission trust and storage.
+    pub fn community(&self) -> &str {
+        &self.trust.community_id
+    }
+
     pub fn with_store(
         store: impl AccountStorage + 'static,
         trust: AdmissionTrust,
