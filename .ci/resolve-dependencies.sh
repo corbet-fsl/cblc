@@ -3,7 +3,7 @@
 set -euo pipefail
 exec 2>&1
 : "${ARTIFACT_ROOT:?Missing retained artifact destination}"
-cargo update -p czkp -p cvfy
+cargo update
 cp Cargo.lock "$ARTIFACT_ROOT/resolve-dependencies-Cargo.lock"
 sha256sum Cargo.lock
 npm install --package-lock-only --ignore-scripts --no-audit --no-fund
