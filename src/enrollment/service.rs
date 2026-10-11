@@ -47,6 +47,12 @@ fn time(tx: &mut Transaction<'_>, now: u64) -> Result<(), Error> {
     Ok(())
 }
 impl<C: Fn() -> u64> EnrollmentService<C> {
+    /// Actual immutable publisher configuration; this observation is not an
+    /// installation capability or a current Policy verdict.
+    pub fn configuration(&self) -> &EnrollmentConfig {
+        &self.store.config
+    }
+
     /// Configure the actual original detached operator, not a signing callback.
     pub fn new(store: EnrollmentStore, operator: SigningKey, clock: C) -> Result<Self, Error> {
         if operator.verifying_key().to_bytes() != store.config.operator_public_key {
