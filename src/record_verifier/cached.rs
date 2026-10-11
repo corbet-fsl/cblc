@@ -72,7 +72,7 @@ impl RecordVerifier {
             &record.certificate,
         )?;
         // Apply the original bounded presentation encoding before allocation.
-        if proof.is_empty() || proof.len() > 8 * 1024 * 1024 || proof.len() % 2 != 0 {
+        if proof.is_empty() || proof.len() > 8 * 1024 * 1024 || !proof.len().is_multiple_of(2) {
             return Err(Error::InvalidInput);
         }
         let proof = data_encoding::HEXLOWER

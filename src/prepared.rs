@@ -305,7 +305,7 @@ pub(crate) fn extension_proofs(
             bytes(&mut fields, &epoch.root);
             fields.push(scalar(u64::from(epoch.leaf_count)));
             bytes(&mut fields, &record.blinded_leaf);
-            for limb in record.presentation_key.chunks_exact(16) {
+            for limb in record.presentation_key.as_chunks::<16>().0 {
                 let mut field = [0; 32];
                 field[16..].copy_from_slice(limb);
                 fields.push(field);

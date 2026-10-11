@@ -104,8 +104,10 @@ fn assert_witness(
     )
     .unwrap();
     let path = plaintext[140..plaintext.len() - 64]
-        .chunks_exact(32)
-        .map(|chunk| chunk.try_into().unwrap())
+        .as_chunks::<32>()
+        .0
+        .iter()
+        .copied()
         .collect();
     let proof = rs_merkle::MerkleProof::<czkp::record::EpochTree>::new(path);
     assert!(
