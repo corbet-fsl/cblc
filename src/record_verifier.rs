@@ -19,6 +19,9 @@ use cbcn::balance::Balance;
 use czkp::record::{Epoch, Presentation, Record};
 use sha2::{Digest, Sha256};
 
+mod cached;
+pub use cached::VerifiedCachedRecord;
+
 /// Trusted bounds from the application's current verified Charter, in seconds.
 /// These must not be copied from the submitted presentation or decoded material.
 #[derive(Clone, Copy)]
@@ -32,17 +35,14 @@ pub struct CharterBounds {
 /// A native proof result, not an admission or challenge-consumption receipt.
 /// There is no wire decoder, unchecked constructor, or clonable authority.
 pub struct VerifiedRecord {
-    record: Record,
+    cached: VerifiedCachedRecord,
     context: RecordContext,
-    publication_digest: [u8; 32],
-    checked_at: u64,
-    record_until: u64,
     commit_until: u64,
 }
 impl VerifiedRecord {
     /// Public record statement checked by the native R2 relation.
     pub fn record(&self) -> &Record {
-        &self.record
+        self.cached.record()
     }
     /// Independently expected context authenticated by the presentation binding.
     pub fn context(&self) -> &RecordContext {
@@ -50,12 +50,12 @@ impl VerifiedRecord {
     }
     /// Completion wall-clock sample, in Unix seconds.
     pub fn checked_at(&self) -> u64 {
-        self.checked_at
+        self.cached.checked_at()
     }
     /// Exclusive bound of this record's checked publication authority. This is
     /// neither an attendance lease nor a promise that Charter will stay current.
     pub fn record_until(&self) -> u64 {
-        self.record_until
+        self.cached.valid_until()
     }
     /// Exclusive bound for committing this fresh challenge. It cannot extend
     /// the record, publication, Charter, or original challenge lifetime.
@@ -129,32 +129,20 @@ impl RecordVerifier {
             return Err(Error::Expired);
         }
         presentation.check_binding(expected, epoch, expected_owner, now)?;
-        let proof = data_encoding::HEXLOWER
-            .decode(presentation.proof.as_bytes())
-            .map_err(|_| Error::InvalidInput)?;
-        if proof.len() > material.policy.max_proof_bytes {
-            return Err(Error::InvalidInput);
-        }
-        self.budget.check(expected_owner)?;
-        let verified = self.native.verify_anonymous(
-            &ExtensionStatement::RecordEpoch {
-                policy: material.extension_policy.clone(),
-                record: presentation.record.clone(),
-            },
-            &proof,
-        );
-        let completed = self.view.observe_time(clock())?;
-        verified?;
-        self.view.observe(balance, current, completed)?;
-        presentation.check_binding(expected, epoch, expected_owner, completed)?;
-        let record_until = authority_until(balance, current, &material, epoch);
+        let cached = self.verify_cached_at(
+            balance,
+            current,
+            &presentation.record,
+            &presentation.proof,
+            &material,
+            clock,
+        )?;
+        presentation.check_binding(expected, epoch, expected_owner, cached.checked_at())?;
+        let commit_until = cached.valid_until().min(expected.expires_at);
         Ok(VerifiedRecord {
-            record: presentation.record.clone(),
+            cached,
             context: expected.clone(),
-            publication_digest: Sha256::digest(balance.signed_bytes()).into(),
-            checked_at: completed,
-            record_until,
-            commit_until: record_until.min(expected.expires_at),
+            commit_until,
         })
     }
 
@@ -168,19 +156,13 @@ impl RecordVerifier {
         current: CharterBounds,
         now: u64,
     ) -> Result<(), Error> {
-        let now = self.view.observe_time(now)?;
-        let material = self.view.observe(balance, current, now)?;
-        if now < verified.checked_at {
-            return Err(Error::ClockRollback);
-        }
-        if now >= verified.commit_until {
-            return Err(Error::Expired);
-        }
-        if <[u8; 32]>::from(Sha256::digest(balance.signed_bytes())) != verified.publication_digest
-            || material.record_epoch.as_ref() != Some(&verified.record.epoch)
-        {
-            return Err(Error::PolicyMismatch);
-        }
+        self.check_cached_current_until(
+            &verified.cached,
+            balance,
+            current,
+            now,
+            verified.commit_until,
+        )?;
         // Re-observation already checks all shorter current publication and
         // Charter deadlines. A longer refresh cannot extend the sealed result.
         Ok(())

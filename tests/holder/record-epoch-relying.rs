@@ -70,6 +70,56 @@ pub fn check<V: AccountProofVerifier>(
     assert_eq!(verified.record_until(), 200);
     assert_eq!(verified.commit_until(), expected.expires_at);
     verifier.check_current(&verified, &balance, bounds, now)?;
+    let cached = verifier.verify_cached_record(
+        &balance,
+        bounds,
+        &owner,
+        &presentation.record,
+        &presentation.proof,
+        || now,
+    )?;
+    assert_eq!(cached.record(), &presentation.record);
+    assert_eq!(cached.checked_at(), now);
+    assert_eq!(cached.valid_until(), 200);
+    verifier.check_cached_current(&cached, &balance, bounds, now)?;
+    let mut wrong_owner = owner;
+    wrong_owner[0] ^= 1;
+    assert!(matches!(
+        verifier.verify_cached_record(
+            &balance,
+            bounds,
+            &wrong_owner,
+            &presentation.record,
+            &presentation.proof,
+            || now,
+        ),
+        Err(Error::Admission)
+    ));
+    for case in 0..3 {
+        let mut wrong = presentation.record.clone();
+        match case {
+            0 => wrong.epoch.root[0] ^= 1,
+            1 => wrong.certificate[0] ^= 1,
+            _ => wrong.shares = Some([10_000, 0, 0]),
+        }
+        assert!(
+            verifier
+                .verify_cached_record(
+                    &balance,
+                    bounds,
+                    &owner,
+                    &wrong,
+                    &presentation.proof,
+                    || now,
+                )
+                .is_err()
+        );
+    }
+    assert!(
+        verifier
+            .verify_cached_record(&balance, bounds, &owner, &presentation.record, "00", || now,)
+            .is_err()
+    );
 
     // A genuine new signed publication fences the old result even though its
     // immutable epoch descriptor is unchanged and its proof remains correct.
@@ -88,6 +138,18 @@ pub fn check<V: AccountProofVerifier>(
         verifier.check_current(&verified, &replacement, bounds, now),
         Err(Error::PolicyMismatch)
     );
+    assert_eq!(
+        verifier.check_cached_current(&cached, &replacement, bounds, now),
+        Err(Error::PolicyMismatch)
+    );
+    let refreshed = verifier.verify_cached_record(
+        &replacement,
+        bounds,
+        &owner,
+        &presentation.record,
+        &presentation.proof,
+        || now,
+    )?;
     assert_eq!(
         verifier.check_current(&verified, &balance, bounds, now),
         Err(Error::Replay)
@@ -109,6 +171,26 @@ pub fn check<V: AccountProofVerifier>(
     ));
     assert_eq!(
         verifier.check_current(&verified, &replacement, bounds, expected.expires_at - 1),
+        Err(Error::ClockRollback)
+    );
+    // Stored record authority survives a spent/expired entry challenge without
+    // becoming fresh entry authority. No old context or signature is retained.
+    verifier.check_cached_current(&refreshed, &replacement, bounds, expected.expires_at)?;
+    let later = verifier.verify_cached_record(
+        &replacement,
+        bounds,
+        &owner,
+        &presentation.record,
+        &presentation.proof,
+        || expected.expires_at,
+    )?;
+    assert_eq!(later.valid_until(), 200);
+    assert_eq!(
+        verifier.check_cached_current(&later, &replacement, bounds, 200),
+        Err(Error::Expired)
+    );
+    assert_eq!(
+        verifier.check_cached_current(&later, &replacement, bounds, 199),
         Err(Error::ClockRollback)
     );
     Ok(json!(true))
