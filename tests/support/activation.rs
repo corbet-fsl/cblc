@@ -3,6 +3,8 @@ use super::*;
 use cssr::Storage as _;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+#[path = "admission_keys.rs"]
+mod admission_keys;
 #[path = "activation_races.rs"]
 mod races;
 
@@ -57,6 +59,7 @@ pub fn exercise(
     init: &Value,
 ) {
     races::exercise(fixture, settings, extension, scope, directory, init);
+    admission_keys::exercise(fixture, settings, extension, scope, directory, init);
     let temporary = tempfile::tempdir().unwrap();
     let refused_path = temporary.path().join("refused.db");
     let unconfigured = common::host_storage::open(

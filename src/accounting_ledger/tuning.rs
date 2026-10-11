@@ -17,7 +17,7 @@ pub(super) struct StoredConfig {
     format: String,
     community_id: String,
     admission_policy_digest: String,
-    policy_keys: Vec<u8>,
+    pub(super) policy_keys: Vec<u8>,
     pub policy: AccountLedgerPolicy,
     proof_scope: AccountProofScope,
     operator_key: [u8; 32],
@@ -55,7 +55,24 @@ pub(super) fn check_config(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn check_epoch_config(frozen: &[u8], current: &[u8]) -> Result<(), Error> {
+    check_config_successor(None, frozen, current)
+}
+
+pub(super) fn check_epoch_config_in(
+    transaction: &mut Transaction<'_>,
+    frozen: &[u8],
+    current: &[u8],
+) -> Result<(), Error> {
+    check_config_successor(Some(transaction), frozen, current)
+}
+
+fn check_config_successor(
+    transaction: Option<&mut Transaction<'_>>,
+    frozen: &[u8],
+    current: &[u8],
+) -> Result<(), Error> {
     let mut prior: StoredConfig = serde_json::from_slice(frozen).map_err(|_| Error::Storage)?;
     let active: StoredConfig = serde_json::from_slice(current).map_err(|_| Error::Storage)?;
     prior.policy.validate()?;
@@ -66,6 +83,14 @@ pub(super) fn check_epoch_config(frozen: &[u8], current: &[u8]) -> Result<(), Er
     if active.tuning_revision > prior.tuning_revision {
         prior.tuning_revision = active.tuning_revision;
         prior.policy.account.abandon_after = active.policy.account.abandon_after;
+    }
+    if prior.policy_keys != active.policy_keys {
+        let transaction = transaction.ok_or(Error::PolicyMismatch)?;
+        let previous = csgn::KeyRing::from_cbor(&prior.policy_keys).map_err(|_| Error::Storage)?;
+        let active_keys =
+            csgn::KeyRing::from_cbor(&active.policy_keys).map_err(|_| Error::Storage)?;
+        admission_keys::check_successor(transaction, &previous, &active_keys)?;
+        prior.policy_keys = active.policy_keys.clone();
     }
     if serde_json::to_vec(&prior).map_err(|_| Error::Storage)? != current {
         return Err(Error::PolicyMismatch);
@@ -148,13 +173,27 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         self.waiting_period()
     }
 
-    /// Refresh the snapshot after a trusted waiting-period update. All other
-    /// policy, proof, authority and database configuration must remain identical.
+    /// Refresh after original waiting tuning or a durably verified CSGN signer
+    /// successor. Every other policy, proof and database setting stays exact.
     pub fn reload_policy(&mut self) -> Result<WaitingPeriodTuning, Error> {
         let mut transaction = self.connection.transaction()?;
         let config: Vec<u8> = transaction.get(b"config")?.ok_or(Error::Storage)?;
-        transaction.rollback()?;
         let stored: StoredConfig = serde_json::from_slice(&config).map_err(|_| Error::Storage)?;
+        let mut trust = self.trust.clone();
+        if stored.policy_keys != trust.policy_keys.to_cbor() {
+            trust.policy_keys =
+                csgn::KeyRing::from_cbor(&stored.policy_keys).map_err(|_| Error::Storage)?;
+            admission_keys::check_successor(
+                &mut transaction,
+                &self.trust.policy_keys,
+                &trust.policy_keys,
+            )?;
+        }
+        let bootstrap = admission_keys::open(&mut transaction, &trust.policy_keys, false, None)?;
+        if bootstrap != self.admission_bootstrap {
+            return Err(Error::PolicyMismatch);
+        }
+        transaction.rollback()?;
         let mut policy = self.policy.clone();
         policy.account.abandon_after = stored.policy.account.abandon_after;
         policy.account.validate()?;
@@ -162,7 +201,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             || stored.tuning_revision > MAX_INTEGER
             || config
                 != config_bytes(
-                    &self.trust,
+                    &trust,
                     &policy,
                     &self.proof_scope,
                     self.operator.verifying_key().to_bytes(),
@@ -172,6 +211,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             return Err(Error::PolicyMismatch);
         }
         self.policy_digest = policy.account.digest(&self.community)?;
+        self.trust = trust;
         self.policy = policy;
         self.tuning_revision = stored.tuning_revision;
         self.config = config;

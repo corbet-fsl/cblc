@@ -223,7 +223,7 @@ fn live_commit_deadline_refuses_expiry_and_clock_rollback_before_memory_swap() {
 }
 
 #[test]
-fn late_successful_commit_is_expired_fresh_authority_and_keeps_committed_state() {
+fn late_successful_commit_reports_reconciliation_and_keeps_committed_state() {
     let mut store = MemoryStore::default();
     let calls = std::cell::Cell::new(0);
     let clock = || {
@@ -235,7 +235,7 @@ fn late_successful_commit_is_expired_fresh_authority_and_keeps_committed_state()
     tx.put(b"request", &7u64).unwrap();
     assert_eq!(
         tx.commit_before(&CommitDeadline::new(&clock, 10, 20)),
-        Err(Error::Expired)
+        Err(Error::Storage)
     );
     let mut tx = store.transaction().unwrap();
     assert_eq!(tx.get::<u64>(b"request").unwrap(), Some(7));
@@ -255,7 +255,7 @@ fn return_clock_cannot_move_behind_the_atomic_decision_observation() {
     tx.put(b"request", &8u64).unwrap();
     assert_eq!(
         tx.commit_before(&CommitDeadline::new(&clock, 10, 20)),
-        Err(Error::ClockRollback)
+        Err(Error::Storage)
     );
     let mut tx = store.transaction().unwrap();
     assert_eq!(tx.get::<u64>(b"request").unwrap(), Some(8));

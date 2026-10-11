@@ -78,7 +78,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 if previous.is_none() {
                     return Err(Error::Storage);
                 }
-                anchor.check(&self.config, &activation, &artifact_binding)?;
+                anchor.check_in(&mut tx, &self.config, &activation, &artifact_binding)?;
                 anchor.clone()
             }
             None => {

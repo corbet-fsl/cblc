@@ -170,7 +170,7 @@ impl<'a> Transaction<'a> {
     /// identity, never manufacture a second accounting operation.
     pub fn commit_before(self, deadline: &CommitDeadline<'_>) -> Result<(), Error> {
         self.0.commit_before(deadline)?;
-        deadline.check()?;
+        deadline.check().map_err(|_| Error::Storage)?;
         Ok(())
     }
     pub fn rollback(self) -> Result<(), Error> {

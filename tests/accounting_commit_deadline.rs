@@ -236,16 +236,16 @@ fn blocking_staged_put_cannot_commit_after_expiry_or_clock_rollback() {
 
 #[test]
 fn late_commit_return_refuses_fresh_authority_but_preserves_exact_recovery() {
-    run(&[(StopAt::Committed, 180)], Error::Expired);
-    run(&[(StopAt::Committed, 181)], Error::Expired);
-    run(&[(StopAt::Committed, 109)], Error::ClockRollback);
+    run(&[(StopAt::Committed, 180)], Error::Storage);
+    run(&[(StopAt::Committed, 181)], Error::Storage);
+    run(&[(StopAt::Committed, 109)], Error::Storage);
 }
 
 #[test]
 fn return_time_cannot_move_behind_a_later_valid_atomic_decision() {
     run(
         &[(StopAt::StagedFrontier, 150), (StopAt::Committed, 140)],
-        Error::ClockRollback,
+        Error::Storage,
     );
 }
 
@@ -283,7 +283,7 @@ fn late_tuning_commit_requires_authenticated_reload_before_a_new_revision() {
     });
     let result = ledger.update_waiting_period(0, 1500, || clock.load(Ordering::SeqCst));
     controller.join().unwrap();
-    assert_eq!(result, Err(Error::Expired));
+    assert_eq!(result, Err(Error::Storage));
     assert_eq!(ledger.waiting_period().unwrap(), initial);
     // A late response does not authorize a blind retry against the stale local
     // revision. The already committed change must first be read and validated.

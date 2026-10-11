@@ -1,5 +1,8 @@
 //! One fixed activation commitment, not member state or a proof verdict.
-use super::tuning::{StoredConfig, check_epoch_config};
+#[cfg(test)]
+use super::tuning::check_epoch_config;
+use super::tuning::{StoredConfig, check_epoch_config_in};
+use crate::storage::Transaction;
 use crate::{
     Error, accounting::statement_bytes, artifacts::ArtifactBinding, extensions::ExtensionActivation,
 };
@@ -33,15 +36,35 @@ impl ActivationAnchor {
         })
     }
 
+    #[cfg(test)]
     pub(super) fn check(
         &self,
         current_config: &[u8],
         activation: &ExtensionActivation,
         binding: &ArtifactBinding,
     ) -> Result<(), Error> {
-        // This comparison permits only the original durable waiting-period
-        // successor. It does not admit an arbitrary new trust ring or policy.
         check_epoch_config(&self.original_config, current_config)?;
+        self.check_binding(activation, binding)
+    }
+
+    pub(super) fn check_in(
+        &self,
+        transaction: &mut Transaction<'_>,
+        current_config: &[u8],
+        activation: &ExtensionActivation,
+        binding: &ArtifactBinding,
+    ) -> Result<(), Error> {
+        // Only the original waiting change or a durably authenticated CSGN
+        // successor can relate this historical config to the current owner.
+        check_epoch_config_in(transaction, &self.original_config, current_config)?;
+        self.check_binding(activation, binding)
+    }
+
+    fn check_binding(
+        &self,
+        activation: &ExtensionActivation,
+        binding: &ArtifactBinding,
+    ) -> Result<(), Error> {
         let original: StoredConfig =
             serde_json::from_slice(&self.original_config).map_err(|_| Error::Storage)?;
         if activation.account.policy != original.policy.account

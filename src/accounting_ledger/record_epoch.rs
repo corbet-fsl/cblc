@@ -72,7 +72,7 @@ pub(super) fn public_descriptor(
     {
         return Err(Error::Storage);
     }
-    tuning::check_epoch_config(&anchor.configuration, configuration)?;
+    tuning::check_epoch_config_in(tx, &anchor.configuration, configuration)?;
     if anchor.extension_configuration != extension_configuration
         || anchor.descriptor.policy_epoch != policy_epoch
         || &anchor.descriptor.proof_scope != proof_scope
@@ -207,7 +207,7 @@ pub(super) fn certify(
     if accepted.accepted_at >= descriptor.expires_at {
         return Ok(None);
     }
-    tuning::check_epoch_config(&published.configuration, configuration)?;
+    tuning::check_epoch_config_in(tx, &published.configuration, configuration)?;
     if descriptor.community != accepted.statement.community
         || published.extension_configuration != extensions.config
         || descriptor.proof_scope != accepted.proof_scope
@@ -527,8 +527,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             if prior.descriptor.epoch == published.descriptor.epoch {
                 prior.descriptor.validate(&self.community, period_seconds)?;
                 let anchor: PublishedAnchor = tx.get(ANCHOR)?.ok_or(Error::Storage)?;
-                tuning::check_epoch_config(&anchor.configuration, &self.config)?;
-                tuning::check_epoch_config(&frozen.0.configuration, &self.config)?;
+                tuning::check_epoch_config_in(&mut tx, &anchor.configuration, &self.config)?;
+                tuning::check_epoch_config_in(&mut tx, &frozen.0.configuration, &self.config)?;
                 if prior.descriptor.policy_epoch != policy_epoch
                     || prior.descriptor.proof_scope != frozen.0.proof_scope
                     || anchor.descriptor != prior.descriptor
@@ -722,7 +722,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 return Err(Error::ClockRollback);
             }
             if prior.epoch == epoch {
-                tuning::check_epoch_config(&prior.configuration, &self.config)?;
+                tuning::check_epoch_config_in(&mut tx, &prior.configuration, &self.config)?;
                 if prior.community != self.community
                     || prior.policy_epoch != policy_epoch
                     || prior.period_seconds != period_seconds

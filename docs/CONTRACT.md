@@ -234,3 +234,33 @@ including unknown tagged-enum fields. This addresses the Utoipa 6 tagged-enum
 derive's missing propagation of container `deny_unknown_fields`.
 See [Schemars settings](https://docs.rs/schemars/latest/schemars/generate/struct.SchemaSettings.html)
 and [Serde compatibility](https://docs.rs/schemars/latest/schemars/).
+
+Admission signer succession uses `with_store_and_admission_keys` with the actual
+trusted Policy ring and its public transition revision. On a new database it
+atomically installs an immutable bootstrap marker and a bounded continuity row
+with the original config. A rotation-capable reopen requires those same rows;
+missing legacy metadata is refused rather than initialized or assigned a zero
+revision. An explicit legacy initialization would need its own reviewed owner
+operation. The original partial constructor claims no rotation support; when
+continuity metadata exists it validates and retains that original bootstrap.
+
+`advance_admission_keys` verifies only the original CSGN COSE transition from the
+exact installed predecessor, requiring the next permanent revision. One existing
+transaction checks current config and clock, atomically installs the next ring,
+proof, verification observation and floor, and checks the authenticated exclusive
+proof deadline at the actual commit decision. Late or uncertain success requires
+reload/reconcile on that same owner. An exact already-applied proof retry reports
+installed state only; it creates no new live authority. No member wire request,
+signing seed, economic-policy reset or additional signature primitive is added.
+
+The history permits at most 256 transitions and 1 MiB of canonical encoded row
+bytes. Capacity refuses before mutations; history is never truncated. Historical
+config comparisons replay genuine signatures only at their stored original
+verification observations, bounded by the durable commit clock, starting at the
+immutable bootstrap. This authenticates succession for unchanged activation and
+frozen-epoch configs, not live credentials or an expired proof. The only allowed
+economic successor remains original waiting-period tuning; all artifact, scope,
+operator, admission-digest and other policy fields remain exact. Authenticated
+chain capacity exhaustion is an explicit operational limit, with no invented
+compression or replacement trust checkpoint. Real-signature RAM and native SQL
+activation/tune/rotation/reopen/refusal tests are authored; execution is pending.

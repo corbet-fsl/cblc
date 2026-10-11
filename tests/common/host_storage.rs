@@ -62,3 +62,22 @@ pub fn open<V: AccountProofVerifier>(
         HostStore(cssr::LibsqlStore::local(path, &trust.community_id).map_err(|_| Error::Storage)?);
     AccountLedger::with_store(store, trust, policy, verifier, operator)
 }
+
+pub fn open_with_admission_keys<V: AccountProofVerifier>(
+    path: impl AsRef<Path>,
+    trust: AdmissionTrust,
+    policy: AccountLedgerPolicy,
+    verifier: V,
+    operator: SigningKey,
+    keys: cblc::accounting_ledger::AdmissionKeyState,
+) -> Result<AccountLedger<V>, Error> {
+    let store = cssr::LibsqlStore::local(path, &trust.community_id).map_err(|_| Error::Storage)?;
+    AccountLedger::with_store_and_admission_keys(
+        HostStore(store),
+        trust,
+        policy,
+        verifier,
+        operator,
+        keys,
+    )
+}

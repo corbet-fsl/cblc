@@ -33,6 +33,8 @@ use std::sync::{
 #[path = "../tests/internal/ledger_clock.rs"]
 mod clock_tests;
 
+mod admission_keys;
+pub use admission_keys::AdmissionKeyState;
 mod extension_activation;
 mod extensions;
 mod obligations;
@@ -80,6 +82,7 @@ impl AccountLedgerPolicy {
 pub struct AccountLedger<V: AccountProofVerifier> {
     connection: Box<dyn AccountStorage>,
     trust: AdmissionTrust,
+    admission_bootstrap: Option<AdmissionKeyState>,
     community: [u8; 32],
     policy: AccountLedgerPolicy,
     policy_digest: [u8; 32],
@@ -227,9 +230,35 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     pub fn with_store(
         store: impl AccountStorage + 'static,
         trust: AdmissionTrust,
+        policy: AccountLedgerPolicy,
+        verifier: V,
+        operator: SigningKey,
+    ) -> Result<Self, Error> {
+        Self::with_store_inner(store, trust, policy, verifier, operator, None)
+    }
+
+    /// Rotation-capable native opening. For a genuinely new ledger, bootstrap
+    /// from the actual trusted Policy's ring and public transition revision in
+    /// the same initial transaction. Existing ledgers require their original
+    /// marker and history, and exact current authority; no legacy reset occurs.
+    pub fn with_store_and_admission_keys(
+        store: impl AccountStorage + 'static,
+        trust: AdmissionTrust,
+        policy: AccountLedgerPolicy,
+        verifier: V,
+        operator: SigningKey,
+        keys: AdmissionKeyState,
+    ) -> Result<Self, Error> {
+        Self::with_store_inner(store, trust, policy, verifier, operator, Some(keys))
+    }
+
+    fn with_store_inner(
+        store: impl AccountStorage + 'static,
+        trust: AdmissionTrust,
         mut policy: AccountLedgerPolicy,
         verifier: V,
         operator: SigningKey,
+        keys: Option<AdmissionKeyState>,
     ) -> Result<Self, Error> {
         let mut connection: Box<dyn AccountStorage> = Box::new(store);
         if !crate::admission::scope(&trust.community_id) {
@@ -253,6 +282,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         )?;
         let mut transaction = connection.transaction()?;
         let prior: Option<Vec<u8>> = transaction.get(b"config")?;
+        let new = prior.is_none();
         if let Some(prior) = prior {
             let stored: StoredConfig =
                 serde_json::from_slice(&prior).map_err(|_| Error::PolicyMismatch)?;
@@ -279,10 +309,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             transaction.put(b"config", &config)?;
             transaction.put(b"clock", &0u64)?;
         }
+        let admission_bootstrap =
+            admission_keys::open(&mut transaction, &trust.policy_keys, new, keys.as_ref())?;
         transaction.commit()?;
         Ok(Self {
             connection,
             trust,
+            admission_bootstrap,
             community,
             policy,
             policy_digest,
