@@ -1,5 +1,10 @@
 //! Durable original CSGN continuity, separate from economic policy or artifacts.
 use super::*;
+mod reconcile;
+mod startup;
+pub use reconcile::AdmissionKeyReconciliation;
+pub(super) use startup::check_empty;
+pub use startup::startup_clock_floor;
 
 const BOOTSTRAP: &[u8] = b"admission-key-bootstrap:v1";
 const HISTORY: &[u8] = b"admission-key-history:v1";
@@ -142,6 +147,7 @@ pub(super) fn open(
             }
         }
         (None, None) if expected.is_none() => {}
+        (Some(_), Some(_)) if new => return Err(Error::Storage),
         (Some(bootstrap), Some(history)) => {
             let states = chain(&bootstrap, &history, clock_floor(tx)?)?;
             let current = states.last().ok_or(Error::Storage)?;
@@ -170,6 +176,35 @@ pub(super) fn check_successor(
         return Err(Error::PolicyMismatch);
     }
     Ok(())
+}
+
+fn checked_transition(
+    current: &AdmissionKeyState,
+    proof: &[u8],
+    now: u64,
+) -> Result<(AdmissionKeyState, u64), Error> {
+    let verified =
+        csgn::verify_transition(&current.policy_keys, proof, now).map_err(|_| Error::Admission)?;
+    if verified.previous() != &current.policy_keys
+        || Some(verified.revision()) != current.revision.checked_add(1)
+        || verified.revision() > MAX_INTEGER
+        || verified.next() == verified.previous()
+    {
+        return Err(Error::PolicyMismatch);
+    }
+    // Only the same maintained authenticated COSE owner supplies this expiry.
+    let deadline = current
+        .policy_keys
+        .verify(proof, csgn::Kind::KeyRingTransition, now)
+        .map_err(|_| Error::Admission)?
+        .valid_until();
+    Ok((
+        AdmissionKeyState {
+            revision: verified.revision(),
+            policy_keys: verified.next().clone(),
+        },
+        deadline,
+    ))
 }
 
 impl<V: AccountProofVerifier> AccountLedger<V> {
@@ -231,26 +266,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         if history.transitions.len() == MAX_TRANSITIONS {
             return Err(Error::Capacity);
         }
-        let verified = csgn::verify_transition(&current.policy_keys, proof, now)
-            .map_err(|_| Error::Admission)?;
-        if verified.previous() != &current.policy_keys
-            || Some(verified.revision()) != current.revision.checked_add(1)
-            || verified.revision() > MAX_INTEGER
-            || verified.next() == verified.previous()
-        {
-            return Err(Error::PolicyMismatch);
-        }
-        // Obtain the authenticated exclusive deadline through that same
-        // maintained COSE owner; never parse unsigned envelope metadata.
-        let deadline = current
-            .policy_keys
-            .verify(proof, csgn::Kind::KeyRingTransition, now)
-            .map_err(|_| Error::Admission)?
-            .valid_until();
-        let next = AdmissionKeyState {
-            revision: verified.revision(),
-            policy_keys: verified.next().clone(),
-        };
+        let (next, deadline) = checked_transition(current, proof, now)?;
         history.revision = next.revision;
         history.transitions.push(AcceptedTransition {
             revision: next.revision,

@@ -24,6 +24,15 @@ pub(super) struct StoredConfig {
     pub tuning_revision: u64,
 }
 
+impl StoredConfig {
+    pub(super) fn validate_clock_provenance(&self) -> Result<(), Error> {
+        if self.format != "cblc.account.database.v5" || self.tuning_revision > MAX_INTEGER {
+            return Err(Error::Storage);
+        }
+        self.policy.validate()
+    }
+}
+
 pub(super) fn config_bytes(
     trust: &AdmissionTrust,
     policy: &AccountLedgerPolicy,

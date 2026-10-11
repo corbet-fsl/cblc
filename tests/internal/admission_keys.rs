@@ -150,3 +150,71 @@ fn capacity_refuses_instead_of_dropping_any_original_transition() {
     history.transitions[0].proof = vec![0; MAX_HISTORY_BYTES];
     assert_eq!(bounded(&history), Err(Error::Capacity));
 }
+
+#[test]
+fn original_startup_probe_refuses_nonempty_missing_or_malformed_config() {
+    let mut store = MemoryStore::default();
+    assert_eq!(startup_clock_floor(&mut store).unwrap(), 0);
+    let mut tx = store.transaction().unwrap();
+    tx.put(b"orphaned-original-owner-row", &1u64).unwrap();
+    tx.commit().unwrap();
+    assert!(matches!(
+        startup_clock_floor(&mut store),
+        Err(Error::Storage)
+    ));
+    let mut tx = store.transaction().unwrap();
+    tx.put(b"config", &b"invalid config".to_vec()).unwrap();
+    tx.commit().unwrap();
+    assert!(matches!(
+        startup_clock_floor(&mut store),
+        Err(Error::Storage)
+    ));
+    let mut tx = store.transaction().unwrap();
+    assert_eq!(
+        tx.get::<u64>(b"orphaned-original-owner-row").unwrap(),
+        Some(1)
+    );
+    tx.rollback().unwrap();
+}
+
+#[test]
+fn reconciliation_transport_cannot_reorder_skip_duplicate_or_exceed_bounds() {
+    let (bootstrap, history, current) = fixture();
+    let proof = history.transitions[0].proof.clone();
+    let target = AdmissionKeyState {
+        revision: 3,
+        policy_keys: current,
+    };
+    for transitions in [
+        vec![(3, proof.clone()), (2, proof.clone())],
+        vec![(1, proof.clone()), (3, proof.clone())],
+        vec![(3, proof.clone()), (3, proof.clone())],
+        vec![(4, proof.clone())],
+        vec![(3, Vec::new())],
+    ] {
+        assert!(
+            AdmissionKeyReconciliation {
+                target: target.clone(),
+                transitions
+            }
+            .check_shape()
+            .is_err()
+        );
+    }
+    assert_eq!(
+        AdmissionKeyReconciliation {
+            target: target.clone(),
+            transitions: vec![(3, vec![0; MAX_HISTORY_BYTES])]
+        }
+        .check_shape(),
+        Err(Error::Capacity)
+    );
+    assert_eq!(
+        AdmissionKeyReconciliation {
+            target,
+            transitions: vec![(bootstrap.revision, proof); MAX_TRANSITIONS + 1]
+        }
+        .check_shape(),
+        Err(Error::Capacity)
+    );
+}

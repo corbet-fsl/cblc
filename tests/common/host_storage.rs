@@ -81,3 +81,30 @@ pub fn open_with_admission_keys<V: AccountProofVerifier>(
         keys,
     )
 }
+
+/// Same original SQL adapter and owner-data probe before the host observer exists.
+pub fn startup_clock_floor(path: &Path, community: &str) -> Result<u64, Error> {
+    let store = cssr::LibsqlStore::local(path, community).map_err(|_| Error::Storage)?;
+    cblc::accounting_ledger::startup_clock_floor(&mut HostStore(store))
+}
+
+pub fn open_reconciled<V: AccountProofVerifier>(
+    path: &Path,
+    trust: AdmissionTrust,
+    policy: AccountLedgerPolicy,
+    verifier: V,
+    operator: SigningKey,
+    request: cblc::accounting_ledger::AdmissionKeyReconciliation,
+    clock: impl Fn() -> u64,
+) -> Result<AccountLedger<V>, Error> {
+    let store = cssr::LibsqlStore::local(path, &trust.community_id).map_err(|_| Error::Storage)?;
+    AccountLedger::with_store_reconciled_admission_keys(
+        HostStore(store),
+        trust,
+        policy,
+        verifier,
+        operator,
+        request,
+        clock,
+    )
+}

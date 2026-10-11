@@ -129,3 +129,34 @@ dependencies. The maintained native verifier uses the current compatible Rust
 SDK range, resolved here to5.2.1. Each CI consumer uses the committed fixture
 lock unchanged, recording its source and digest rather than refreshing different
 SDKs behind unchanged artifact metadata.
+
+
+## Admission signer catchup at startup
+
+`startup_clock_floor` observes the original account owner's validated durable
+clock before its host observer is constructed. Zero is returned after the
+bounded `[empty, 0xff)` range proves every original owner-key namespace empty
+(all original keys are within this range); this is not an arbitrary byte-key
+universe scanner. An initialized original owner may still retain its original zero
+floor before any live operation. Missing, malformed or nonempty orphaned state
+refuses. This data observation grants no proof or admission authority. The same
+host observer must then supply construction, native operations and facade cuts.
+
+`with_store_reconciled_admission_keys` quarantines an existing ledger until its
+installed ring reaches the independently held Policy ring and revision. Supply
+Policy's original retained transition tuples, not a grant-derived key or payload.
+Every unseen transition must verify live from the exact durable predecessor; an
+expired tail refuses the entire catchup. Only exact already-observed proofs may
+be replayed at their original accepted time. The one atomic commit retains the
+existing activation anchor and current tuned policy. An explicit new bootstrap
+is separate; missing existing metadata never resets a ledger. Config deletion
+with other owner rows present refuses. No partially advanced handle escapes.
+
+Incoming tuples and retained history are bounded to 256 entries and one MiB;
+exhaustion refuses before mutation and requires an explicitly reviewed operational
+solution, never truncation. Late committed outcomes return `Storage` and require
+reconciliation. Running host-only callers may use `reconcile_admission_keys` on
+the same owner; the actual Policy guard must survive cancellation and final
+snapshot checks. Native SQL tests use the existing genuine activation proof and
+real original signer transitions. Their execution and the full durable Policy
+rotation-to-native restart journey remain separate qualification obligations.

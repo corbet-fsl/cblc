@@ -34,7 +34,7 @@ use std::sync::{
 mod clock_tests;
 
 mod admission_keys;
-pub use admission_keys::AdmissionKeyState;
+pub use admission_keys::{AdmissionKeyReconciliation, AdmissionKeyState, startup_clock_floor};
 mod extension_activation;
 mod extensions;
 mod obligations;
@@ -283,6 +283,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         let mut transaction = connection.transaction()?;
         let prior: Option<Vec<u8>> = transaction.get(b"config")?;
         let new = prior.is_none();
+        if new && keys.is_some() {
+            admission_keys::check_empty(&mut transaction)?;
+        }
         if let Some(prior) = prior {
             let stored: StoredConfig =
                 serde_json::from_slice(&prior).map_err(|_| Error::PolicyMismatch)?;
