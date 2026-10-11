@@ -34,12 +34,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         )?;
         transaction.rollback()?;
         let material = PublicVerifierMaterial {
-            purpose: Purpose::PublicVerifierV1,
+            purpose: Purpose::PublicVerifierV2,
             community: self.trust.community_id.clone(),
             revision,
             policy_epoch,
             policy: self.policy.clone(),
             policy_digest: self.policy_digest,
+            admission_policy_digest: decode::<32>(&self.trust.policy_digest)?,
             extension_policy: extensions.policy.clone(),
             proof_scope: extensions.verifier.scope(),
             manifest_sha256: binding.manifest_sha256,

@@ -11,8 +11,8 @@ use sha2::{Digest, Sha256};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum Purpose {
-    #[serde(rename = "cblc.public-verifier.v1")]
-    PublicVerifierV1,
+    #[serde(rename = "cblc.public-verifier.v2")]
+    PublicVerifierV2,
 }
 
 /// One canonical owner document. Signature and durable publication floors are
@@ -26,7 +26,11 @@ pub struct PublicVerifierMaterial {
     pub revision: u64,
     pub policy_epoch: u64,
     pub policy: AccountLedgerPolicy,
+    /// Current economic proof policy, including durably tuned waiting time.
     pub policy_digest: [u8; 32],
+    /// Immutable eligibility policy from the configured admission trust. This
+    /// is independent of economic tuning and has no legacy/default projection.
+    pub admission_policy_digest: [u8; 32],
     pub extension_policy: ExtensionPolicy,
     pub proof_scope: AccountProofScope,
     pub manifest_sha256: [u8; 32],

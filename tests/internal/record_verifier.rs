@@ -29,7 +29,7 @@ fn material() -> PublicVerifierMaterial {
     };
     let policy_digest = account.digest(&community_hash).unwrap();
     PublicVerifierMaterial {
-        purpose: crate::publication::Purpose::PublicVerifierV1,
+        purpose: crate::publication::Purpose::PublicVerifierV2,
         community: community.into(),
         revision: 1,
         policy_epoch: 1,
@@ -40,6 +40,7 @@ fn material() -> PublicVerifierMaterial {
             checkpoint_period_seconds: 100,
         },
         policy_digest,
+        admission_policy_digest: [3; 32],
         extension_policy: crate::extensions::ExtensionPolicy {
             revision: 1,
             public_record_quorum: 10,

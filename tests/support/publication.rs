@@ -9,6 +9,10 @@ use csgn::{Kind, SecretKey, Signer};
 pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> PublicVerifierMaterial {
     let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
     let material = ledger.public_verifier_material(1, 1, &issuer).unwrap();
+    // The actual fixture configures encoded(3) as admission trust before the
+    // ledger is constructed. Its economic proof policy is a separate digest.
+    assert_eq!(material.admission_policy_digest, [3; 32]);
+    assert_ne!(material.admission_policy_digest, material.policy_digest);
     #[cfg(feature = "schema")]
     {
         let schema =
@@ -17,6 +21,12 @@ pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> Publi
         let validator = jsonschema::validator_for(&schema).unwrap();
         let value = serde_json::to_value(&material).unwrap();
         assert!(validator.is_valid(&value));
+        let mut legacy = value.clone();
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove("admissionPolicyDigest");
+        assert!(!validator.is_valid(&legacy));
         let mut unknown = value.clone();
         unknown["member"] = "forbidden".into();
         assert!(!validator.is_valid(&unknown));
@@ -175,14 +185,22 @@ pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> Publi
         cache.install(signer.key_ring(), other_kind, 200),
         Err(Error::Signature)
     );
-    for variant in 0..5 {
+    for variant in 0..8 {
         let mut value = serde_json::to_value(&material).unwrap();
         match variant {
             0 => value["purpose"] = "cblc.record-certificate.v1".into(),
             1 => value["community"] = "other.example".into(),
             2 => value["revision"] = 0.into(),
             3 => value["policyEpoch"] = 0.into(),
-            _ => value["policyDigest"][0] = (value["policyDigest"][0].as_u64().unwrap() ^ 1).into(),
+            4 => value["policyDigest"][0] = (value["policyDigest"][0].as_u64().unwrap() ^ 1).into(),
+            5 => value["purpose"] = "cblc.public-verifier.v1".into(),
+            6 => {
+                value
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("admissionPolicyDigest");
+            }
+            _ => value["admissionPolicyDigest"] = serde_json::json!([3]),
         }
         let changed = signer
             .sign(
@@ -197,20 +215,26 @@ pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> Publi
             Err(Error::Incoherent)
         );
     }
-    let mut changed = material.clone();
-    changed.account_response_key[0] ^= 1;
-    let candidate = signer
-        .sign(
-            Kind::SettingsSnapshot,
-            &serde_json::to_vec(&changed).unwrap(),
-            100,
-            900,
-        )
-        .unwrap();
-    assert_eq!(
-        cache.install(signer.key_ring(), candidate, 200),
-        Err(Error::Equivocation)
-    );
+    for change_admission in [false, true] {
+        let mut changed = material.clone();
+        if change_admission {
+            changed.admission_policy_digest[0] ^= 1;
+        } else {
+            changed.account_response_key[0] ^= 1;
+        }
+        let candidate = signer
+            .sign(
+                Kind::SettingsSnapshot,
+                &serde_json::to_vec(&changed).unwrap(),
+                100,
+                900,
+            )
+            .unwrap();
+        assert_eq!(
+            cache.install(signer.key_ring(), candidate, 200),
+            Err(Error::Equivocation)
+        );
+    }
     let mut newer = material.clone();
     newer.revision = 2;
     newer.policy_epoch = 2;

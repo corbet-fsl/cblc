@@ -163,8 +163,12 @@ The existing Policy workflow supplies durable publication revision/epoch and
 signature lifetime. A stale ledger snapshot must be reloaded before projection.
 
 The canonical document implements Beacon's `document::Document`, requiring the
-protected `SettingsSnapshot` kind, strict `cblc.public-verifier.v1` purpose and
-community issuer. It contains only public owner policies/bounds, their digest,
+protected `SettingsSnapshot` kind, strict `cblc.public-verifier.v2` purpose and
+community issuer. The required `admissionPolicyDigest` projects the immutable
+configured admission trust; account grants bind that digest. The separate
+`policyDigest` remains the current economic proof policy and changes with waiting
+period tuning. Neither field supplies a default for the other; v1 material is
+unsupported. It contains only public owner policies/bounds, their digests,
 proof scope, manifest SHA256 and actual account/certificate public keys. Its
 manifest binding is authenticated from host-supplied RAM snapshots before
 activation and binds the active proof scope and certificate issuer at publication.
