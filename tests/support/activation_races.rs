@@ -1,7 +1,6 @@
 //! Actual SQL rollback/commit boundaries around genuine native activation.
 use super::*;
 use cblc::storage::{AccountStorage, AtomicTransaction, CommitDeadline, Transaction};
-use cssr::Storage as _;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
