@@ -98,7 +98,11 @@ export async function retainRecordStartup({initialize,scope,manifestSha256,sourc
   files['account-generation.txt']={sha256:digest(sourceBytes),bytes:sourceBytes.length};
   const metadataBytes=JSON.stringify({version:1,purpose:'cblc.native-startup-test.v1',
     sourceCommit,accountGenerationCommit:provenance[0],extensionManifestSha256:manifestSha256,
-    extensionScope:scope,accountManifestSha256:configuration.manifestSha256,files});
+    extensionScope:scope,accountManifestSha256:configuration.manifestSha256,
+    // Public fictional test-seed provenance, not a trust source. The original
+    // accounting admission/device fixture differs from the Gather G1 fixture.
+    fixtureSeeds:{accountAdmissionIssuer:1,accountDevice:2,accountResponseOperator:9,
+      epochCertificateIssuer:3,balancePublisher:31,gatherG1Issuer:31,gatherG1Device:13},files});
   await writeFile(resolve(retained,'startup-artifacts.json'),metadataBytes);
   console.log(`CBLC_STARTUP_ARTIFACT ${JSON.stringify({sourceCommit,
     accountGenerationCommit:provenance[0],metadataSha256:digest(metadataBytes)})}`);
