@@ -71,6 +71,7 @@ export async function selectedProducer() {
 export async function proveUpdateConformance(api, program, verificationKey, producer, transition, nativeSetup, target) {
   const secret = new Uint8Array(32).fill(20);
   let witness;
+  let stage = 'witness';
   try {
     const hashes = extensionHashes(api);
     const community = new Uint8Array(createHash('sha256').update(target?.community ?? 'alpha').digest());
@@ -94,24 +95,32 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
     const executed = await new Noir(program).execute(witnessInputs(program, candidate.input));
     witness = executed.witness;
     const backend = new UltraHonkBackend(program.bytecode, api);
+    stage = 'proof-generation';
     const proof = await backend.generateProof(witness, OPTIONS);
+    stage = 'public-input-shape';
     assert(proof.proof.length > 0 && proof.proof.length <= 1024 * 1024);
     assert.equal(proof.publicInputs.length, expected.length);
     assert(proof.publicInputs.every((n, i) => BigInt(n) === BigInt(expected[i])));
     const verifier = new UltraHonkVerifierBackend(api);
+    stage = 'native-js-positive';
     assert(await verifier.verifyProof({...proof, verificationKey}, OPTIONS));
     const refuses = async changed => {
       assert.equal(await verifier.verifyProof(changed, OPTIONS), false);
     };
     const corrupt = new Uint8Array(proof.proof); corrupt[corrupt.length - 1] ^= 1;
+    stage = 'native-js-proof-negative';
     await refuses({...proof, proof: corrupt, verificationKey});
     const changed = [...proof.publicInputs]; changed[0] = '0x' + (BigInt(changed[0]) ^ 1n).toString(16).padStart(64, '0');
+    stage = 'native-js-public-negative';
     await refuses({...proof, publicInputs: changed, verificationKey});
     let nativeVerification;
     if (nativeSetup) {
+      stage = 'foreign-key-identity';
       const foreignKey = await originalForeignVerificationKey();
       assert.notEqual(sha(foreignKey), sha(verificationKey));
+      stage = 'native-js-foreign-key-negative';
       await refuses({...proof, verificationKey: foreignKey});
+      stage = 'original-raw-native-verification';
       nativeVerification = await verifyOriginalNative(proof, verificationKey, nativeSetup.setup, nativeSetup.circuitDigest);
       nativeVerification.proofMutation = 'native-js-verified-false';
       nativeVerification.publicInputMutation = 'native-js-verified-false';
@@ -127,7 +136,8 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
       ...(target ? {configuration: target} : {}),
       account: candidate.statement, proof: hex(proof.proof)};
   } catch {
-    throw new Error('Original native producer conformance refused');
+    // Only fixed public stage labels escape, never an upstream error or witness.
+    throw new Error(`Original native producer conformance refused: ${stage}`);
   } finally {
     secret.fill(0);
     witness?.fill(0);
