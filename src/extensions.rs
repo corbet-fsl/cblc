@@ -214,6 +214,8 @@ pub const EXTENSION_PROOF_BYTES: usize = 4 * 1024 * 1024;
 /// implements this sealed trait; a caller cannot substitute a signed verdict.
 pub trait ExtensionVerifier: sealed::Sealed + Send {
     fn scope(&self) -> AccountProofScope;
+    /// Withdraw execution from the same sealed native process owner.
+    fn cancellation(&self) -> crate::verification::NativeExtensionCancellation;
     /// Refuse epoch publication unless the authenticated native R2 key exists.
     fn require_record_epoch(&self) -> Result<(), Error>;
     fn verify(&self, statement: &ExtensionStatement, proof: &[u8]) -> Result<(), Error>;

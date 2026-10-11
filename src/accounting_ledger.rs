@@ -91,6 +91,20 @@ pub struct AccountLedger<V: AccountProofVerifier> {
     observed_time: Arc<AtomicU64>,
 }
 
+impl AccountLedger<crate::accounting_service::NativeAccountVerifier> {
+    pub(crate) fn native_cancellation(
+        &self,
+    ) -> crate::accounting_service::NativeAccountCancellation {
+        crate::accounting_service::NativeAccountCancellation {
+            account: self.verifier.cancellation(),
+            extensions: self
+                .extensions
+                .as_ref()
+                .map(|extensions| extensions.verifier.cancellation()),
+        }
+    }
+}
+
 // Every valid observation, including a late return or a refused operation,
 // remains a lower bound for this handle. The host coordinates clocks across
 // handles/restarts; the actual atomic commit time also lives in host storage.

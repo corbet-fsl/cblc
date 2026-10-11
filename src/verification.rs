@@ -111,6 +111,9 @@ impl NativeExtensionVerifier {
     }
 }
 impl ExtensionVerifier for NativeExtensionVerifier {
+    fn cancellation(&self) -> NativeExtensionCancellation {
+        NativeExtensionVerifier::cancellation(self)
+    }
     fn require_record_epoch(&self) -> Result<(), Error> {
         self.record_epochs
             .as_ref()

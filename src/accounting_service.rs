@@ -19,6 +19,32 @@ impl NativeAccountVerifier {
     pub fn new(options: NativeVerifierOptions, artifacts: AccountArtifacts) -> Result<Self, Error> {
         Ok(Self(cvfy::NativeVerifier::new(artifacts.config(options))?))
     }
+    /// Withdraw execution from this exact owned native verifier and its clones.
+    pub fn cancellation(&self) -> cvfy::NativeCancellation {
+        self.0.cancellation()
+    }
+}
+
+/// Actual native process owners, retained before the service moves to its worker.
+/// This only withdraws execution and cannot authorize or reset any operation.
+pub struct NativeAccountCancellation {
+    pub(crate) account: cvfy::NativeCancellation,
+    pub(crate) extensions: Option<crate::verification::NativeExtensionCancellation>,
+}
+impl NativeAccountCancellation {
+    pub fn cancel(&self) {
+        self.account.cancel();
+        if let Some(extensions) = &self.extensions {
+            extensions.cancel();
+        }
+    }
+}
+
+impl<C: Fn() -> u64> AccountService<NativeAccountVerifier, C> {
+    /// Cancel all native proof owners belonging to this same actual service.
+    pub fn cancellation(&self) -> NativeAccountCancellation {
+        self.ledger.native_cancellation()
+    }
 }
 impl AccountProofVerifier for NativeAccountVerifier {
     fn scope(&self) -> AccountProofScope {
