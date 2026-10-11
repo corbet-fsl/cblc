@@ -7,6 +7,11 @@ use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER as HEX};
 use ed25519_dalek::{Signer, SigningKey};
 use sha2::{Digest, Sha256};
 
+#[path = "enrollment/checkpoint.rs"]
+mod checkpoint;
+#[path = "enrollment/registry.rs"]
+mod registry;
+
 fn delegation(f: &Fixture) -> AccountingDelegation {
     let account = p256::ecdsa::SigningKey::from_bytes((&[3; 32]).into()).unwrap();
     let coordinate = account.verifying_key().to_encoded_point(false);

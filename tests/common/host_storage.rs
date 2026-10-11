@@ -108,3 +108,12 @@ pub fn open_reconciled<V: AccountProofVerifier>(
         clock,
     )
 }
+
+/// Original caller-owned SQL transaction adapter, shared with enrollment tests.
+pub fn open_enrollment(
+    path: impl AsRef<Path>,
+    config: cblc::enrollment::EnrollmentConfig,
+) -> Result<cblc::enrollment::EnrollmentStore, Error> {
+    let store = cssr::LibsqlStore::local(path, &config.community_id).map_err(|_| Error::Storage)?;
+    cblc::enrollment::EnrollmentStore::new(HostStore(store), config)
+}
