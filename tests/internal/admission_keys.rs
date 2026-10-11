@@ -178,6 +178,26 @@ fn original_startup_probe_refuses_nonempty_missing_or_malformed_config() {
 }
 
 #[test]
+fn original_binary_owner_row_prevents_empty_store_clock_bootstrap() {
+    let mut store = MemoryStore::default();
+    let frontier_key = key(1, &[&[7; 32]]);
+    let mut tx = store.transaction().unwrap();
+    // An orphan in the original lowest binary owner namespace remains refusal,
+    // even when the textual config and clock metadata are both missing.
+    tx.put(&frontier_key, &1u64).unwrap();
+    tx.commit().unwrap();
+    assert!(matches!(
+        startup_clock_floor(&mut store),
+        Err(Error::Storage)
+    ));
+    let mut tx = store.transaction().unwrap();
+    assert_eq!(tx.get::<u64>(&frontier_key).unwrap(), Some(1));
+    assert!(tx.get::<Vec<u8>>(b"config").unwrap().is_none());
+    assert!(tx.get::<u64>(b"clock").unwrap().is_none());
+    tx.rollback().unwrap();
+}
+
+#[test]
 fn reconciliation_transport_cannot_reorder_skip_duplicate_or_exceed_bounds() {
     let (bootstrap, history, current) = fixture();
     let proof = history.transitions[0].proof.clone();

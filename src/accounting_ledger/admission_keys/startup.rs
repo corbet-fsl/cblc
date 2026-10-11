@@ -3,7 +3,7 @@ use super::*;
 
 pub(in crate::accounting_ledger) fn check_empty(tx: &mut Transaction<'_>) -> Result<(), Error> {
     if !tx
-        .current_range::<serde_json::Value>(b"", &[0xff], 1)?
+        .current_range::<serde_json::Value>(&[0], &[0xff], 1)?
         .is_empty()
     {
         return Err(Error::Storage);

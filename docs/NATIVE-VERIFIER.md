@@ -135,7 +135,7 @@ SDKs behind unchanged artifact metadata.
 
 `startup_clock_floor` observes the original account owner's validated durable
 clock before its host observer is constructed. Zero is returned after the
-bounded `[empty, 0xff)` range proves every original owner-key namespace empty
+bounded `[0x00, 0xff)` range proves every original owner-key namespace empty
 (all original keys are within this range); this is not an arbitrary byte-key
 universe scanner. An initialized original owner may still retain its original zero
 floor before any live operation. Missing, malformed or nonempty orphaned state
