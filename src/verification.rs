@@ -60,8 +60,30 @@ pub struct NativeExtensionVerifier {
     update_timeout: Duration,
     anonymous_timeout: Duration,
 }
+/// Host-owned one-way cancellation for every process in this verifier. Cancelling
+/// cannot manufacture a verdict, reset resource limits or replace native keys.
+pub struct NativeExtensionCancellation(Vec<cvfy::NativeCancellation>);
+impl NativeExtensionCancellation {
+    pub fn cancel(&self) {
+        for cancellation in &self.0 {
+            cancellation.cancel();
+        }
+    }
+}
 impl crate::extensions::sealed::Sealed for NativeExtensionVerifier {}
 impl NativeExtensionVerifier {
+    /// Retain outside the serial application actor for bounded process teardown.
+    pub fn cancellation(&self) -> NativeExtensionCancellation {
+        let mut owners = vec![
+            self.updates.cancellation(),
+            self.deposits.cancellation(),
+            self.records.cancellation(),
+        ];
+        if let Some(record) = &self.record_epochs {
+            owners.push(record.cancellation());
+        }
+        NativeExtensionCancellation(owners)
+    }
     pub fn new(
         updates: crate::artifacts::NativeVerifierOptions,
         anonymous: crate::artifacts::NativeVerifierOptions,
