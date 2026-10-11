@@ -105,11 +105,7 @@ fn authenticated_apply_refuses_oversized_cross_scope_and_future_envelopes() {
         if variant != 1 {
             sign(&mut request, &f.device);
         }
-        grant.signature = B64.encode(
-            &f.issuer
-                .sign(&cblc::admission::admission_bytes(&grant).unwrap())
-                .to_bytes(),
-        );
+        f.resign_grant(&mut grant);
         authority.signature = B64.encode(
             &SigningKey::from_bytes(&[7; 32])
                 .sign(&cblc::admission::device_authorization_bytes(&authority).unwrap())

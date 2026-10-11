@@ -20,11 +20,11 @@ missing_docs = "warn"
 [features]
 default = []
 schema = ["dep:utoipa", "dep:schemars", "czkp/schema"]
-publication = ["dep:cbcn", "dep:csgn"]
+publication = ["dep:cbcn"]
 
 [dependencies]
 cbcn = { git = "https://git.corbet.ch/corbet-foss/cbcn", branch = "main", optional = true }
-csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false, optional = true }
+csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false }
 utoipa = { version = "6", optional = true }
 schemars = { version = "1", optional = true }
 cthl = { git = "https://git.corbet.ch/corbet-foss/cthl", branch = "main" }

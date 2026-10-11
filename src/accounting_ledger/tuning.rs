@@ -17,7 +17,7 @@ pub(super) struct StoredConfig {
     format: String,
     community_id: String,
     admission_policy_digest: String,
-    issuer_public_key: [u8; 32],
+    policy_keys: Vec<u8>,
     pub policy: AccountLedgerPolicy,
     proof_scope: AccountProofScope,
     operator_key: [u8; 32],
@@ -32,10 +32,10 @@ pub(super) fn config_bytes(
     tuning_revision: u64,
 ) -> Result<Vec<u8>, Error> {
     serde_json::to_vec(&StoredConfig {
-        format: "cblc.account.database.v3".into(),
+        format: "cblc.account.database.v5".into(),
         community_id: trust.community_id.clone(),
         admission_policy_digest: trust.policy_digest.clone(),
-        issuer_public_key: trust.issuer_public_key,
+        policy_keys: trust.policy_keys.to_cbor(),
         policy: policy.clone(),
         proof_scope: proof_scope.clone(),
         operator_key,

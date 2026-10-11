@@ -3,10 +3,10 @@ use super::*;
 
 fn config() -> StoredConfig {
     StoredConfig {
-        format: "cblc.account.database.v3".into(),
+        format: "cblc.account.database.v5".into(),
         community_id: "community.example".into(),
         admission_policy_digest: "opaque-policy-digest".into(),
-        issuer_public_key: [4; 32],
+        policy_keys: vec![1, 2, 3],
         proof_scope: AccountProofScope {
             circuit_digest: [1; 32],
             verifying_key_digest: [2; 32],
@@ -70,7 +70,7 @@ fn immutable_configuration_remains_bound_even_at_a_newer_revision() {
             0 => changed.format.push('x'),
             1 => changed.community_id.push('x'),
             2 => changed.admission_policy_digest.push('x'),
-            3 => changed.issuer_public_key[0] ^= 1,
+            3 => changed.policy_keys.push(4),
             4 => changed.operator_key[0] ^= 1,
             5 => changed.proof_scope.circuit_digest[0] ^= 1,
             6 => changed.proof_scope.verifying_key_digest[0] ^= 1,
@@ -82,4 +82,20 @@ fn immutable_configuration_remains_bound_even_at_a_newer_revision() {
         }
         assert!(check_epoch_config(&bytes, &serde_json::to_vec(&changed).unwrap()).is_err());
     }
+}
+
+#[test]
+fn legacy_detached_key_configuration_is_not_inferred_as_a_policy_ring() {
+    let current = serde_json::to_vec(&config()).unwrap();
+    let mut legacy = serde_json::to_value(config()).unwrap();
+    legacy["format"] = "cblc.account.database.v3".into();
+    let fields = legacy.as_object_mut().unwrap();
+    fields.remove("policyKeys");
+    fields.insert(
+        "issuerPublicKey".into(),
+        serde_json::to_value([4u8; 32]).unwrap(),
+    );
+    let legacy = serde_json::to_vec(&legacy).unwrap();
+    assert_eq!(check_epoch_config(&legacy, &current), Err(Error::Storage));
+    assert_eq!(check_epoch_config(&current, &legacy), Err(Error::Storage));
 }

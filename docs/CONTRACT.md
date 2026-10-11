@@ -111,11 +111,25 @@ Only pending obligation payload rows and superseded signed acceptances are
 removed. The library does not delete physical pages, provider backups, or copies
 made by an operator. Marker retention is a permanent cost of replay prevention.
 
-Admission envelope v2 explicitly signs the canonical cpsd pseudonym bytes as
-lowercase hex and requires their SHA-256 digest to equal `memberId`. Legacy
-`cvld.admission.v1` grants are rejected. The issuer must still verify the cpsd
-presentation and community; the encoding consistency check is not BBS verification.
-No pseudonym opening, root-derived fallback, or raw gate evidence is accepted.
+Admission envelope v3 carries the exact original `cvld.admission.v3` payload
+inside Policy's canonical csgn COSE Credential envelope. It signs the canonical
+cpsd pseudonym bytes as lowercase hex and requires their SHA-256 digest to equal
+`memberId`, together with the community policy epoch and the opaque digest of the
+exact authenticated global passport cohort. Verification requires the independently
+configured Policy key ring, exact issuer/key/payload/protected-time agreement and
+exclusive expiry. Detached v1/v2 grants are rejected; no fallback converts them.
+The durable configuration now binds the original v5 format and complete Policy
+ring bytes. Old or differently configured database bytes refuse; they are not
+silently rewritten or assigned an epoch or cohort digest.
+
+The issuer must still verify the cpsd presentation and community; encoding
+consistency is not BBS verification. The admitting facade must compare the grant's
+`policyEpoch` and `passportPolicyDigest` with its current authenticated policies
+while retaining the same policy/member leases through forwarding. A valid COSE
+signature alone does not establish current global or community policy authority.
+No global gate facts are exported. Grants remain reusable within their validity;
+account request replay remains governed by the existing ledger markers. No
+pseudonym opening, root-derived fallback, or raw gate evidence is accepted.
 
 
 Authenticated obligation ingestion and extended service operations:
