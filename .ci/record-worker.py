@@ -105,9 +105,11 @@ def export(worker, output):
 
 def check(directory, expected_source, expected_metadata, output):
     metadata_path = directory / "worker.json"
-    if digest(metadata_path) != expected_metadata:
+    with metadata_path.open("rb") as source:
+        metadata_bytes = source.read(65537)
+    if len(metadata_bytes) > 65536 or hashlib.sha256(metadata_bytes).hexdigest() != expected_metadata:
         raise ValueError("Worker metadata differs from the independently pinned capture")
-    metadata = json.loads(metadata_path.read_text())
+    metadata = json.loads(metadata_bytes)
     if metadata["version"] != 1 or metadata["sourceCommit"] != expected_source:
         raise ValueError("Worker source identity is unavailable or mismatched")
     if metadata["platform"] != {"system": platform.system(), "machine": platform.machine()}:
@@ -138,7 +140,9 @@ def check(directory, expected_source, expected_metadata, output):
     output.mkdir(parents=True, exist_ok=False)
     target = output / "worker"
     shutil.copy2(worker, target)
-    if digest(target) != metadata["workerSha256"]:
+    copied = target.stat()
+    if (not stat.S_ISREG(copied.st_mode) or stat.S_IMODE(copied.st_mode) != metadata["workerMode"]
+            or copied.st_size != metadata["workerBytes"] or digest(target) != metadata["workerSha256"]):
         raise ValueError("Worker changed during the consuming snapshot")
     for name, maximum in limits.items():
         source = directory / name
