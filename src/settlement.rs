@@ -5,6 +5,11 @@ use crate::{Error, admission::MAX_INTEGER, extensions::Deposit};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// Original maintained opaque private issuer for trusted host transport.
+/// Construct it from provisioned bytes in a wiping loader, then discard those
+/// bytes before queueing. No private-key getter, serializer or clone is exposed.
+pub use cmbl::settlement::issuer::Issuer as SettlementIssuer;
+
 /// Actual daily owner settings inside the existing signed Balance publication.
 /// The original common cryptographic context is independent of the effective
 /// Policy epoch. This data is not a verified token, Deposit or member authority.

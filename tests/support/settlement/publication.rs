@@ -10,6 +10,69 @@ fn material(ledger: &mut Ledger, epoch: u64) -> Result<PublicVerifierMaterial, E
 }
 
 #[test]
+fn opaque_original_issuer_mismatch_and_actual_writer_refusal_cannot_install_mode() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Refuse(AtomicUsize);
+    impl cblc::storage::CommitAuthority for Refuse {
+        fn check(&self, _: u64) -> Result<(), Error> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Err(Error::Admission)
+        }
+    }
+    // This is a refusal/persistence cut, never a fabricated current Policy.
+    let inputs = Inputs::load(".record-epoch-test");
+    let fixture = Fixture::new();
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("owned-key.db");
+    let mut ledger = inputs.open(&path, &fixture);
+    let cfg = config(1, false, 8, 8);
+    let before = inspection::Connection::open(&path).unwrap().snapshot();
+    let refusal = Arc::new(Refuse(AtomicUsize::new(0)));
+    let wrong = cblc::settlement::SettlementIssuer::from_pkcs1_der(
+        config(2, false, 8, 8).epoch,
+        private_key(false),
+    )
+    .unwrap();
+    assert!(matches!(
+        ledger.reconcile_daily_settlement_with_issuer(
+            cfg.clone(),
+            wrong,
+            INCARNATION.into(),
+            refusal.clone(),
+            || 100
+        ),
+        Err(Error::PolicyMismatch)
+    ));
+    assert_eq!(refusal.0.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        inspection::Connection::open(&path).unwrap().snapshot(),
+        before
+    );
+    let issuer =
+        cblc::settlement::SettlementIssuer::from_pkcs1_der(cfg.epoch.clone(), private_key(false))
+            .unwrap();
+    assert!(matches!(
+        ledger.reconcile_daily_settlement_with_issuer(
+            cfg,
+            issuer,
+            INCARNATION.into(),
+            refusal.clone(),
+            || 100
+        ),
+        Err(Error::Admission)
+    ));
+    assert!(refusal.0.load(Ordering::SeqCst) > 0);
+    assert_eq!(
+        inspection::Connection::open(&path).unwrap().snapshot(),
+        before
+    );
+    assert!(material(&mut ledger, 1).unwrap().settlement.is_none());
+}
+
+#[test]
 fn original_native_same_slot_reendorsement_preserves_every_object_and_lineage_byte() {
     let inputs = Inputs::load(".record-epoch-test");
     let fixture = Fixture::new();

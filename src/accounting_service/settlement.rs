@@ -5,6 +5,24 @@ use crate::storage::CommitAuthority;
 use std::sync::Arc;
 
 impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
+    /// Retain only the original opaque provisioned key on the same worker.
+    /// No raw-key transport, new signer or caller-selected verification exists.
+    pub fn reconcile_daily_settlement_with_issuer(
+        &mut self,
+        config: crate::settlement::SettlementConfig,
+        issuer: crate::settlement::SettlementIssuer,
+        incarnation: String,
+        authority: Arc<dyn CommitAuthority>,
+    ) -> Result<cmbl::settlement::Epoch, Error> {
+        self.ledger.reload_policy()?;
+        self.ledger.reconcile_daily_settlement_with_issuer(
+            config,
+            issuer,
+            incarnation,
+            authority,
+            &self.clock,
+        )
+    }
     /// Trusted Policy-currentness reconciliation on the SAME native service.
     /// The supplied actual owner survives cancellation and final writer checks.
     pub fn reconcile_daily_settlement(

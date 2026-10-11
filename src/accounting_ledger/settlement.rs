@@ -8,6 +8,11 @@ mod freeze;
 mod ingress;
 mod issuance;
 
+enum KeySource<'a> {
+    Encoded(&'a [u8]),
+    Issuer(Issuer),
+}
+
 const MODE: &[u8] = b"settlement-mode:v1";
 const ANCHOR_PREFIX: &[u8] = b"settlement-issuer:v1:";
 const BUDGET_PREFIX: &[u8] = b"settlement-budget:v1:";
@@ -188,7 +193,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         incarnation: String,
         clock: impl Fn() -> u64,
     ) -> Result<cmbl::settlement::Epoch, Error> {
-        self.install_daily_settlement(config, provisioned_key, incarnation, clock, None)
+        self.install_daily_settlement(
+            config,
+            KeySource::Encoded(provisioned_key),
+            incarnation,
+            clock,
+            None,
+        )
     }
 
     /// Reopen/catch up only to the independently held current Policy. The real
@@ -204,7 +215,33 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         authority: Arc<dyn crate::storage::CommitAuthority>,
         clock: impl Fn() -> u64,
     ) -> Result<cmbl::settlement::Epoch, Error> {
-        self.install_daily_settlement(config, provisioned_key, incarnation, clock, Some(authority))
+        self.install_daily_settlement(
+            config,
+            KeySource::Encoded(provisioned_key),
+            incarnation,
+            clock,
+            Some(authority),
+        )
+    }
+
+    /// Queue the original opaque provisioned issuer without retaining raw DER.
+    /// Its exact public epoch must agree with independently configured Policy
+    /// data; the actual Policy callback still gates the native writer decision.
+    pub fn reconcile_daily_settlement_with_issuer(
+        &mut self,
+        config: SettlementConfig,
+        issuer: Issuer,
+        incarnation: String,
+        authority: Arc<dyn crate::storage::CommitAuthority>,
+        clock: impl Fn() -> u64,
+    ) -> Result<cmbl::settlement::Epoch, Error> {
+        self.install_daily_settlement(
+            config,
+            KeySource::Issuer(issuer),
+            incarnation,
+            clock,
+            Some(authority),
+        )
     }
 
     /// A cold owner remains quarantined until the real current Policy callback
@@ -224,7 +261,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     fn install_daily_settlement(
         &mut self,
         config: SettlementConfig,
-        provisioned_key: &[u8],
+        provisioned: KeySource<'_>,
         incarnation: String,
         clock: impl Fn() -> u64,
         authority: Option<Arc<dyn crate::storage::CommitAuthority>>,
@@ -243,8 +280,17 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         extensions.verifier.require_record_epoch()?;
         let binding = binding(extensions)?;
         let context = config.epoch.context().map_err(crypto_error)?;
-        let issuer =
-            Issuer::from_pkcs1_der(config.epoch.clone(), provisioned_key).map_err(crypto_error)?;
+        let issuer = match provisioned {
+            KeySource::Encoded(bytes) => {
+                Issuer::from_pkcs1_der(config.epoch.clone(), bytes).map_err(crypto_error)?
+            }
+            KeySource::Issuer(issuer) => {
+                if issuer.epoch() != &config.epoch {
+                    return Err(Error::PolicyMismatch);
+                }
+                issuer
+            }
+        };
         let verifier = cmbl::settlement::Verifier::new(config.epoch.clone(), incarnation.clone())
             .map_err(crypto_error)?;
         let settlement = Settlement {
