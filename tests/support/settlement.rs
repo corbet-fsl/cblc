@@ -236,7 +236,7 @@ fn config(epoch: u64, next: bool, pending: u32, members: u32) -> SettlementConfi
             valid_until: (epoch + 1) * PERIOD * 1000,
             public_key_der: Rsa::private_key_from_der(private_key(next))
                 .unwrap()
-                .public_key_to_der()
+                .public_key_to_der_pkcs1()
                 .unwrap(),
         },
         policy_epoch: 1,
@@ -326,12 +326,6 @@ fn submission(
     }
 }
 fn activate(ledger: &mut Ledger, cfg: &SettlementConfig, next: bool, now: u64) {
-    eprintln!(
-        "DIAG context={:?} publen={} keylen={}",
-        cfg.epoch.context().map(|_| ()),
-        cfg.epoch.public_key_der.len(),
-        private_key(next).len(),
-    );
     assert!(
         ledger
             .activate_daily_settlement(cfg.clone(), private_key(next), INCARNATION.into(), || now)
