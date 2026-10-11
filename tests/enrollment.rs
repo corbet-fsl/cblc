@@ -11,6 +11,8 @@ use sha2::{Digest, Sha256};
 mod checkpoint;
 #[path = "enrollment/registry.rs"]
 mod registry;
+#[path = "enrollment/service.rs"]
+mod service;
 
 fn delegation(f: &Fixture) -> AccountingDelegation {
     let account = p256::ecdsa::SigningKey::from_bytes((&[3; 32]).into()).unwrap();

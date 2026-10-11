@@ -35,6 +35,7 @@ mod clock_tests;
 
 mod admission_keys;
 pub use admission_keys::{AdmissionKeyReconciliation, AdmissionKeyState, startup_clock_floor};
+mod enrollment;
 mod extension_activation;
 mod extensions;
 mod obligations;

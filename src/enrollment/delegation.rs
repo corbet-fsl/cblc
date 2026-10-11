@@ -170,6 +170,37 @@ pub fn verify_delegation(
     expected: ExpectedAdmission<'_>,
     now: u64,
 ) -> Result<VerifiedDelegation, Error> {
+    let digest = authenticate(d, expected, now)?;
+    Ok(VerifiedDelegation {
+        delegation: d.clone(),
+        digest,
+        checked_at: now,
+    })
+}
+
+// Historical correspondence is private to reconstruction of the actual
+// operator-authenticated original frozen slot. It is not current admission.
+pub(super) struct HistoricalDelegation {
+    pub(super) delegation: AccountingDelegation,
+    pub(super) digest: [u8; 32],
+}
+pub(super) fn verify_historical(
+    d: &AccountingDelegation,
+    expected: ExpectedAdmission<'_>,
+    original_cut: u64,
+) -> Result<HistoricalDelegation, Error> {
+    let digest = authenticate(d, expected, original_cut)?;
+    Ok(HistoricalDelegation {
+        delegation: d.clone(),
+        digest,
+    })
+}
+
+fn authenticate(
+    d: &AccountingDelegation,
+    expected: ExpectedAdmission<'_>,
+    now: u64,
+) -> Result<[u8; 32], Error> {
     d.bounded()?;
     if now == 0
         || now > czkp::MAX_INTEGER
@@ -214,9 +245,5 @@ pub fn verify_delegation(
             &Signature::from_slice(&signature).map_err(|_| Error::Admission)?,
         )
         .map_err(|_| Error::Admission)?;
-    Ok(VerifiedDelegation {
-        delegation: d.clone(),
-        digest: d.digest()?,
-        checked_at: now,
-    })
+    d.digest()
 }

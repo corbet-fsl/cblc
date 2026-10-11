@@ -14,6 +14,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 mod admission_keys;
 mod authority;
+mod enrollment;
 mod pin_change;
 mod settlement;
 /// Adapter connecting policy public inputs to the generic proof verifier leaf.

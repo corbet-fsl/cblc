@@ -48,7 +48,7 @@ impl EnrollmentEntry {
         }
         czkp::decode::<32>(&self.member_id).map_err(|_| Error::Admission)?;
         hex::<64>(&self.account_key)?;
-        hex::<32>(&self.secret_hash)?;
+        czkp::field(&hex::<32>(&self.secret_hash)?, false)?;
         hex::<32>(&self.delegation_digest)?;
         if self.issued_at == 0
             || self.issued_at >= self.expires_at

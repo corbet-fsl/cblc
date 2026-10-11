@@ -57,7 +57,7 @@ impl EnrollmentConfig {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StoredEnrollment {
-    record: EnrollmentDelegation,
+    pub(super) record: EnrollmentDelegation,
 }
 impl StoredEnrollment {
     /// Exact stored authority, still requiring the current owner verifier.
@@ -74,7 +74,7 @@ impl StoredEnrollment {
 /// opened here. Member writes require an actual per-command host authority.
 pub struct EnrollmentStore {
     pub(super) storage: Box<dyn AccountStorage>,
-    scope: AuthorityScope,
+    pub(super) scope: AuthorityScope,
     pub(super) config: EnrollmentConfig,
 }
 impl EnrollmentStore {
@@ -116,6 +116,13 @@ impl EnrollmentStore {
         }
         let verified = verify_delegation(delegation, expected, now)?;
         let record = EnrollmentDelegation::from_verified(&verified);
+        // Immutable registry rows must be usable by the original native leaf.
+        // A valid device signature alone cannot admit a noncanonical scalar
+        // that would poison the complete community checkpoint build.
+        czkp::field(
+            &super::publication::hex::<32>(&record.entry.secret_hash)?,
+            false,
+        )?;
         let entry = record.entry.clone();
         let stored: Option<EnrollmentConfig> = tx.get(CONFIG)?;
         if stored.as_ref().is_some_and(|stored| stored != &self.config) {

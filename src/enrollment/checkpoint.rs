@@ -37,6 +37,26 @@ impl EnrollmentTree {
             }
             entries.push(EnrollmentEntry::from_verified(value));
         }
+        Self::from_entries(community, entries)
+    }
+    // This distinct internal input can only arise after authenticating the
+    // original frozen object/context; it never escapes as current admission.
+    pub(super) fn from_historical(
+        values: &[super::delegation::HistoricalDelegation],
+    ) -> Result<Self, Error> {
+        let first = values.first().ok_or(Error::Admission)?;
+        let community: Field =
+            Sha256::digest(first.delegation.admission.community_id.as_bytes()).into();
+        let entries = values
+            .iter()
+            .map(|v| EnrollmentEntry::from_delegation(&v.delegation, v.digest))
+            .collect();
+        Self::from_entries(community, entries)
+    }
+    fn from_entries(community: Field, mut entries: Vec<EnrollmentEntry>) -> Result<Self, Error> {
+        if entries.is_empty() || entries.len() > 65536 {
+            return Err(Error::Admission);
+        }
         entries.sort_by(|a, b| a.member_id.cmp(&b.member_id));
         if entries
             .windows(2)

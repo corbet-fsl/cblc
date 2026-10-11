@@ -36,7 +36,7 @@ fn authority(f: &Fixture, d: &AccountingDelegation) -> Arc<Current> {
         checked: AtomicU64::new(0),
     })
 }
-fn config(f: &Fixture) -> EnrollmentConfig {
+pub(super) fn config(f: &Fixture) -> EnrollmentConfig {
     EnrollmentConfig {
         community_id: f.trust.community_id.clone(),
         policy_digest: f.trust.policy_digest.clone(),
@@ -47,7 +47,7 @@ fn config(f: &Fixture) -> EnrollmentConfig {
         max_publication_bytes: 65536,
     }
 }
-fn enroll(
+pub(super) fn enroll(
     store: &mut EnrollmentStore,
     f: &Fixture,
     d: &AccountingDelegation,
@@ -280,4 +280,28 @@ fn orphan_or_malformed_rows_refuse_without_repair_and_configuration_is_exact() {
         enroll(&mut other, &f, &d, 131),
         Err(Error::PolicyMismatch)
     ));
+}
+
+#[test]
+fn genuine_signed_nonfield_commitment_refuses_before_immutable_registry_and_clock_write() {
+    let f = Fixture::new();
+    let mut d = delegation(&f);
+    d.state_secret_commitment = HEX.encode(&[255; 32]);
+    resign(&mut d, &f.device);
+    // Crypto-only statements are broader than the concrete native leaf shape.
+    check(&d, &f, 130).unwrap();
+    let mut durable = MemoryStore::default();
+    let mut store = EnrollmentStore::new(durable.clone(), config(&f)).unwrap();
+    assert!(matches!(
+        enroll(&mut store, &f, &d, 130),
+        Err(Error::InvalidInput)
+    ));
+    assert!(store.records().unwrap().is_empty());
+    let mut tx = durable.transaction().unwrap();
+    assert!(
+        tx.get::<EnrollmentConfig>(b"enrollment/config")
+            .unwrap()
+            .is_none()
+    );
+    assert!(tx.get::<u64>(b"clock").unwrap().is_none());
 }
