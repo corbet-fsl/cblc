@@ -1,3 +1,6 @@
+mod passport;
+pub use passport::passport_cohort_digest;
+
 use crate::Error;
 use czkp::digest;
 pub(crate) use czkp::{MAX_INTEGER, decode, scope, signature};
