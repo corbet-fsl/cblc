@@ -6,4 +6,7 @@ exec 2>&1
 npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 cp package-lock.json "$ARTIFACT_ROOT/resolve-npm-package-lock.json"
 sha256sum package-lock.json
+echo '---LOCK-BEGIN---'
+cat package-lock.json
+echo '---LOCK-END---'
 echo 'Resolved npm lock only; retain it in a commit and run the full verify job.'

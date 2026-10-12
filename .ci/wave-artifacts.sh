@@ -4,6 +4,8 @@ set -euo pipefail
 exec 2>&1
 python3 -B .ci/check-native-sdk.py
 npm ci --ignore-scripts --no-audit --no-fund
+# Witness builder logic that needs no proof artifacts.
+node --test tests/runtime/waves.test.ts
 export CBLC_EXTENSION_DIRECTORY="$PWD/.wave-artifacts"
 test ! -e "$CBLC_EXTENSION_DIRECTORY" || { echo 'Existing wave output refuses overwrite' >&2; exit 2; }
 node runtime/extensions/compile.mts --waves
