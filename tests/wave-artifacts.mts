@@ -53,5 +53,7 @@ const keyBytes=Buffer.from(JSON.stringify(keys));await writeFile(resolve(directo
 const issuer=createECDH('prime256v1');issuer.setPrivateKey(Buffer.alloc(32,3));
 const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-beta.26',backend:producer.receipt.packageVersion,verifierTarget:OPTIONS.verifierTarget,
   circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files,issuerKey:Array.from(issuer.getPublicKey().subarray(1))};
-await writeFile(resolve(directory,'manifest.json'),Buffer.from(JSON.stringify(manifest)));
+const manifestBytes=Buffer.from(JSON.stringify(manifest));
+await writeFile(resolve(directory,'manifest.json'),manifestBytes);
+await writeFile(resolve(directory,'config.json'),JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
 console.log('Generated authenticated wave artifact group; proofs remain unqualified');
