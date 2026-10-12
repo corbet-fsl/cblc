@@ -51,3 +51,4 @@ const distinct=new Set(digests.values());
 assert.equal(distinct.size,digests.size,'each parameter set has its own digest');
 console.log(`standing probe: ${steps} steps; default digest ${digests.get('default')}`);
 if(DEFAULT_DIGEST!==undefined) assert.equal(digests.get('default'),DEFAULT_DIGEST);
+// Re-run after the platform killed the first attempt before it started.
