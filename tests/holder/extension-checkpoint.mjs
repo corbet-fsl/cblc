@@ -9,8 +9,10 @@ import { fieldBytes, fieldValue } from '@corbet-labs/czkp/primitives';
 import { IndexedMap, SparseTree, integer, policyDigest, statePolicyDigest, SAFE } from '@corbet-labs/cwlt/hashes';
 import { checkEnrollmentShape, copyEnrollmentCheckpoint, enrollmentRoot, verifyEnrollmentLeaf, verifyEnrollmentPath } from './enrollment.mjs';
 
-const TOP = ['version','kind','extension','community','owner','policyDigest','enrollmentRoot','now','accountVersion','commitment','opening','maps','slots'];
-const OPENING = ['available','reserved','frontier','createdAt','admissionEpoch','admissions','blind','debt','accepted','declined','punished','inbox','authorization'];
+const TOP = ['version','kind','extension','standing','community','owner','policyDigest','enrollmentRoot','now','accountVersion','commitment','opening','maps','slots'];
+const OPENING = ['reserved','createdAt','blind','accepted','declined','punished','inbox','authorization','standing'];
+const STANDING = ['g','a','c','pr','pg','lc','day'];
+const STANDING_PARAMS = ['c0','hA','hG','nHalf','nC','eQ','rMax','rAge','cMaxQ','cVet','ageVet','boostQ','boostDays','slopeQ','midQ','kappaQ','loanUseQ'];
 const SLOT = ['peer','nonce','group','contactPolicy','role','phase','amount','admittedAt','expiresAt','peerAuthority','ownerAuthority','peerEnrollment','ownerEnrollment','outcome','answered','selfPunished'];
 const ENROLLMENT = ['member','key','secretHash','start','end','delegationDigest','index','leaf','path'];
 const MAPS = ['outgoing','incoming','pairs'];
@@ -49,9 +51,8 @@ function readTime(value) {
   const result = decimal(value, 64); if (result > SAFE) fail(); return result;
 }
 function wireOpening(value) {
-  return { available: writeDecimal(value.available, 32), reserved: writeDecimal(value.reserved, 128),
-    frontier: writeDecimal(value.frontier, 64), createdAt: writeDecimal(value.createdAt, 64),
-    admissionEpoch: writeDecimal(value.admissionEpoch, 64), admissions: writeDecimal(value.admissions, 32), blind: bytes(value.blind), debt: writeDecimal(value.debt, 64), accepted: writeDecimal(value.accepted, 64), declined: writeDecimal(value.declined, 64), punished: writeDecimal(value.punished, 64), inbox: bytes(value.inbox), authorization: writeDecimal(value.authorization) };
+  return { reserved: writeDecimal(value.reserved, 128), createdAt: writeDecimal(value.createdAt, 64),
+    standing: Object.fromEntries(STANDING.map(k => [k, writeDecimal(value.standing[k], 64)])), blind: bytes(value.blind), accepted: writeDecimal(value.accepted, 64), declined: writeDecimal(value.declined, 64), punished: writeDecimal(value.punished, 64), inbox: bytes(value.inbox), authorization: writeDecimal(value.authorization) };
 }
 function wireSlot(value) {
   return { peer: bytes(value.peer), nonce: bytes(value.nonce), group: bytes(value.group), contactPolicy: bytes(value.contactPolicy),
@@ -87,7 +88,7 @@ function wireMap(value, limit) {
 export function encodeExtensionCheckpoint(value, limits) {
   const bound = bounds(limits);
   if (!(value.slots instanceof Map) || value.slots.size > bound.maxSlots) fail();
-  const snapshot = { version: 1, kind:'cblc.account-extension.v1', extension:structuredClone(value.extension), community: bytes(value.community), owner: bytes(value.owner.member),
+  const snapshot = { version: 1, kind:'cblc.account-extension.v1', extension:structuredClone(value.extension), standing:structuredClone(value.standing), community: bytes(value.community), owner: bytes(value.owner.member),
     policyDigest: bytes(value.policyHash), enrollmentRoot: bytes(fieldBytes(value.checkpoint.root)),
     now: writeDecimal(value.now, 64), accountVersion: writeDecimal(value.version, 64), commitment: bytes(fieldBytes(value.commitment)),
     opening: wireOpening(value.opening), maps: Object.fromEntries(MAPS.map(name => [name, wireMap(value[name], bound.maxMapEntries)])),
@@ -137,15 +138,21 @@ export async function restoreExtensionCheckpoint(options) {
   if (snapshot.version !== 1 || snapshot.kind !== 'cblc.account-extension.v1' || !Array.isArray(snapshot.slots) || snapshot.slots.length > bound.maxSlots) fail();
   const extension=structuredClone(options.extension);
   const extensionKeys=['revision','publicRecordQuorum','changeTokenCost','depositDelaySeconds','minimumDepositBatch'];
-  exact(extension,extensionKeys);exact(snapshot.extension,extensionKeys);
+  exact(extension,[...extensionKeys,'standingPolicyDigest']);exact(snapshot.extension,[...extensionKeys,'standingPolicyDigest']);
   for(const key of extensionKeys)if(!Number.isSafeInteger(extension[key])||extension[key]<1||snapshot.extension[key]!==extension[key])fail();
+  if(!Array.isArray(extension.standingPolicyDigest)||extension.standingPolicyDigest.length!==32||!extension.standingPolicyDigest.every(n=>Number.isInteger(n)&&n>=0&&n<256)
+      ||!extension.standingPolicyDigest.some(Boolean)||JSON.stringify(snapshot.extension.standingPolicyDigest)!==JSON.stringify(extension.standingPolicyDigest))fail();
+  const standingParams=structuredClone(options.standing);
+  exact(standingParams,STANDING_PARAMS);exact(snapshot.standing,STANDING_PARAMS);
+  for(const key of STANDING_PARAMS)if(!Number.isSafeInteger(standingParams[key])||standingParams[key]<0||snapshot.standing[key]!==standingParams[key])fail();
   if(extension.minimumDepositBatch<2||extension.minimumDepositBatch>64||extension.publicRecordQuorum>0xffffffff||extension.changeTokenCost>0xffffffff)fail();
   const community = readBytes(snapshot.community), ownerId = bytes(readBytes(snapshot.owner)),
     policyHash = readBytes(snapshot.policyDigest), root = fieldValue(readBytes(snapshot.enrollmentRoot)),
     commitment = fieldValue(readBytes(snapshot.commitment)), now = readTime(snapshot.now), version = readTime(snapshot.accountVersion);
   const o = snapshot.opening;
-  const opening = { available: decimal(o.available, 32), reserved: decimal(o.reserved, 128), frontier: readTime(o.frontier),
-    createdAt: readTime(o.createdAt), admissionEpoch: readTime(o.admissionEpoch), admissions: decimal(o.admissions, 32), blind: readBytes(o.blind), debt: decimal(o.debt,64), accepted: decimal(o.accepted,64), declined: decimal(o.declined,64), punished: decimal(o.punished,64), inbox:readBytes(o.inbox), authorization:decimal(o.authorization) };
+  exact(o.standing, STANDING);
+  const opening = { reserved: decimal(o.reserved, 128), createdAt: readTime(o.createdAt),
+    standing: Object.fromEntries(STANDING.map(k => [k, readTime(o.standing[k])])), blind: readBytes(o.blind), accepted: decimal(o.accepted,64), declined: decimal(o.declined,64), punished: decimal(o.punished,64), inbox:readBytes(o.inbox), authorization:decimal(o.authorization) };
   const leaves = Object.fromEntries(MAPS.map(name => [name, mapLeaves(snapshot.maps[name], bound.maxMapEntries)]));
   const entries = new Map();
   for (let index = 0; index < checkpoint.entries.length; index++) {
@@ -161,7 +168,7 @@ export async function restoreExtensionCheckpoint(options) {
     const event = decimal(item[0]), s = item[1]; exact(s, SLOT);
     const peer = readBytes(s.peer);
     if (event === 0n || slots.has(item[0]) || ![0, 1].includes(s.role)
-        || ![1, 2, 3, 4, 5, 7].includes(s.phase) || (s.role === 1 && s.phase === 5)||![0,1,2,3].includes(s.outcome)||typeof s.answered!=='boolean'||typeof s.selfPunished!=='boolean') fail();
+        || ![1, 2, 3, 4, 5, 7, 8].includes(s.phase) || (s.role === 1 && s.phase === 5)||![0,1,2,3].includes(s.outcome)||typeof s.answered!=='boolean'||typeof s.selfPunished!=='boolean') fail();
     const slot = { peer, nonce: readBytes(s.nonce), group: readBytes(s.group), contactPolicy: readBytes(s.contactPolicy),
       role: s.role, phase: s.phase, outcome:s.outcome, answered:s.answered, selfPunished:s.selfPunished, amount: decimal(s.amount, 32), admittedAt: readTime(s.admittedAt), expiresAt: readTime(s.expiresAt),
       peerAuthority: decimal(s.peerAuthority), ownerAuthority: decimal(s.ownerAuthority),
@@ -195,7 +202,7 @@ export async function restoreExtensionCheckpoint(options) {
     own.delete(event);
     const pair = await hashes.pairKey(community, owner.member, ownerSecret, slot.peer);
     pairs.set(pair,(pairs.get(pair)===2n||slot.selfPunished)?2n:1n);
-    if (slot.phase === 1 || slot.phase === 2) reserved += slot.amount;
+    if (slot.phase === 1 || slot.phase === 2 || slot.phase === 8) reserved += slot.amount;
   }
   for(const [pair,value] of pairs)if(payloads.pairs.get(pair)!==value)fail();
   if (payloads.outgoing.size || payloads.incoming.size || pairs.size !== payloads.pairs.size || reserved !== opening.reserved) fail();
@@ -205,7 +212,7 @@ export async function restoreExtensionCheckpoint(options) {
     incomingRoot: maps.incoming.root, incomingCount: maps.incoming.count, pairRoot: maps.pairs.root, pairCount: maps.pairs.count });
   const statePolicyHash = await statePolicyDigest(community, policy);
   const restored=new ExtensionWitness();
-  Object.assign(restored,{hashes, community, policy, extension, transition, checkpoint, ownerIndex, ownerSecret, owner, policyHash, statePolicyHash,
+  Object.assign(restored,{hashes, community, policy, extension, standing: standingParams, transition, checkpoint, ownerIndex, ownerSecret, owner, policyHash, statePolicyHash,
     now, version, commitment, opening, slots, ...maps});
   if(await restored.commit(opening,version)!==commitment)fail();
   return restored;

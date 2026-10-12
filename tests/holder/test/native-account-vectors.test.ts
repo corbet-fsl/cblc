@@ -11,6 +11,7 @@ import {
 } from '@corbet-labs/cwlt/hashes';
 import { fieldBytes } from '@corbet-labs/czkp/primitives';
 import { hex } from '@corbet-labs/czkp/encoding';
+import { STANDING, STANDING_DIGEST } from '../standing-fixture.mts';
 
 const bytes = (n: number) => new Uint8Array(32).fill(n);
 const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -47,9 +48,10 @@ export function registerNativeAccountVectors(hashApi: Parameters<typeof extensio
       const extension = {
         revision: 1, publicRecordQuorum: 2, changeTokenCost: 1,
         depositDelaySeconds: 100, minimumDepositBatch: 2,
+        standingPolicyDigest: STANDING_DIGEST,
       };
       const genesis = await ExtensionWitness.genesis({
-        hashes, community, policy, extension, checkpoint: enrollment,
+        hashes, community, policy, extension, standing: STANDING, checkpoint: enrollment,
         ownerIndex: 0, ownerSecret, now: 101,
       });
       // Recompute the original private state transcript with a fixed fictional

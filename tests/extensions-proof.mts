@@ -15,6 +15,7 @@ import {createProver} from '@corbet-labs/czkp/prove';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
+import {STANDING,STANDING_DIGEST,STANDING_TABLES} from './holder/standing-fixture.mts';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
 import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';
 import {ingestedRecordEpoch} from './holder/record-epoch-ingestion.mts';
@@ -159,7 +160,7 @@ async function submit(member,candidates,label,measure=false,expected=true){
   return {next:last.next,request};
 }
 async function anonymous(candidate,label,measure=false){return {statement:candidate.statement,proof:encodeBundle([{proof:await proof(candidate.statement.kind,candidate.input,label,measure)}])};}
-const extension={revision:1,publicRecordQuorum:2,changeTokenCost:1,depositDelaySeconds:10,minimumDepositBatch:2};
+const extension={revision:1,publicRecordQuorum:2,changeTokenCost:1,depositDelaySeconds:10,minimumDepositBatch:2,standingPolicyDigest:STANDING_DIGEST};
 const policy={initialCredit:3,maximumAvailable:3,outgoingReservation:1,incomingReservation:1,policyRevision:1,policyValidFrom:1,policyValidUntil:2000,
   newcomerPeriod:100,rateWindow:10,newcomerAdmissions:8,maximumAdmissions:8,refillPeriod:10,refillUnits:1,abandonAfter:100};
 const community=new Uint8Array(sha('community-example'));
@@ -172,12 +173,12 @@ try{
   }
   const checkpoint=await checkpointFromVerified(community,entries,hashes);
   const genesis=[];
-  for(let i=0;i<4;i++)genesis.push(await ExtensionWitness.genesis({hashes,community,policy,extension,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++}));
+  for(let i=0;i<4;i++)genesis.push(await ExtensionWitness.genesis({hashes,community,policy,extension,standing:STANDING,policyTables:STANDING_TABLES,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++}));
   const wasmHashes=await Barretenberg.new({backend:BackendType.Wasm,threads:1,skipSrsInit:true});
   try {
     const limits={maxBytes:1024*1024,maxMapEntries:256,maxSlots:64};
     const checkpointBytes=encodeExtensionCheckpoint(genesis[0].next,limits);
-    const restored=await restoreExtensionCheckpoint({hashes:extensionHashes(wasmHashes),extension,transition,
+    const restored=await restoreExtensionCheckpoint({hashes:extensionHashes(wasmHashes),extension,standing:STANDING,transition,
       enrollment:checkpoint,ownerSecret:bytes(20),expectedStatement:genesis[0].statement,checkpointBytes,limits});
     assert.deepEqual(encodeExtensionCheckpoint(restored,limits),checkpointBytes);
   } finally {await wasmHashes.destroy();}

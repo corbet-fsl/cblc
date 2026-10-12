@@ -3,8 +3,8 @@ export const exact=(value,keys)=>!!value&&!Array.isArray(value)&&Object.keys(val
 export const equal=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((v,i)=>v===b[i]);
 export const zero=()=>Array(32).fill(0);
 export function policyInput(p) {
-  if(!exact(p,['revision','publicRecordQuorum','changeTokenCost','depositDelaySeconds','minimumDepositBatch']))throw new Error('Extension policy shape');
-  return {revision:p.revision,quorum:p.publicRecordQuorum,change_cost:p.changeTokenCost,delay:p.depositDelaySeconds,batch:p.minimumDepositBatch};
+  if(!exact(p,['revision','publicRecordQuorum','changeTokenCost','depositDelaySeconds','minimumDepositBatch','standingPolicyDigest']))throw new Error('Extension policy shape');
+  return {revision:p.revision,quorum:p.publicRecordQuorum,change_cost:p.changeTokenCost,delay:p.depositDelaySeconds,batch:p.minimumDepositBatch,standing:p.standingPolicyDigest};
 }
 export function updateInput(account,policy,previousInbox,inbox,consume,binding) {
   const s=account;

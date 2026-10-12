@@ -37,7 +37,8 @@
     "publicRecordQuorum": 2,
     "changeTokenCost": 1,
     "depositDelaySeconds": 10,
-    "minimumDepositBatch": 2
+    "minimumDepositBatch": 2,
+    "standingPolicyDigest": [46, 241, 91, 251, 246, 36, 103, 147, 196, 95, 175, 181, 23, 98, 171, 158, 212, 216, 145, 236, 182, 123, 162, 208, 202, 78, 13, 109, 35, 249, 142, 178]
   },
   "nativeWrapper": {
     "maxAuthorizationSeconds": 100,

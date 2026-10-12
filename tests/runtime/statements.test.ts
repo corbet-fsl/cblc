@@ -10,7 +10,8 @@ const policy = { initialCredit: 3, maximumAvailable: 4, outgoingReservation: 1, 
   policyRevision: 1, policyValidFrom: 100, policyValidUntil: 250, newcomerPeriod: 100, rateWindow: 100,
   newcomerAdmissions: 2, maximumAdmissions: 4, refillPeriod: 100, refillUnits: 1, abandonAfter: 500 };
 const extension = { revision: 1, publicRecordQuorum: 2, changeTokenCost: 1,
-  depositDelaySeconds: 100, minimumDepositBatch: 2 };
+  depositDelaySeconds: 100, minimumDepositBatch: 2,
+  standingPolicyDigest: Array(32).fill(9) };
 const manifest = { issuerKey: Array(64).fill(7), circuitSha256: 'ab'.repeat(32) };
 
 async function account(genesis = true) {

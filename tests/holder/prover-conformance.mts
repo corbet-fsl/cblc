@@ -12,6 +12,7 @@ import {OPTIONS, hex, unhex} from '@corbet-labs/czkp/encoding';
 import {publicInputs, witnessInputs} from '@corbet-labs/czkp/abi';
 import {boundedFile} from '../../runtime/bounded-file.ts';
 import {originalForeignVerificationKey, verifyOriginalNative} from './native-conformance.mts';
+import {STANDING,STANDING_DIGEST,STANDING_TABLES} from './standing-fixture.mts';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const json = bytes => JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
@@ -86,12 +87,13 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
       rateWindow: 10, newcomerAdmissions: 8, maximumAdmissions: 8, refillPeriod: 10,
       refillUnits: 1, abandonAfter: 100};
     const extension = target?.extensionPolicy ?? {revision: 1, publicRecordQuorum: 2, changeTokenCost: 1,
-      depositDelaySeconds: 10, minimumDepositBatch: 2};
-    const candidate = await ExtensionWitness.genesis({hashes, community, policy, extension,
+      depositDelaySeconds: 10, minimumDepositBatch: 2,
+      standingPolicyDigest: STANDING_DIGEST};
+    const candidate = await ExtensionWitness.genesis({hashes, community, policy, extension, standing: STANDING, policyTables: STANDING_TABLES,
       transition,
       checkpoint, ownerIndex: 0, ownerSecret: secret, now: target?.observation ?? 110});
     const expected = publicInputs(program, candidate.input);
-    assert.equal(expected.length, 345);
+    assert.equal(expected.length, 377);
     const executed = await new Noir(program).execute(witnessInputs(program, candidate.input));
     witness = executed.witness;
     const backend = new UltraHonkBackend(program.bytecode, api);
@@ -208,7 +210,7 @@ export async function retainConformance(value, manifestBytes, circuitBytes, keyB
 // accepted membership. Only its operational capture path was omitted in source.
 export async function alphaStartupRequest() {
   const bytes = await boundedFile('tests/holder/fixtures/alpha-native-request.json', 65536);
-  if (sha(bytes) !== '197281e27a68c485c51d556b1d10cbefdd21b0ba471b9c5a03afa86d4af0c897') {
+  if (sha(bytes) !== 'cf1bc7b2d79a2ab8d02ba9c6311dcf9895265d5faa1a2bb27e6b5d8c6129c8e6') {
     throw new Error('Reviewed alpha fixture configuration differs');
   }
   const request = json(bytes);
@@ -225,7 +227,7 @@ export async function alphaStartupRequest() {
 // authority and must never relabel the alpha proof or renew its configured time.
 export async function omegaStartupRequest() {
   const bytes = await boundedFile('tests/holder/fixtures/omega-native-request.json', 65536);
-  if (sha(bytes) !== '782f779ccc6cbcfca4ab651f7fe2cd584391b8659c0ee59a94f307af457ee139') {
+  if (sha(bytes) !== '257c8476d9d21696fc8699497ca70446507ebfa34972f8ed9df70c5236fa1ce4') {
     throw new Error('Reviewed omega fixture configuration differs');
   }
   const request = json(bytes);

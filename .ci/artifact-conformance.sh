@@ -20,7 +20,7 @@ ACCEPTED_KEY_GROUP_SHA256 = "3b0c627844f05d0c9f295a987a4125d21dfb693498614d11f09
 with open(sys.argv[1], "rb") as stream:
     data = stream.read(1024 * 1024 + 1)
 if len(data) > 1024 * 1024 or hashlib.sha256(data).hexdigest() != ACCEPTED_KEY_GROUP_SHA256:
-    raise SystemExit("JS prover verification keys differ from the server's accepted identity")
+    raise SystemExit("JS prover verification keys differ from the server's accepted identity: " + hashlib.sha256(data).hexdigest())
 PY
 # Only public files exist here; private witnesses never enter this directory.
 : "${CI_COMMIT_SHA:?Missing original source identity}"
@@ -57,13 +57,13 @@ destination = Path(sys.argv[1])
 manifest_sha = sha(bounded(destination / "manifest.json", 65536))
 activations = {}
 for community, expected in (
-    ("alpha", "197281e27a68c485c51d556b1d10cbefdd21b0ba471b9c5a03afa86d4af0c897"),
-    ("omega", "782f779ccc6cbcfca4ab651f7fe2cd584391b8659c0ee59a94f307af457ee139"),
+    ("alpha", "cf1bc7b2d79a2ab8d02ba9c6311dcf9895265d5faa1a2bb27e6b5d8c6129c8e6"),
+    ("omega", "257c8476d9d21696fc8699497ca70446507ebfa34972f8ed9df70c5236fa1ce4"),
 ):
     request_bytes = bounded(Path(f"tests/holder/fixtures/{community}-native-request.json"), 65536)
     request_sha = sha(request_bytes)
     if request_sha != expected:
-        raise ValueError("Reviewed scoped configuration differs")
+        raise ValueError("Reviewed scoped configuration differs: " + community + " " + request_sha)
     request = json.loads(request_bytes)
     matches = []
     for count, path in enumerate(Path(os.environ["ARTIFACT_ROOT"]).glob(f"{community}-activation-{manifest_sha}-*.json")):

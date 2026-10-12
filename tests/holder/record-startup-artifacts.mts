@@ -29,7 +29,7 @@ export async function retainRecordStartup({initialize,scope,manifestSha256,sourc
   assert.equal(initialize.op,'init');
   keys(initialize.policy,policyKeys);
   keys(initialize.extension,['revision','publicRecordQuorum','changeTokenCost',
-    'depositDelaySeconds','minimumDepositBatch']);
+    'depositDelaySeconds','minimumDepositBatch','standingPolicyDigest']);
   keys(initialize.scope,scopeKeys);
   assert.deepEqual(initialize.scope,scope);
   keys(initialize.activation,['account','proof']);

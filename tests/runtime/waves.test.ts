@@ -11,7 +11,7 @@ const slot=(over:object={})=>({role:0,peer:bytes(2),nonce:bytes(3),group:bytes(4
 const map=(leaf:bigint=PAYLOAD,present=true)=>({find:()=>present?[0]:undefined,witness:()=>({leaf:[0n,leaf,0n,0n],index:0n,path:[],append_path:[]}),clone(){return this;}});
 function source(over:Partial<WaveSource>={},s=slot()):WaveSource {
   const value:any={owner:{member:bytes(1)},ownerSecret:bytes(20),community:bytes(30),statePolicyHash:bytes(40),
-    extension:{revision:1,publicRecordQuorum:2,changeTokenCost:3,depositDelaySeconds:4,minimumDepositBatch:5},
+    extension:{revision:1,publicRecordQuorum:2,changeTokenCost:3,depositDelaySeconds:4,minimumDepositBatch:5,standingPolicyDigest:Array(32).fill(9)},
     certificate:{acceptedAt:50n,signature:bytes(60)},outgoing:map(),incoming:map(),slots:new Map([['5',s]]),
     hashes:{obligation:async()=>PAYLOAD,raw:async(v:bigint[])=>v.reduce((a,b)=>a+b,0n)&((1n<<250n)-1n)},
     commitment:123n,version:3n,opening:{},now:100n,input:()=>({old:{marker:'extended-opening'}}),
