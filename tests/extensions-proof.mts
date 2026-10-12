@@ -335,6 +335,11 @@ try{
   const establishedDeposit=await anonymous(await members[0].deposit(established.delivery,members[0].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'established-deposit');
   await call({op:'deposit',batch:[{deposit:establishedDeposit.statement.deposit,proof:establishedDeposit.proof},batch[1]],now});
   await drain(2);assert.equal(members[2].opening.punished,1n);
+  // A wave punished by its target holds its pool slot until the waiting period ends; retire it, then the pool has room again.
+  const held=members[0].slots.get(first.outgoing.toString());
+  now=Math.max(now,Number(held.expiresAt)+1);
+  members[0]=(await submit(7,[await members[0].expire(first.outgoing,now++)],'expire-held')).next;
+  assert.equal(members[0].opening.reserved,0n);
   const declinedContact=await contact(0,3);
   members[3]=(await submit(10,[await members[3].activate(declinedContact.incoming,now++,declinedContact.senderSignature)],'decline-activate')).next;
   const declinedSlot=members[3].slots.get(declinedContact.incoming.toString());
