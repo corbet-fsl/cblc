@@ -151,7 +151,8 @@ test('anonymous extension statements bind deposit scope and both record disclosu
     authorizationNullifier: field(4), obligation: field(5) } };
   const [mapped] = await expectedProofs(deposit, bundle, manifest);
   assert.equal(mapped.kind, 'deposit');
-  assert.deepEqual(mapped.input.extension, { revision: 1, quorum: 2, change_cost: 1, delay: 100, batch: 2 });
+  assert.deepEqual(mapped.input.extension, { revision: 1, quorum: 2, change_cost: 1, delay: 100, batch: 2,
+    standing: extension.standingPolicyDigest });
   assert.deepEqual(mapped.input.issuer_key, manifest.issuerKey);
   assert.deepEqual(mapped.input.scope, bytes(171));
   assert.deepEqual(mapped.input.authorization_nullifier, deposit.deposit.authorizationNullifier);

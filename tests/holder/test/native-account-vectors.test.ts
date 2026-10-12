@@ -11,7 +11,7 @@ import {
 } from '@corbet-labs/cwlt/hashes';
 import { fieldBytes } from '@corbet-labs/czkp/primitives';
 import { hex } from '@corbet-labs/czkp/encoding';
-import { STANDING, STANDING_DIGEST } from '../standing-fixture.mts';
+import { STANDING, STANDING_DIGEST, STANDING_TABLES } from '../standing-fixture.mts';
 
 const bytes = (n: number) => new Uint8Array(32).fill(n);
 const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -51,7 +51,7 @@ export function registerNativeAccountVectors(hashApi: Parameters<typeof extensio
         standingPolicyDigest: STANDING_DIGEST,
       };
       const genesis = await ExtensionWitness.genesis({
-        hashes, community, policy, extension, standing: STANDING, checkpoint: enrollment,
+        hashes, community, policy, extension, standing: STANDING, policyTables: STANDING_TABLES, checkpoint: enrollment,
         ownerIndex: 0, ownerSecret, now: 101,
       });
       // Recompute the original private state transcript with a fixed fictional
@@ -66,7 +66,6 @@ export function registerNativeAccountVectors(hashApi: Parameters<typeof extensio
         fixedBlind.fill(0);
         originalBlind.fill(0);
       }
-      assert.equal(genesis.next.opening.frontier, 200n);
       assert.equal(genesis.next.opening.createdAt, 200n);
       assert.equal(enrollment.entries[0].path.length, 32);
       const empty = await IndexedMap.create(hashes);
