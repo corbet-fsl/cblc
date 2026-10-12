@@ -26,6 +26,20 @@ command = ["bash", ".ci/run-cached.sh"]
 # The advisory DB gate lives in [checks.advisories] and runs fresh on every
 # invocation, never from cache.
 
+# Peer-release relations (wave, outcome) on main's core: compile, ABI widths and
+# verification keys only. No proof, witness or issuer acceptance.
+[checks.wave-artifacts]
+kind = "commands"
+commands = [["bash", ".ci/wave-artifacts.sh"]]
+cache_pure = false
+
+[jobs.wave-artifacts]
+environment = { CI_TIMEOUT = "7200" }
+scheduler = "crow"
+checks = ["wave-artifacts"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
+
 [checks.verify]
 kind = "commands"
 commands = [["bash", ".ci/verify.sh"]]
