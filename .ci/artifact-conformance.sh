@@ -100,3 +100,4 @@ for community, expected in (
 }, sort_keys=True) + "\n")
 PY
 sha256sum "$destination/manifest.json" "$destination/circuits.json" "$destination/keys.json"
+
