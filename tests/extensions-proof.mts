@@ -150,7 +150,7 @@ async function submit(member,candidates,label,measure=false,expected=true){
     assert.equal(restored.commitment,original.commitment);
     assert.deepEqual(encodeExtensionCheckpoint(restored,limits),checkpointBytes);
     // Checkpoint bytes stay in this fictional member's memory, never artifacts.
-    for(const key of ['debt','accepted','declined','punished','authorization']) {
+    for(const key of ['reserved','accepted','declined','punished','authorization']) {
       const corrupt=JSON.parse(new TextDecoder().decode(checkpointBytes));
       corrupt.opening[key]=(BigInt(corrupt.opening[key])+1n).toString();
       await assert.rejects(restoreExtensionCheckpoint({...options,checkpointBytes:new TextEncoder().encode(JSON.stringify(corrupt))}));
