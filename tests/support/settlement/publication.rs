@@ -382,7 +382,8 @@ fn current_anchor_conflicts_cannot_reset_budget_or_project_a_stale_descriptor() 
     wrong["policy_epoch"] = 2.into();
     connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community-example' AND key=X'{}'", HEXLOWER.encode(&serde_json::to_vec(&wrong).unwrap()), HEXLOWER.encode(key))).unwrap();
     let damaged = connection.snapshot();
-    assert_eq!(material(&mut ledger, 1), Err(Error::PolicyMismatch));
+    // A stored policy epoch above the configured one is a policy rollback.
+    assert_eq!(material(&mut ledger, 1), Err(Error::ClockRollback));
     assert_eq!(connection.snapshot(), damaged);
     connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community-example' AND key=X'{}'", HEXLOWER.encode(bytes), HEXLOWER.encode(key))).unwrap();
     assert!(material(&mut ledger, 1).unwrap().settlement.is_some());
