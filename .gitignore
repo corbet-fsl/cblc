@@ -10,3 +10,6 @@ dependency-metadata.json
 
 .runtime-v8/
 runtime-coverage/
+# noir_wasm dependency caches
+circuits/extensions/*/archives/
+circuits/extensions/*/libs/
