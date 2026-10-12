@@ -270,7 +270,7 @@ fn genesis_cannot_consume_and_ordinary_updates_have_no_change_binding() {
     let single =
         json!({"version":1,"proofs":[{"state":vec![5;32],"inbox":vec![0;32],"proof":"01"}]});
     let prepared = prepare(&statement, &bundle_bytes(single)).unwrap();
-    assert_eq!(values(&prepared[32].inputs[102..134]), vec![0; 32]);
+    assert_eq!(values(&prepared[0].inputs[102..134]), vec![0; 32]);
 }
 
 #[test]
