@@ -40,6 +40,22 @@ checks = ["wave-artifacts"]
 workflow = "repository-jobs"
 command = ["bash", ".ci/run-cached.sh"]
 
+# Real peer-release proofs (a wave reservation and an Answer outcome) in their own job,
+# retained write-once under the fixture digest; verify never regenerates them.
+[checks.proof-fixtures]
+kind = "commands"
+commands = [["bash", ".ci/proof-fixtures.sh"]]
+cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["node", "--version"], ["python3", "--version"], ["wasm-pack", "--version"], ["jq", "--version"], ["clang", "--version"], ["pkg-config", "--version"]]
+cache_env = ["BB_LIB_DIR", "BB_NATIVE_RUSTFLAGS", "LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
+cache_pure = false
+
+[jobs.proof-fixtures]
+environment = { CI_TIMEOUT = "7200" }
+scheduler = "crow"
+checks = ["proof-fixtures"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
+
 [checks.verify]
 kind = "commands"
 commands = [["bash", ".ci/verify.sh"]]
