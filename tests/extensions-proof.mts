@@ -136,8 +136,7 @@ async function proof(kind,input,label,measure=false,group=artifacts){
 async function retainWave(){
   if(waveCases.length) {
     // Retained for the counterpart verifiers: statements, proofs, the pinned scopes and the measured proving times.
-    const fixture=waveJson({extensionScope:artifacts.scope,waveScope:waveArtifacts.scope,issuerKey:manifest.issuerKey,context:{history:bytes(231),challenge:bytes(232)},
-      cases:waveCases,timings:benchmarks.filter(b=>b.kind==='wave'||b.kind==='outcome')});
+    const fixture=waveJson({extensionScope:artifacts.scope,waveScope:waveArtifacts.scope,issuerKey:manifest.issuerKey,      cases:waveCases,timings:benchmarks.filter(b=>b.kind==='wave'||b.kind==='outcome')});
     await writeFile(resolve(directory,'wave-roundtrip.json'),fixture,{mode:0o600});
     if(process.env.ARTIFACT_ROOT) {
       const digest=sha(Buffer.from(fixture)).toString('hex'),retained=resolve(process.env.ARTIFACT_ROOT,'wave-fixtures',digest);
@@ -334,7 +333,7 @@ try{
   const answerDigest=await receiptDigest(replyBytes,resolution.signature);
   const acknowledgment={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[0].owner.member,members[2].owner.member,replySlot,answerDigest,members[0].owner.delegationDigest,now),{key:signing[0],dsaEncoding:'ieee-p1363'}))};
   members[2]=(await submit(9,[await members[2].settle(acceptedContact.incoming,resolution,acknowledgment,now++)],'answer')).next;
-  if(waveArtifacts)waveCases.push(await outcomeCase(members[2],acceptedContact.incoming,waveContext,waveScope,waveIssuer,{outcome:'answer',resolution,acknowledgment},waveProve));
+  if(waveArtifacts)waveCases.push(await outcomeCase(members[2],acceptedContact.incoming,{...waveContext,history:resolution.historyDigest},waveScope,waveIssuer,{outcome:'answer',resolution,acknowledgment},waveProve));
   if(process.env.CBLC_WAVE_ONLY==='1') {
     // Fixture job: the reservation and the Answer are proved; the rest of the harness belongs to verify.
     await retainWave();
