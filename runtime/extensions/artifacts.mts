@@ -27,7 +27,8 @@ export async function loadArtifacts(configPath) {
     typeof circuits.record_epoch?.bytecode!=='string'||!circuits.record_epoch.bytecode||
     typeof keys.record_epoch!=='string'||!keys.record_epoch)))throw new Error('Incomplete record epoch artifact pair');
   return {manifest,scope:{circuitDigest:Array.from(unhex(manifest.circuitSha256)),verifyingKeyDigest:Array.from(unhex(manifest.vkSha256))},
-    artifacts(kind){if(!['update','deposit','record','record_epoch'].includes(kind))throw new Error('Circuit domain');
+    artifacts(kind){if(!['update','deposit','record','record_epoch','wave','outcome'].includes(kind))throw new Error('Circuit domain');
       if(kind==='record_epoch'&&!recordEpochCircuit)throw new Error('Record epoch circuit unavailable');
+      if(!circuits[kind]||!keys[kind])throw new Error('Circuit unavailable in this artifact group');
       return {manifest,circuit:circuits[kind],verificationKey:unhex(keys[kind]),setup,limits:{memoryPages:65536,maxProofBytes:1024*1024}};}};
 }
