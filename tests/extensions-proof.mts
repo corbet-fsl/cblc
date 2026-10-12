@@ -251,7 +251,10 @@ try{
   const signContact=(index,owner,slot)=>canonicalSignature(sign('sha256',contactBytes(community,owner,slot),{key:signing[index],dsaEncoding:'ieee-p1363'}));
   async function contact(sender,recipient){
     const n=bytes(nonce++),group=bytes(nonce++),contactPolicy=bytes(nonce++);
-    const outgoing=await members[sender].reserve({peerIndex:recipient,role:0,nonce:n,group,contactPolicy,now:now++});
+    const outgoing=await members[sender].reserve({peerIndex:recipient,role:0,nonce:n,group,contactPolicy,now:now++}).catch(error=>{
+      const o=members[sender].opening;
+      console.log('CBLC-DIAG-RESERVE',sender,recipient,now,String(o.reserved),String(o.accepted),String(o.declined),String(o.punished),JSON.stringify(o.standing,(k,v)=>typeof v==='bigint'?String(v):v));
+      throw error;});
     members[sender]=(await submit(7+sender,[outgoing],'reserve')).next;
     const s=members[sender].slots.get(outgoing.event.toString());
     const incoming=await members[recipient].reserve({peerIndex:sender,role:1,nonce:n,group,contactPolicy,openedAt:s.admittedAt,expiresAt:s.expiresAt,now:now++});
