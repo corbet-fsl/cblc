@@ -8,6 +8,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 FIRST_PARTY = re.compile(r"^(?:git\+)?https://(?:git\.corbet\.ch|github\.com)/(?:corbet-(?:foss|libs)|cmtymeet)/")
+# First-party repositories whose working line is not main (one line per repository).
+WORKING_LINE = {
+    'https://git.corbet.ch/corbet-foss/cmbl': 'v01',
+    'https://git.corbet.ch/corbet-foss/cmmr': 'v01',
+}
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -21,14 +26,16 @@ def check_lock(packages):
         query = parse_qs(source.query, keep_blank_values=True)
         if not SHA.fullmatch(source.fragment):
             raise ValueError(f'Missing resolved revision for {name}')
-        if query != {'branch': ['main']}:
+        line = WORKING_LINE.get(source._replace(query='', fragment='').geturl().removesuffix('.git'), 'main')
+        if query != {'branch': [line]}:
             raise ValueError(f'Invalid first-party source selector for {name}')
 
 
 def check_manifest(value):
     if isinstance(value, dict):
         if FIRST_PARTY.match(value.get('git', '')):
-            if value.get('branch') != 'main' or {'rev', 'tag'}.intersection(value):
+            line = WORKING_LINE.get(value['git'].removesuffix('.git'), 'main')
+            if value.get('branch') != line or {'rev', 'tag'}.intersection(value):
                 raise ValueError('First-party dependency must declare branch = "main"')
         for item in value.values():
             check_manifest(item)
