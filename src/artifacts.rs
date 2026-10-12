@@ -287,6 +287,66 @@ impl ExtensionArtifacts {
     }
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WaveKeys {
+    wave: String,
+    outcome: String,
+}
+
+/// Immutable peer-release group: the `wave` and `outcome` relations on main's
+/// core, with the pinned certificate issuer key. It never joins the account group.
+#[derive(Clone)]
+pub struct WaveArtifacts {
+    material: Material,
+    issuer: [u8; 64],
+    wave_key: Vec<u8>,
+    outcome_key: Vec<u8>,
+}
+
+impl WaveArtifacts {
+    pub fn authenticate(bytes: ArtifactBytes<'_>) -> Result<Self, Error> {
+        let (material, manifest) = material(&bytes, true)?;
+        let issuer = manifest
+            .issuer_key
+            .ok_or(Error::InvalidInput)?
+            .try_into()
+            .map_err(|_| Error::InvalidInput)?;
+        let keys: WaveKeys = serde_json::from_slice(bytes.keys).map_err(|_| Error::InvalidInput)?;
+        let decode = |text: String| {
+            if text.is_empty() {
+                return Err(Error::InvalidInput);
+            }
+            HEXLOWER
+                .decode(text.as_bytes())
+                .map_err(|_| Error::InvalidInput)
+        };
+        Ok(Self {
+            material,
+            issuer,
+            wave_key: decode(keys.wave)?,
+            outcome_key: decode(keys.outcome)?,
+        })
+    }
+    pub fn scope(&self) -> AccountProofScope {
+        self.material.scope.clone()
+    }
+    pub fn manifest_sha256(&self) -> [u8; 32] {
+        self.material.manifest_sha256
+    }
+    pub fn issuer_key(&self) -> [u8; 64] {
+        self.issuer
+    }
+    /// Verifier configuration for reservation evidence (586 public fields).
+    pub fn wave_config(&self, options: NativeVerifierOptions) -> cvfy::NativeVerifierConfig {
+        self.material.config(options, self.wave_key.clone(), 586)
+    }
+    /// Verifier configuration for settled outcomes (619 public fields).
+    pub fn outcome_config(&self, options: NativeVerifierOptions) -> cvfy::NativeVerifierConfig {
+        self.material.config(options, self.outcome_key.clone(), 619)
+    }
+}
+
 impl Material {
     fn config(
         &self,
