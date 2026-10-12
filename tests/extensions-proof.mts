@@ -326,6 +326,7 @@ try{
   members[2]=(await submit(9,[await members[2].activate(acceptedContact.incoming,now++,acceptedContact.senderSignature)],'activate')).next;
   const waveContext={history:bytes(231),challenge:bytes(232)},waveScope=Uint8Array.from(artifacts.scope.circuitDigest),waveIssuer=Uint8Array.from(manifest.issuerKey);
   if(waveArtifacts)waveCases.push(await reservationCase(members[2],acceptedContact.incoming,waveContext,waveScope,waveIssuer,waveProve));
+  members[0]=(await submit(7,[await members[0].activate(acceptedContact.outgoing,now++,acceptedContact.recipientSignature)],'activate')).next;
   // The sender's own reservation of the same wave: it mirrors the recipient's context except for its role and one-use challenge.
   if(waveArtifacts)waveCases.push(await reservationCase(members[0],acceptedContact.outgoing,{...waveContext,challenge:bytes(233)},waveScope,waveIssuer,waveProve,'wave-sender'));
   const replySlot=members[2].slots.get(acceptedContact.incoming.toString());
