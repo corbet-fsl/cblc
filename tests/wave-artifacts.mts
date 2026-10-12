@@ -27,7 +27,7 @@ for(const kind of ['wave','outcome']) {
     .reduce((count,parameter)=>count+width(parameter.type),0);
 }
 console.log(`Compiled public ABI widths ${JSON.stringify(widths)}`);
-const expected={wave:586,outcome:619};
+const expected={wave:618,outcome:651};
 assert.deepEqual(widths,expected,'wave public ABI widths');
 const lock=JSON.parse(await readFile('circuits/extensions/setup-lock.json'));
 await mkdir(resolve(directory,'setup'),{recursive:true});

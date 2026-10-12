@@ -271,10 +271,10 @@ impl ExtensionArtifacts {
         anonymous: NativeVerifierOptions,
     ) -> [cvfy::NativeVerifierConfig; 3] {
         [
-            self.material.config(updates, self.keys[0].clone(), 345),
+            self.material.config(updates, self.keys[0].clone(), 377),
             self.material
-                .config(anonymous.clone(), self.keys[1].clone(), 262),
-            self.material.config(anonymous, self.keys[2].clone(), 172),
+                .config(anonymous.clone(), self.keys[1].clone(), 294),
+            self.material.config(anonymous, self.keys[2].clone(), 204),
         ]
     }
     pub(crate) fn record_epoch_config(
@@ -283,7 +283,7 @@ impl ExtensionArtifacts {
     ) -> Option<cvfy::NativeVerifierConfig> {
         self.record_epoch_key
             .as_ref()
-            .map(|key| self.material.config(options, key.clone(), 303))
+            .map(|key| self.material.config(options, key.clone(), 335))
     }
 }
 
@@ -337,13 +337,13 @@ impl WaveArtifacts {
     pub fn issuer_key(&self) -> [u8; 64] {
         self.issuer
     }
-    /// Verifier configuration for reservation evidence (586 public fields).
+    /// Verifier configuration for reservation evidence (618 public fields).
     pub fn wave_config(&self, options: NativeVerifierOptions) -> cvfy::NativeVerifierConfig {
-        self.material.config(options, self.wave_key.clone(), 586)
+        self.material.config(options, self.wave_key.clone(), 618)
     }
-    /// Verifier configuration for settled outcomes (619 public fields).
+    /// Verifier configuration for settled outcomes (651 public fields).
     pub fn outcome_config(&self, options: NativeVerifierOptions) -> cvfy::NativeVerifierConfig {
-        self.material.config(options, self.outcome_key.clone(), 619)
+        self.material.config(options, self.outcome_key.clone(), 651)
     }
 }
 

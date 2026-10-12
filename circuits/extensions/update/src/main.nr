@@ -18,13 +18,13 @@ fn main(
     policy_revision: pub u64, policy_valid_from: pub u64, policy_valid_until: pub u64,
     newcomer_period: pub u64, rate_window: pub u64, newcomer_admissions: pub u32,
     maximum_admissions: pub u32, refill_period: pub u64, refill_units: pub u32, abandon_after: pub u64,
-    standing_policy: StandingPolicy,
     owner_secret: [u8; 32], owner_enrollment: Enrollment, peer_enrollment: Enrollment,
     receipt_owner_enrollment: Enrollment,
     delivery_kind: u8, contact_signature: [u8;64],
     old: Opening, new_blind: [u8; 32], action: u8, slot: Obligation,
     own_map: MapWitness, opposite_map: MapWitness, pair_map: MapWitness,
     pair_exists: bool, resolution: Resolution, acknowledgment: Acknowledgment,
+    standing_policy: StandingPolicy,
 ) {
     let ext = extension_hash(extension);
     assert((now > 0) & (now <= SAFE));

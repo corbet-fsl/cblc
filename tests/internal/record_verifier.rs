@@ -47,6 +47,7 @@ fn material() -> PublicVerifierMaterial {
             change_token_cost: 1,
             deposit_delay_seconds: 1,
             minimum_deposit_batch: 2,
+            standing_policy_digest: [9; 32],
         },
         proof_scope: scope.clone(),
         manifest_sha256: [3; 32],

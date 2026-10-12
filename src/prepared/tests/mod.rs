@@ -46,6 +46,7 @@ fn policy() -> ExtensionPolicy {
         change_token_cost: 3,
         deposit_delay_seconds: 10,
         minimum_deposit_batch: 2,
+        standing_policy_digest: [9; 32],
     }
 }
 fn scalar_value(field: &PublicField) -> u64 {
@@ -167,25 +168,26 @@ fn ingestion_preserves_versions_and_clears_only_intermediate_bindings() {
     let proofs = prepare(&update(), &bundle_bytes(steps())).unwrap();
     assert_eq!(proofs.len(), 2);
     for proof in &proofs {
-        assert_eq!(proof.inputs.len(), 345);
+        assert_eq!(proof.inputs.len(), 377);
     }
     let first = values(&proofs[0].inputs);
     let last = values(&proofs[1].inputs);
     assert_eq!(&first[..5], &[2, 5, 3, 10, 2]);
-    assert_eq!(&first[5..37], &[11; 32]);
-    assert_eq!(&first[37..69], &[12; 32]);
-    assert_eq!(first[69], 1);
-    assert_eq!(&first[70..102], &[0; 32]);
-    assert_eq!(&first[233..235], &[4, 4]);
-    assert_eq!(&first[235..267], &[4; 32]);
-    assert_eq!(&first[267..299], &[7; 32]);
-    assert_eq!(&first[299..331], &[0; 32]);
-    assert_eq!(last[69], 0);
-    assert_eq!(&last[70..102], &[13; 32]);
-    assert_eq!(&last[233..235], &[4, 5]);
-    assert_eq!(&last[235..267], &[7; 32]);
-    assert_eq!(&last[267..299], &[5; 32]);
-    assert_eq!(&last[299..331], &[6; 32]);
+    assert_eq!(&first[5..37], &[9; 32]);
+    assert_eq!(&first[37..69], &[11; 32]);
+    assert_eq!(&first[69..101], &[12; 32]);
+    assert_eq!(first[101], 1);
+    assert_eq!(&first[102..134], &[0; 32]);
+    assert_eq!(&first[265..267], &[4, 4]);
+    assert_eq!(&first[267..299], &[4; 32]);
+    assert_eq!(&first[299..331], &[7; 32]);
+    assert_eq!(&first[331..363], &[0; 32]);
+    assert_eq!(last[101], 0);
+    assert_eq!(&last[102..134], &[13; 32]);
+    assert_eq!(&last[265..267], &[4, 5]);
+    assert_eq!(&last[267..299], &[7; 32]);
+    assert_eq!(&last[299..331], &[5; 32]);
+    assert_eq!(&last[331..363], &[6; 32]);
     assert_eq!(proofs[0].proof, [1, 2]);
     assert_eq!(proofs[1].proof, [3, 4]);
 }
@@ -268,7 +270,7 @@ fn genesis_cannot_consume_and_ordinary_updates_have_no_change_binding() {
     let single =
         json!({"version":1,"proofs":[{"state":vec![5;32],"inbox":vec![0;32],"proof":"01"}]});
     let prepared = prepare(&statement, &bundle_bytes(single)).unwrap();
-    assert_eq!(values(&prepared[0].inputs[70..102]), vec![0; 32]);
+    assert_eq!(values(&prepared[32].inputs[102..134]), vec![0; 32]);
 }
 
 #[test]
@@ -286,15 +288,15 @@ fn anonymous_inputs_bind_manifest_issuer_scope_and_record_disclosure() {
     };
     let prepared = prepare(&deposit, &anonymous()).unwrap();
     let fields = values(&prepared[0].inputs);
-    assert_eq!(fields.len(), 262);
-    assert_eq!(&fields[5..69], &[9; 64]);
-    assert_eq!(&fields[69..101], &[10; 32]);
-    assert_eq!(&fields[101..133], &[1; 32]);
-    assert_eq!(&fields[133..165], &[2; 32]);
-    assert_eq!(fields[165], 42);
-    assert_eq!(&fields[166..198], &[3; 32]);
-    assert_eq!(&fields[198..230], &[4; 32]);
-    assert_eq!(&fields[230..262], &[5; 32]);
+    assert_eq!(fields.len(), 294);
+    assert_eq!(&fields[37..101], &[9; 64]);
+    assert_eq!(&fields[101..133], &[10; 32]);
+    assert_eq!(&fields[133..165], &[1; 32]);
+    assert_eq!(&fields[165..197], &[2; 32]);
+    assert_eq!(fields[197], 42);
+    assert_eq!(&fields[198..230], &[3; 32]);
+    assert_eq!(&fields[230..262], &[4; 32]);
+    assert_eq!(&fields[262..294], &[5; 32]);
     for variant in 0..3 {
         let mut changed = deposit.clone();
         if let ExtensionStatement::Deposit { deposit, .. } = &mut changed {
@@ -309,17 +311,17 @@ fn anonymous_inputs_bind_manifest_issuer_scope_and_record_disclosure() {
     let mut record = record();
     let p = prepare(&record, &anonymous()).unwrap();
     let fields = values(&p[0].inputs);
-    assert_eq!(fields.len(), 172);
-    assert_eq!(fields[134], 0);
-    assert_eq!(&fields[168..], &[0, 0, 0, 0]);
+    assert_eq!(fields.len(), 204);
+    assert_eq!(fields[166], 0);
+    assert_eq!(&fields[200..], &[0, 0, 0, 0]);
     if let ExtensionStatement::Record { record, .. } = &mut record {
         record.context.purpose = RecordUse::ForumListing;
         record.shares = Some([2000, 3000, 5000]);
     }
     let p = prepare(&record, &anonymous()).unwrap();
     let fields = values(&p[0].inputs);
-    assert_eq!(fields[134], 1);
-    assert_eq!(&fields[168..], &[1, 2000, 3000, 5000]);
+    assert_eq!(fields[166], 1);
+    assert_eq!(&fields[200..], &[1, 2000, 3000, 5000]);
 }
 
 #[test]

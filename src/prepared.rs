@@ -126,7 +126,7 @@ fn decode(proof: &str) -> Result<Vec<u8>, Error> {
 
 fn extension_fields(policy: &ExtensionPolicy) -> Result<Vec<PublicField>, Error> {
     policy.validate()?;
-    Ok([
+    let mut fields = [
         policy.revision,
         u64::from(policy.public_record_quorum),
         u64::from(policy.change_token_cost),
@@ -134,7 +134,9 @@ fn extension_fields(policy: &ExtensionPolicy) -> Result<Vec<PublicField>, Error>
         u64::from(policy.minimum_deposit_batch),
     ]
     .map(scalar)
-    .to_vec())
+    .to_vec();
+    bytes(&mut fields, &policy.standing_policy_digest);
+    Ok(fields)
 }
 
 fn update_fields(

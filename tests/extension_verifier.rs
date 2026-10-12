@@ -63,6 +63,7 @@ fn missing_worker_refuses_both_pools_and_domain_confusion_without_accepting_a_pr
         change_token_cost: 1,
         deposit_delay_seconds: 10,
         minimum_deposit_batch: 2,
+        standing_policy_digest: [9; 32],
     };
     let record = ExtensionStatement::Record {
         policy: policy.clone(),
@@ -125,9 +126,10 @@ fn extension_policy_requires_every_explicit_positive_economic_bound() {
         change_token_cost: 1,
         deposit_delay_seconds: 10,
         minimum_deposit_batch: 2,
+        standing_policy_digest: [9; 32],
     };
     policy.validate().unwrap();
-    for variant in 0..9 {
+    for variant in 0..10 {
         let mut changed = policy.clone();
         match variant {
             0 => changed.revision = 0,
@@ -138,7 +140,8 @@ fn extension_policy_requires_every_explicit_positive_economic_bound() {
             5 => changed.deposit_delay_seconds = czkp::MAX_INTEGER + 1,
             6 => changed.minimum_deposit_batch = 0,
             7 => changed.minimum_deposit_batch = 1,
-            _ => changed.minimum_deposit_batch = 65,
+            8 => changed.minimum_deposit_batch = 65,
+            _ => changed.standing_policy_digest = [0; 32],
         }
         assert_eq!(changed.validate(), Err(Error::InvalidInput));
     }

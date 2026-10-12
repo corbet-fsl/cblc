@@ -18,6 +18,8 @@ pub struct ExtensionPolicy {
     pub change_token_cost: u32,
     pub deposit_delay_seconds: u64,
     pub minimum_deposit_batch: u8,
+    /// Digest of the rulebook-signed standing policy (`czkp::standing::Policy::digest`).
+    pub standing_policy_digest: [u8; 32],
 }
 impl ExtensionPolicy {
     pub fn validate(&self) -> Result<(), Error> {
@@ -28,6 +30,7 @@ impl ExtensionPolicy {
             || self.deposit_delay_seconds == 0
             || self.deposit_delay_seconds > czkp::MAX_INTEGER
             || !(2..=64).contains(&self.minimum_deposit_batch)
+            || self.standing_policy_digest == [0; 32]
         {
             return Err(Error::InvalidInput);
         }

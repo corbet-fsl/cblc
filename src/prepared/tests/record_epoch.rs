@@ -45,30 +45,30 @@ fn original_r2_public_abi_preserves_each_field_and_the_two_key_limbs() {
     assert_eq!(prepared.len(), 1);
     assert_eq!(prepared[0].proof, [1, 2]); // Opaque framing fixture, never a valid proof.
     let fields = &prepared[0].inputs;
-    assert_eq!(fields.len(), 303);
+    assert_eq!(fields.len(), 335);
     assert_eq!(values(&fields[..5]), [2, 5, 3, 10, 2]);
     // Offsets are the original record_epoch Noir public parameter order.
     for (start, expected) in [
-        (5, record.epoch.issuer_key.as_slice()),
-        (37, record.certificate.as_slice()),
-        (101, record.epoch.proof_scope.circuit_digest.as_slice()),
+        (37, record.epoch.issuer_key.as_slice()),
+        (69, record.certificate.as_slice()),
+        (133, record.epoch.proof_scope.circuit_digest.as_slice()),
         (
-            133,
+            165,
             record.epoch.proof_scope.verifying_key_digest.as_slice(),
         ),
-        (165, record.epoch.community.as_slice()),
-        (197, record.owner.as_slice()),
-        (232, record.epoch.root.as_slice()),
-        (265, record.blinded_leaf.as_slice()),
+        (197, record.epoch.community.as_slice()),
+        (229, record.owner.as_slice()),
+        (264, record.epoch.root.as_slice()),
+        (297, record.blinded_leaf.as_slice()),
     ] {
         assert_eq!(
             values(&fields[start..start + expected.len()]),
             expected.iter().map(|v| u64::from(*v)).collect::<Vec<_>>()
         );
     }
-    assert_eq!(values(&fields[229..232]), [2, 200, 300]);
-    assert_eq!(scalar_value(&fields[264]), 9);
-    let key = fields[297..299]
+    assert_eq!(values(&fields[261..264]), [2, 200, 300]);
+    assert_eq!(scalar_value(&fields[296]), 9);
+    let key = fields[329..331]
         .iter()
         .flat_map(|f| {
             assert_eq!(&f[..16], &[0; 16]);
@@ -76,7 +76,7 @@ fn original_r2_public_abi_preserves_each_field_and_the_two_key_limbs() {
         })
         .collect::<Vec<_>>();
     assert_eq!(key, record.presentation_key);
-    assert_eq!(values(&fields[299..]), [1, 2500, 6000, 1500]);
+    assert_eq!(values(&fields[331..]), [1, 2500, 6000, 1500]);
     for field in fields {
         czkp::field(field, false).unwrap();
     }
@@ -84,7 +84,7 @@ fn original_r2_public_abi_preserves_each_field_and_the_two_key_limbs() {
     let mut below_quorum = record;
     below_quorum.shares = None;
     let prepared = prepare(&statement(below_quorum), &anonymous()).unwrap();
-    assert_eq!(values(&prepared[0].inputs[299..]), [0, 0, 0, 0]);
+    assert_eq!(values(&prepared[0].inputs[331..]), [0, 0, 0, 0]);
 }
 
 #[test]

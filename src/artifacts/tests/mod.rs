@@ -125,7 +125,7 @@ fn authenticated_snapshots_bind_group_and_each_native_key_without_host_files() {
     for (config, (key, inputs)) in
         configs
             .into_iter()
-            .zip([(vec![1, 2], 345), (vec![3, 4], 262), (vec![5, 6], 172)])
+            .zip([(vec![1, 2], 377), (vec![3, 4], 294), (vec![5, 6], 204)])
     {
         assert_eq!(config.verification_key, key);
         assert_eq!(config.max_public_inputs, inputs);
@@ -314,7 +314,7 @@ fn optional_original_r2_key_is_authenticated_distinct_and_never_substituted() {
     let artifacts = fixture.extension().unwrap();
     let config = artifacts.record_epoch_config(options()).unwrap();
     assert_eq!(config.verification_key, [7, 8]);
-    assert_eq!(config.max_public_inputs, 303);
+    assert_eq!(config.max_public_inputs, 335);
     assert_eq!(
         config.scope.circuit_digest,
         artifacts.scope().circuit_digest
@@ -365,6 +365,7 @@ fn legacy_group_cannot_route_r2_to_a_legacy_key_or_native_worker() {
             change_token_cost: 1,
             deposit_delay_seconds: 1,
             minimum_deposit_batch: 2,
+            standing_policy_digest: [9; 32],
         },
         record: czkp::record::Record {
             epoch: czkp::record::Epoch {

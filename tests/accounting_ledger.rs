@@ -893,6 +893,7 @@ fn extension_activation_requires_a_real_proof() {
             change_token_cost: 1,
             deposit_delay_seconds: 10,
             minimum_deposit_batch: 2,
+            standing_policy_digest: [9; 32],
         },
         verifier,
         cblc::verification::ExtensionLimits {
