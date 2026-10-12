@@ -20,9 +20,13 @@ def digest(path, maximum):
 root = Path(os.environ["ARTIFACT_ROOT"])
 if not root.is_absolute():
     raise SystemExit("Original artifact destination unavailable")
-source = (root / "gather-record-fixture").resolve(strict=True)
+# The live producer directory is rewritten by every verify run; the pinned capture is kept
+# immutably under its own receipt digest (retain-record-fixture.py).
+PINNED = "7270351d40c1ed49b1499ec82e59449e6d28ca715d5590485dee56e7ef757ff2"
+retained = root / "gather-record-fixture-retained" / PINNED
+source = (retained if retained.is_dir() else root / "gather-record-fixture").resolve(strict=True)
 metadata = source / "worker.json"
-if digest(metadata, 65536) != "7270351d40c1ed49b1499ec82e59449e6d28ca715d5590485dee56e7ef757ff2":
+if digest(metadata, 65536) != PINNED:
     raise SystemExit("Original verification worker receipt differs")
 receipt = json.loads(metadata.read_text())
 expected = {
