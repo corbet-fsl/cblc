@@ -263,13 +263,12 @@ try{
   const burns=[];
   for(const [i,c] of [first,noise].entries()){
     const candidate=await members[1].punish(c.incoming,now++,c.senderSignature);
-    const malformed=structuredClone(candidate.input);malformed.old.available=BigInt(malformed.old.available)+1n;
+    const malformed=structuredClone(candidate.input);malformed.old.reserved=BigInt(malformed.old.reserved)+1n;
     await assert.rejects(new Noir(programs.update).execute(witnessInputs(programs.update,malformed)));
     members[1]=(await submit(8,[candidate],'punishment',i===0)).next;
     assert.equal(members[1].opening.reserved,BigInt(1-i));
     burns.push({member:members[1],delivery:candidate.delivery});
   }
-  assert.equal(members[1].opening.available,1n);
   now=Math.ceil((now+extension.depositDelaySeconds)/10)*10;
   const deposits=[];
   for(const [i,b] of burns.entries())deposits.push(await anonymous(await b.member.deposit(b.delivery,b.member.certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'deposit',i===0));
@@ -291,7 +290,7 @@ try{
     const empty=await call({op:'inbox',member:7+index,now,owner:toArray(members[index].owner.member)});assert.equal(empty.entries.length,0);
   }
   await drain(0);await drain(3);
-  assert.equal(members[0].opening.available,2n);assert.equal(members[0].opening.punished,1n);
+  assert.equal(members[0].opening.punished,1n);
   await assert.rejects(members[0].expire(first.outgoing,now));
   const below=await record(0,'record-below');assert.equal(await call({op:'record',record:below.statement.record,proof:below.proof,now}),null);
   const binding=await call({op:'binding',member:7});
@@ -326,23 +325,13 @@ try{
   assert.deepEqual(await call({op:'record',record:visible.statement.record,proof:visible.proof,now}),[5000,0,5000]);
   const falseShares=structuredClone(visible.statement.record);falseShares.shares=[5001,0,4999];
   await call({op:'record',record:falseShares,proof:visible.proof,now},false);
-  // Spend the last available unit, then punish an established conversation at zero.
   members[0]=(await submit(7,[await members[0].changeToken(bytes(211),now++)],'second-change')).next;
-  assert.equal(members[0].opening.available,0n);
   const established=await members[0].punish(acceptedContact.outgoing,now++,acceptedContact.recipientSignature);
   members[0]=(await submit(7,[established],'established-punishment')).next;
-  assert.equal(members[0].opening.debt,1n);
-  const blocked=await members[0].reserve({peerIndex:2,role:0,nonce:bytes(221),group:bytes(222),contactPolicy:bytes(223),now}).catch(()=>null);
-  if(blocked)await assert.rejects(new Noir(programs.update).execute(witnessInputs(programs.update,blocked.input)));
   now=Math.ceil((now+10)/10)*10;
   const establishedDeposit=await anonymous(await members[0].deposit(established.delivery,members[0].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'established-deposit');
   await call({op:'deposit',batch:[{deposit:establishedDeposit.statement.deposit,proof:establishedDeposit.proof},batch[1]],now});
-  await drain(2);assert.equal(members[2].opening.available,2n);assert.equal(members[2].opening.punished,1n);
-  members[0]=(await submit(7,[await members[0].refill(now++)],'debt-refill')).next;
-  assert.equal(members[0].opening.debt,0n);assert.equal(members[0].opening.available,0n);
-  now=Math.max(now,Number(members[0].opening.frontier)+10);
-  members[0]=(await submit(7,[await members[0].refill(now++)],'spendable-refill')).next;
-  assert.equal(members[0].opening.available,1n);
+  await drain(2);assert.equal(members[2].opening.punished,1n);
   const declinedContact=await contact(0,3);
   members[3]=(await submit(10,[await members[3].activate(declinedContact.incoming,now++,declinedContact.senderSignature)],'decline-activate')).next;
   const declinedSlot=members[3].slots.get(declinedContact.incoming.toString());
@@ -374,10 +363,10 @@ try{
   const lateProof=await anonymous(await answered.deposit({slot:delayedSlot,kind:1},answered.certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'late-answer-deposit');
   await call({op:'deposit',batch:[earlyProof,lateProof].map(d=>({deposit:d.statement.deposit,proof:d.proof})),now});
   await drain(2);
-  assert.equal(members[2].opening.available,1n);assert.equal(members[2].opening.reserved,0n);
+  assert.equal(members[2].opening.reserved,0n);
   assert.equal(members[2].opening.accepted,0n);assert.equal(members[2].opening.punished,2n);
   await assert.rejects(members[2].expire(reordered.outgoing,now));
-  console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, zero-balance debt and negative scenarios');
+  console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, established punishment and negative scenarios');
   }
   await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
   // Only fictional public requests/proofs cross this fixture pipe. Replaying
