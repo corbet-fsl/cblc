@@ -58,7 +58,7 @@ manifest_sha = sha(bounded(destination / "manifest.json", 65536))
 activations = {}
 for community, expected in (
     ("alpha", "197281e27a68c485c51d556b1d10cbefdd21b0ba471b9c5a03afa86d4af0c897"),
-    ("omega", "782f779ccc6cbcfca4ab651f7fe2cd584391b8659c0ee59a94f307af457ee139"),
+    ("omega", "9afa016238172f2ca734b62de150c9b9c0963cdaaf640c1db16f31751042c60d"),
 ):
     request_bytes = bounded(Path(f"tests/holder/fixtures/{community}-native-request.json"), 65536)
     request_sha = sha(request_bytes)

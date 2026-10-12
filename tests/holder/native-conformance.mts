@@ -29,17 +29,17 @@ const fields = values => values.map(value => {
 async function execute(worker, request) {
   if (await realpath(worker) !== worker) throw new Error('Original verifier path differs');
   const file = await stat(worker);
-  if (!file.isFile() || file.size !== 65702792 || (file.mode & 0o777) !== 0o755) {
+  if (!file.isFile() || file.size !== 68078712 || (file.mode & 0o777) !== 0o755) {
     throw new Error('Original verifier file differs');
   }
   const digest = createHash('sha256');
   let read = 0;
   for await (const chunk of createReadStream(worker)) {
     read += chunk.length;
-    if (read > 65702792) throw new Error('Original verifier grew');
+    if (read > 68078712) throw new Error('Original verifier grew');
     digest.update(chunk);
   }
-  if (read !== 65702792 || digest.digest('hex') !== '747881540393b97845026c4c7c1831527a9356d1157aaa91ad2edd05599fb000') {
+  if (read !== 68078712 || digest.digest('hex') !== '5c5c69cca3ccc1d00e12d7d75bd431b79d68864b88e3c5ba18284c77f2ac46f9') {
     throw new Error('Original verifier bytes differ');
   }
   const input = Buffer.from(JSON.stringify(request));
@@ -72,8 +72,8 @@ export async function verifyOriginalNative(proof, verificationKey, setup, circui
   if (!worker) throw new Error('Original conformance worker unavailable');
   const receipt = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(
     await boundedFile('artifact-conformance-worker.json', 65536)));
-  if (receipt.metadataSha256 !== '7270351d40c1ed49b1499ec82e59449e6d28ca715d5590485dee56e7ef757ff2'
-      || receipt.workerSha256 !== '747881540393b97845026c4c7c1831527a9356d1157aaa91ad2edd05599fb000') {
+  if (receipt.metadataSha256 !== '23cf333ef4c1bb9acc401e3cf448528978d960fe793dbcc50da7a1ef54f6b212'
+      || receipt.workerSha256 !== '5c5c69cca3ccc1d00e12d7d75bd431b79d68864b88e3c5ba18284c77f2ac46f9') {
     throw new Error('Original conformance worker identity differs');
   }
   const scope = {circuitDigest: Array.from(circuitDigest), verifyingKeyDigest: Array.from(sha(verificationKey))};

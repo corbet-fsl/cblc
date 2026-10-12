@@ -20,18 +20,22 @@ def digest(path, maximum):
 root = Path(os.environ["ARTIFACT_ROOT"])
 if not root.is_absolute():
     raise SystemExit("Original artifact destination unavailable")
-source = (root / "gather-record-fixture").resolve(strict=True)
+# The first pinned worker (cblc d6014ac, receipt 7270351d...) was only ever kept in the live producer
+# directory, which every verify run rewrites; its bytes no longer exist. The immutable retained capture
+# below (cblc 6232481, retain-record-fixture.py) replaces it. A pin change: reviewed before it is trusted.
+PINNED = "23cf333ef4c1bb9acc401e3cf448528978d960fe793dbcc50da7a1ef54f6b212"
+source = (root / "gather-record-fixture-retained" / PINNED).resolve(strict=True)
 metadata = source / "worker.json"
-if digest(metadata, 65536) != "7270351d40c1ed49b1499ec82e59449e6d28ca715d5590485dee56e7ef757ff2":
+if digest(metadata, 65536) != PINNED:
     raise SystemExit("Original verification worker receipt differs")
 receipt = json.loads(metadata.read_text())
 expected = {
-    "sourceCommit": "d6014acbef63f4cd0929b20091884dd422421fc3",
-    "sourceArchiveSha256": "4b82df6659ae25f6cbfc509089baf7d6f8a3458975eea28f9e9044ac4d2d8157",
-    "cargoLockSha256": "d0a8d444db7322653d92cbfb491e529a2b1a919917e1751ba03e1d55f3b3f172",
+    "sourceCommit": "62324819462d67a39f71e41216967a2b1e1600ce",
+    "sourceArchiveSha256": "1b1a8dd61d4db763becf01f8b2e989f85791d2b3b588f5edd912f2c815b4399a",
+    "cargoLockSha256": "85ee6e30cc3d8ce6033a0cb415f265db95e0cd4f93f0dcf9cdd30bc8b2270f99",
     "nativeSdkSha256": "d3d70f5c3a9e55d241ce8842b2a8fd254ca651bcd38a8434faa9f363f68e756f",
-    "workerSha256": "747881540393b97845026c4c7c1831527a9356d1157aaa91ad2edd05599fb000",
-    "workerBytes": 65702792,
+    "workerSha256": "5c5c69cca3ccc1d00e12d7d75bd431b79d68864b88e3c5ba18284c77f2ac46f9",
+    "workerBytes": 68078712,
     "workerMode": 493,
 }
 if any(receipt[key] != value for key, value in expected.items()):

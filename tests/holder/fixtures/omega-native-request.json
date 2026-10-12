@@ -12,6 +12,7 @@
   "clock": {
     "host": "SystemClock",
     "capturedAtUtc": "2026-10-11T11:23:20+00:00",
+    "regenerated": "2026-10-12 after the first window (until 1791804200) expired: ten-year policy window; the activation proof stays historical, only this policy window is live",
     "policyInterval": "inclusive from, exclusive until; refuse live operations outside this exact interval; regenerate a new explicit fixture after expiry, never rewrite a proof",
     "activation": "original with_extensions verifies the historical configured relation without a live clock; this probe must never be submitted as a member account request",
     "liveProof": "new private holder proofs use actual current owner time; next original rate-window boundary and authorization deadlines remain exclusive"
@@ -23,7 +24,7 @@
     "incomingReservation": 1,
     "policyRevision": 1,
     "policyValidFrom": 1791717799,
-    "policyValidUntil": 1791804200,
+    "policyValidUntil": 2107077800,
     "newcomerPeriod": 100,
     "rateWindow": 1000,
     "newcomerAdmissions": 2,

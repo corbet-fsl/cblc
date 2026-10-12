@@ -225,14 +225,14 @@ export async function alphaStartupRequest() {
 // authority and must never relabel the alpha proof or renew its configured time.
 export async function omegaStartupRequest() {
   const bytes = await boundedFile('tests/holder/fixtures/omega-native-request.json', 65536);
-  if (sha(bytes) !== '782f779ccc6cbcfca4ab651f7fe2cd584391b8659c0ee59a94f307af457ee139') {
+  if (sha(bytes) !== '9afa016238172f2ca734b62de150c9b9c0963cdaaf640c1db16f31751042c60d') {
     throw new Error('Reviewed omega fixture configuration differs');
   }
   const request = json(bytes);
   assert.equal(request.purpose, 'cmsg.omega-native-fixture-request.v1');
   assert.equal(request.community, 'omega');
   assert.equal(request.observation, 1791717800);
-  assert.equal(request.accountPolicy.policyValidUntil, 1791804200);
+  assert.equal(request.accountPolicy.policyValidUntil, 2107077800);
   assert.equal(createHash('sha256').update(Buffer.alloc(48, 7)).digest('base64url'), request.accountMemberId);
   return request;
 }
