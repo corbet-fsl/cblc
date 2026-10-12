@@ -144,7 +144,7 @@ async function submit(member,candidates,label,measure=false,expected=true){
   if(expected) {
     const original=last.next,limits={maxBytes:1024*1024,maxMapEntries:256,maxSlots:64};
     const checkpointBytes=encodeExtensionCheckpoint(original,limits);
-    const options={hashes,extension:original.extension,transition,enrollment:original.checkpoint,
+    const options={hashes,extension:original.extension,standing:original.standing,transition,enrollment:original.checkpoint,
       ownerSecret:original.ownerSecret,expectedStatement:statement,checkpointBytes,limits};
     const restored=await restoreExtensionCheckpoint(options);
     assert.equal(restored.commitment,original.commitment);
