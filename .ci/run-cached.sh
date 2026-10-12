@@ -3,7 +3,6 @@
 set -euo pipefail
 # Merge stderr into stdout so the captured Crow log shows tool diagnostics.
 exec 2>&1
-set -x
 : "${CCID_BIN:?Missing verified ccid job runtime}"
 : "${CI_COMMIT_SHA:?Missing verified source revision}"
 : "${CI_REPOSITORY_URL:?Missing canonical repository identity}"

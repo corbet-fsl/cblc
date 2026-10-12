@@ -19,6 +19,21 @@
         "CI_TIMEOUT": "7200"
       }
     },
+    "proof-fixtures": {
+      "job": "proof-fixtures",
+      "scheduler": "crow",
+      "checks": [
+        "proof-fixtures"
+      ],
+      "workflow": "repository-jobs",
+      "command": [
+        "bash",
+        ".ci/run-cached.sh"
+      ],
+      "environment": {
+        "CI_TIMEOUT": "7200"
+      }
+    },
     "resolve-dependencies": {
       "job": "resolve-dependencies",
       "scheduler": "crow",
@@ -64,21 +79,6 @@
       "scheduler": "crow",
       "checks": [
         "wave-artifacts"
-      ],
-      "workflow": "repository-jobs",
-      "command": [
-        "bash",
-        ".ci/run-cached.sh"
-      ],
-      "environment": {
-        "CI_TIMEOUT": "7200"
-      }
-    },
-    "proof-fixtures": {
-      "job": "proof-fixtures",
-      "scheduler": "crow",
-      "checks": [
-        "proof-fixtures"
       ],
       "workflow": "repository-jobs",
       "command": [
