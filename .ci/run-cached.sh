@@ -7,7 +7,7 @@ exec 2>&1
 : "${CI_COMMIT_SHA:?Missing verified source revision}"
 : "${CI_REPOSITORY_URL:?Missing canonical repository identity}"
 : "${CHECKS:?Missing declared check selection}"
-if [ "$CHECKS" != "verify,advisories" ] && [ "$CHECKS" != "resolve-npm" ] && [ "$CHECKS" != "resolve-dependencies" ] && [ "$CHECKS" != "artifact-conformance" ]; then
+if [ "$CHECKS" != "verify,advisories" ] && [ "$CHECKS" != "resolve-npm" ] && [ "$CHECKS" != "resolve-dependencies" ] && [ "$CHECKS" != "artifact-conformance" ] && [ "$CHECKS" != "wave-artifacts" ]; then
   echo "CHECKS must be verify,advisories or an explicit dependency-resolution job, got: $CHECKS" >&2
   exit 2
 fi
@@ -80,6 +80,9 @@ rustup run nightly cargo llvm-cov --version
 # Re-prepend the verified ccid directory inside the shell so `ccid` on PATH stays exact.
 if [ "$CHECKS" = "resolve-npm" ] || [ "$CHECKS" = "resolve-dependencies" ]; then
   exec "$CCID_BIN" check --repo "$PWD" --check "$CHECKS"
+fi
+if [ "$CHECKS" = "wave-artifacts" ]; then
+  exec nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; exec "$CCID_BIN" check --repo "$PWD" --check wave-artifacts'
 fi
 if [ "$CHECKS" = "artifact-conformance" ]; then
   exec nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; exec "$CCID_BIN" check --repo "$PWD" --check artifact-conformance'
