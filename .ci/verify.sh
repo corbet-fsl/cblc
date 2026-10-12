@@ -98,7 +98,13 @@ esac
 if ! "$proof_cache_hit"; then
   git rev-parse HEAD > .extension-test/source.txt
   sha256sum package-lock.json >> .extension-test/source.txt
-  CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mts | tee -a "$proof_fixture_evidence"
+  # Peer-release circuits (the same issuer key and extension scope) so the one harness
+  # also proves a reservation and an Answer outcome for the counterpart verifiers.
+  wave_directory="$PWD/.wave-test"
+  test ! -e "$wave_directory" || { echo 'Existing wave output refuses overwrite' >&2; exit 2; }
+  CBLC_EXTENSION_DIRECTORY="$wave_directory" node runtime/extensions/compile.mts --waves
+  CBLC_EXTENSION_DIRECTORY="$wave_directory" node tests/wave-artifacts.mts
+  CBLC_WAVE_DIRECTORY="$wave_directory" CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mts | tee -a "$proof_fixture_evidence"
 fi
 # This original native owner test needs only the original three artifacts.
 # Retain its actual signed current material before the longer fourth fixture.
