@@ -422,6 +422,7 @@ dependencies = [
  "cssr",
  "cthl",
  "cvfy",
+ "cwlt",
  "czkp",
  "data-encoding",
  "ed25519-dalek 2.2.0",
@@ -880,6 +881,20 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+]
+
+[[package]]
+name = "cwlt"
+version = "0.0.0"
+source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#95a36a9e3b17e74339a2804ffaac464156f2be44"
+dependencies = [
+ "cvfy",
+ "czkp",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

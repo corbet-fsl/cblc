@@ -52,6 +52,7 @@ sha2 = "0.10"
 [dev-dependencies]
 czkp = { git = "https://git.corbet.ch/corbet-foss/czkp", branch = "main", features = ["native-worker"] }
 crlt = { git = "https://git.corbet.ch/corbet-foss/crlt", branch = "main" }
+cwlt = { git = "https://git.corbet.ch/corbet-foss/cwlt.git", branch = "main", default-features = false, features = ["native-verifier"] }
 csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
 jsonschema = { version = "0.58", default-features = false }
 openssl = "0.10"
