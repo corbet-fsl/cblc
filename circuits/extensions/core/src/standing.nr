@@ -66,7 +66,7 @@ fn decay(x: u64, days: u64, h: u64, table: [u64; 64]) -> u64 {
     if (x == 0) | big {
         0
     } else {
-        (((x >> (shift as u8)) as u128 * table[r as u32] as u128) >> 16) as u64
+        (((x >> shift) as u128 * table[r as u32] as u128) >> 16) as u64
     }
 }
 

@@ -8,7 +8,7 @@ import {compile,createFileManager} from '@noir-lang/noir_wasm';
 import {Noir} from '@noir-lang/noir_js';
 
 // Poseidon2 digest of the default parameters under the core domain; czkp pins the same value.
-const DEFAULT_DIGEST: string|undefined = undefined;
+const DEFAULT_DIGEST: string|undefined = '0x2ef15bfbf6246793c45fafb51762ab9ed4d891ecb67ba2d0ca4e0d6d23f98eb2';
 const golden=JSON.parse(await readFile(resolve('tests/vectors/standing/golden.json'),'utf8'));
 const compiled=await compile(createFileManager(resolve('circuits/extensions/standing_probe')));
 assert.ok(compiled.program?.bytecode,'standing probe compiles');
@@ -51,4 +51,3 @@ const distinct=new Set(digests.values());
 assert.equal(distinct.size,digests.size,'each parameter set has its own digest');
 console.log(`standing probe: ${steps} steps; default digest ${digests.get('default')}`);
 if(DEFAULT_DIGEST!==undefined) assert.equal(digests.get('default'),DEFAULT_DIGEST);
-// Re-run after the platform killed the first attempt before it started.
