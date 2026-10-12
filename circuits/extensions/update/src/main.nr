@@ -3,6 +3,8 @@ use core::{Enrollment,Opening,Obligation,MapWitness,Resolution,Acknowledgment,Ex
     verify_peer_authority,policy_bytes,state_policy_hash,state_hash,obligation_hash,
     verify_acknowledgment,verify_resolution,extension_hash,advance,delivery,authorization,verify_contact};
 use core::indexed;
+use core::standing::{Standing,StandingPolicy,policy_digest as standing_digest,check_policy,check_state,advance as advance_standing,
+    answer_received,answer_given,unanswered,punished,punish_given,cap};
 global SAFE: u64 = 9007199254740991;
 fn main(
     extension: pub ExtensionPolicy, previous_inbox: pub [u8;32], inbox: pub [u8;32],
@@ -16,6 +18,7 @@ fn main(
     policy_revision: pub u64, policy_valid_from: pub u64, policy_valid_until: pub u64,
     newcomer_period: pub u64, rate_window: pub u64, newcomer_admissions: pub u32,
     maximum_admissions: pub u32, refill_period: pub u64, refill_units: pub u32, abandon_after: pub u64,
+    standing_policy: StandingPolicy,
     owner_secret: [u8; 32], owner_enrollment: Enrollment, peer_enrollment: Enrollment,
     receipt_owner_enrollment: Enrollment,
     delivery_kind: u8, contact_signature: [u8;64],
@@ -29,18 +32,19 @@ fn main(
     assert((policy_revision > 0) & (policy_revision <= SAFE));
     assert((policy_valid_from > 0) & (policy_valid_from <= now));
     assert((now < policy_valid_until) & (policy_valid_until <= SAFE));
-    assert((maximum_available > 0) & (initial_credit <= maximum_available));
-    assert((outgoing_reservation > 0) & (outgoing_reservation <= initial_credit));
-    assert((incoming_reservation > 0) & (incoming_reservation <= initial_credit));
-    assert((newcomer_period > 0) & (newcomer_period <= SAFE));
-    assert((rate_window > 0) & (rate_window <= SAFE));
-    assert((refill_period > 0) & (refill_period <= SAFE));
+    // Credit-era policy inputs (initial_credit, maximum_available, newcomer_*, refill_*) are
+    // accepted for policy-digest compatibility but never influence a result (temporary).
+    assert((outgoing_reservation > 0) & (incoming_reservation > 0));
+    // The proof window is at most one day: standing counts days, and the account creation
+    // time (the window end at genesis) is therefore accurate to a day.
+    assert((rate_window > 0) & (rate_window <= 86400));
     assert((abandon_after > 0) & (abandon_after <= SAFE));
     assert(abandon_after >= rate_window);
-    assert((newcomer_admissions > 0) & (newcomer_admissions <= maximum_admissions));
-    assert((refill_units > 0) & (refill_units <= initial_credit));
     let window_end = (now / rate_window + 1) * rate_window;
     assert(valid_until == if window_end < policy_valid_until { window_end } else { policy_valid_until });
+    let day = now / 86400;
+    check_policy(standing_policy);
+    assert(standing_digest(standing_policy) == field(extension.standing));
     let policy = policy_bytes(community, initial_credit, maximum_available,
         outgoing_reservation, incoming_reservation, policy_revision,
         policy_valid_from, policy_valid_until, newcomer_period, rate_window,
@@ -57,10 +61,11 @@ fn main(
         assert((previous_state == [0; 32]) & (settlement_marker == [0; 32]));
         let empty = indexed::initial_root();
         assert((previous_inbox==[0;32]) & (inbox==[0;32]) & !consume_only & (change_binding==[0;32]));
-        let initial = Opening { available: initial_credit, reserved: 0, debt:0, accepted:0, declined:0, punished:0, inbox:[0;32], authorization:0,
+        let initial = Opening { reserved: 0, accepted:0, declined:0, punished:0, inbox:[0;32], authorization:0,
             outgoing_root: empty, outgoing_count: 1, incoming_root: empty, incoming_count: 1,
-            pair_root: empty, pair_count: 1, frontier: valid_until, created_at: valid_until,
-            admission_epoch: now / rate_window, admissions: 0, blind: new_blind };
+            pair_root: empty, pair_count: 1, created_at: valid_until,
+            standing: Standing { g: 0, a: (standing_policy.c0 - 1) << 16, c: 0, pr: 0, pg: 0, lc: 0, day: valid_until / 86400 },
+            blind: new_blind };
         assert(state_hash(community, owner, state_policy, registered_secret, 0, ext, initial) == field(next_state));
     } else {
         assert(next_version == previous_version + if consume_only {0} else {1});
@@ -70,17 +75,16 @@ fn main(
         if action!=9 { assert(change_binding==[0;32]); }
         assert(new_blind != old.blind);
         assert(state_hash(community, owner, state_policy, registered_secret, previous_version, ext, old) == field(previous_state));
-        assert((old.created_at > 0) & (old.created_at <= old.frontier) & (old.frontier <= valid_until));
-        let mature = if now >= old.created_at { now - old.created_at >= newcomer_period } else { false };
-        let capacity = if mature { maximum_available } else { initial_credit };
-        let admission_limit = if mature { maximum_admissions } else { newcomer_admissions };
-        let epoch = now / rate_window;
-        assert((old.admission_epoch <= epoch) & (old.admissions <= maximum_admissions));
-        assert(old.available as u128 + old.reserved <= capacity as u128);
+        assert(old.created_at > 0);
+        let joined = old.created_at / 86400;
+        check_state(old.standing, joined);
+        let mut standing = advance_standing(old.standing, day, standing_policy);
+        // The shared pool: pending first contacts in both roles, sized by standing.
+        let pool = cap(standing, standing_policy, joined);
         assert((old.outgoing_count >= 1) & (old.outgoing_count <= 4294967296));
         assert((old.incoming_count >= 1) & (old.incoming_count <= 4294967296));
         assert((old.pair_count >= 1) & (old.pair_count <= 4294967296));
-        assert((action >= 1) & (action <= 11)); // reserve, activate, settle, cancel, expire, refill
+        assert((action >= 1) & (action <= 11) & (action != 6)); // 6 (refill) retired: slots return on settlement
         let amount = if slot.role == 0 { outgoing_reservation } else { incoming_reservation };
         if (action != 6) & (action != 9) & (action != 11) {
             assert((slot.role < 2) & (slot.peer != owner));
@@ -100,21 +104,13 @@ fn main(
         let mut changed_count = own_count;
         let mut pair_root = old.pair_root;
         let mut pair_count = old.pair_count;
-        let mut available = old.available;
         let mut reserved = old.reserved;
-        let mut frontier = old.frontier;
-        let mut admission_epoch = old.admission_epoch;
-        let mut admissions = old.admissions;
-        let mut issued: u32 = 0;
-        let mut burned: u64 = 0;
-        let mut debt = old.debt;
-        let mut accepted = old.accepted; let mut declined = old.declined; let mut punished = old.punished;
+        let mut accepted = old.accepted; let mut declined = old.declined; let mut punished_count = old.punished;
         let mut authorized: Field = 0;
-        assert((old.debt <= SAFE) & (old.accepted <= SAFE) & (old.declined <= SAFE) & (old.punished <= SAFE));
+        assert((old.accepted <= SAFE) & (old.declined <= SAFE) & (old.punished <= SAFE));
         if action == 1 {
             // Both owners commit the original initiator's common opened-at.
             assert((slot.phase == 1) & (slot.outcome==0) & !slot.answered & !slot.self_punished & (now < slot.expires_at));
-            assert(old.debt==0);
             assert(valid_until <= slot.expires_at);
             if slot.role == 0 {
                 assert(slot.admitted_at == now);
@@ -122,9 +118,8 @@ fn main(
             }
             // Incoming adopts the exact sender lease verified by the native
             // peer gate. Its proof alone does not establish cross-owner consent.
-            let count = if old.admission_epoch == epoch { old.admissions as u64 + 1 } else { 1 };
-            assert(count <= admission_limit as u64);
-            admission_epoch = epoch; admissions = count as u32;
+            // Pool check, both roles: pending first contacts (sent and received) stay within the cap.
+            assert(old.reserved + amount as u128 <= pool as u128);
             verify_enrollment(community, slot.peer, peer_enrollment, field(enrollment_root), now, valid_until);
             assert(slot.peer_authority == enrollment_leaf(community, slot.peer, peer_enrollment));
             assert(slot.owner_authority == enrollment_leaf(community, owner, owner_enrollment));
@@ -142,27 +137,12 @@ fn main(
                     pair_map.leaf, pair_map.index, pair_map.path, pair_map.append_path);
                 pair_count = pair_count + 1;
             }
-            available = old.available - amount;
             reserved = old.reserved + amount as u128;
             assert(settlement_marker == [0; 32]);
-        } else if action == 6 {
-            assert(now >= old.frontier);
-            assert(now - old.frontier >= refill_period);
-            let headroom = capacity as u128 - (old.available as u128 + old.reserved);
-            let paid = if debt < refill_units as u64 {debt} else {refill_units as u64};
-            let remainder=refill_units-paid as u32;
-            let grant=if headroom < remainder as u128 {headroom as u32} else {remainder};
-            issued=paid as u32+grant;
-            debt = debt - paid; burned = paid;
-            available = old.available + issued - paid as u32;
-            // No backdated proof chain may collect multiple grants inside one
-            // accepted window. Even a zero grant consumes the common horizon.
-            frontier = valid_until;
-            assert(settlement_marker == [0; 32]);
         } else if action==9 {
-            assert((change_binding!=[0;32]) & (old.debt==0));
-            available = available - extension.change_cost;
-            burned = extension.change_cost as u64;
+            assert(change_binding!=[0;32]);
+            // The change needs pool headroom; it holds nothing (open: v5 prices it no further).
+            assert(old.reserved + extension.change_cost as u128 <= pool as u128);
             let c=limbs(change_binding);
             let event=marker(community,owner,owner_secret,owner,change_binding);
             assert(field(settlement_marker)==hash([event,previous_version as Field,c[0],c[1]]));
@@ -176,7 +156,6 @@ fn main(
             let self_punish=(action==7)|(action==8);
             let kind=if action==7 {3} else if action==8 {4} else {delivery_kind};
             let mut next_slot=slot;
-            let mut cost: u64=0;
             if self_punish {
                 verify_contact(community,owner,slot,peer_enrollment,contact_signature);
                 if action==7 {assert((slot.role==1) & ((slot.phase==1)|(slot.phase==2)) & (slot.outcome==0));}
@@ -185,6 +164,8 @@ fn main(
                 pair_root=indexed::update(pair_root,pair_count,pair,pair_map.leaf[1],2,pair_map.leaf,pair_map.index,pair_map.path);
                 authorized=authorization(community,owner,owner_secret,slot,kind);
                 next_slot.self_punished=true;
+                // Punishing costs the punisher the same as the target: one given punishment.
+                standing = punish_given(standing);
             } else {
                 let obligation: [u8;32]=delivery(community,owner,slot.peer,slot,kind).to_be_bytes();
                 assert(inbox==advance(community,owner,previous_inbox,obligation));
@@ -202,40 +183,42 @@ fn main(
                     // contact; receiving-side punishment adds one punitive outcome.
                     if (slot.role==0)&(slot.outcome==1) {accepted=accepted-1;}
                     if (slot.role==0)&(slot.outcome==2) {declined=declined-1;}
-                    punished=punished+1;
+                    punished_count=punished_count+1;
+                    // Obligation consumed: the punishment counts fully against the target.
+                    standing = punished(standing, (kind==4) | slot.answered);
                 }
             }
             if (kind==3)|(kind==4) {
-                if (slot.phase==1)|(slot.phase==2) {
+                // My own wave punished by its target (kind 3): the slot is held until the
+                // waiting period ends (phase 8), then settled as a miss. Every other
+                // punishment frees a live slot at once.
+                let hold = (!self_punish) & (kind==3) & (slot.role==0) & ((slot.phase==1)|(slot.phase==2));
+                if ((slot.phase==1)|(slot.phase==2)) & !hold {
                     reserved=reserved-slot.amount as u128;
-                    if kind==4 {
-                        available=available+slot.amount; cost=1;
-                    } else {burned=slot.amount as u64;}
-                } else {cost=if kind==4 {1} else {slot.amount as u64};}
-                next_slot.phase=7;
+                }
+                next_slot.phase=if hold {8} else {7};
                 if kind==4 {next_slot.answered=true;}
                 if !self_punish {next_slot.outcome=3;}
             } else if slot.outcome!=3 {
-                // Accepted outcomes release the bond once. Declines retain the
-                // sender's wait. Expired reservations were already refunded.
+                // An Answer frees the slot once and earns goodwill. Declines retain the
+                // sender's wait. Expired reservations were already freed.
                 if (kind==1)&(slot.outcome==0) {
                     if (slot.phase==1)|(slot.phase==2) {
-                        available=available+slot.amount;
                         reserved=reserved-slot.amount as u128;
                     } else {assert((slot.phase==4)|(slot.phase==5));}
                     next_slot.phase=3; next_slot.answered=true;
+                    standing = answer_received(standing, standing_policy, joined);
                 }
                 if (kind==2)&(slot.phase==1) {next_slot.phase=2;}
                 next_slot.outcome=kind;
             }
-            let paid=if cost < available as u64 {cost} else {available as u64};
-            available=available-paid as u32; debt=debt+cost-paid; burned=burned+paid;
             changed_root=indexed::update(own_root,own_count,event,obligation_hash(event,slot,slot.phase),
                 obligation_hash(event,next_slot,next_slot.phase),own_map.leaf,own_map.index,own_map.path);
             if self_punish {assert(field(settlement_marker)==hash([event,kind as Field]));}
         } else {
             let next_phase = if action == 2 { 2 } else if action == 4 { 4 } else if action == 5 { 5 } else { 3 };
-            assert(slot.phase == if (action == 2) | (action == 4) { 1 } else { 2 });
+            assert(slot.phase == if (action == 2) | (action == 4) { 1 } else if action == 5 { slot.phase } else { 2 });
+            if action == 5 { assert((slot.phase == 2) | (slot.phase == 8)); }
             let mut changed_slot=slot;
             if action==3 {changed_slot.outcome=resolution.kind; if resolution.kind==1 {changed_slot.answered=true;}}
             changed_root = indexed::update(own_root, own_count, event,
@@ -247,17 +230,17 @@ fn main(
                 assert(valid_until <= slot.expires_at);
                 assert(settlement_marker == [0; 32]);
             } else if action == 4 {
-                // Before protected release only; the admission counter and
-                // permanent event tombstone prevent refund/reset churn.
-                available = old.available + amount;
+                // Before protected release only; the permanent event tombstone prevents
+                // refund/reset churn.
                 reserved = old.reserved - amount as u128;
                 assert(event == field(settlement_marker));
             } else if action == 5 {
                 assert((slot.role == 0) & (now >= slot.expires_at));
                 // The fixed wait refunds the bond regardless of whether a
-                // Close receipt was delivered. Admission throughput stays spent.
-                available = old.available + amount;
+                // Close receipt was delivered; the slot returns and the miss uses part of
+                // the starter loan. Phase 8 (punished while held) settles the same way.
                 reserved = old.reserved - amount as u128;
+                standing = unanswered(standing, standing_policy);
                 assert(event == field(settlement_marker));
             } else {
                 assert(slot.outcome==0);
@@ -286,26 +269,24 @@ fn main(
                     verify_acknowledgment(community, owner, slot, receipt_owner_enrollment,
                         peer_enrollment, resolution, acknowledgment, now);
                 }
-                // Incoming Close and confirmed Answer restore the exact bond.
-                // There is no additional reward or sender-selected burn.
-                available = old.available + amount;
+                // Incoming Close and a confirmed Answer free the slot. An Answer is a clean
+                // conversation in either role; a Close earns nothing and costs nothing.
                 reserved = old.reserved - amount as u128;
+                if resolution.kind == 1 {
+                    standing = if slot.role == 0 { answer_received(standing, standing_policy, joined) }
+                        else { answer_given(standing, standing_policy) };
+                }
                 assert(event == field(settlement_marker));
             }
         }
-        let refunded_debt=if debt<available as u64 {debt} else {available as u64};
-        available=available-refunded_debt as u32; debt=debt-refunded_debt; burned=burned+refunded_debt;
-        assert(available as u128 + reserved <= capacity as u128);
-        assert(available as u128 + reserved + burned as u128 == old.available as u128 + old.reserved + issued as u128);
-        assert((debt<=SAFE)&(accepted<=SAFE)&(declined<=SAFE)&(punished<=SAFE));
-        assert((debt==0)|(available==0));
-        let successor = Opening { available, reserved, debt, accepted, declined, punished, inbox, authorization: authorized,
+        assert((accepted<=SAFE)&(declined<=SAFE)&(punished_count<=SAFE));
+        check_state(standing, joined);
+        let successor = Opening { reserved, accepted, declined, punished: punished_count, inbox, authorization: authorized,
             outgoing_root: if slot.role == 0 { changed_root } else { old.outgoing_root },
             outgoing_count: if slot.role == 0 { changed_count } else { old.outgoing_count },
             incoming_root: if slot.role == 1 { changed_root } else { old.incoming_root },
             incoming_count: if slot.role == 1 { changed_count } else { old.incoming_count },
-            pair_root, pair_count, frontier, created_at: old.created_at,
-            admission_epoch, admissions, blind: new_blind };
+            pair_root, pair_count, created_at: old.created_at, standing, blind: new_blind };
         assert(state_hash(community, owner, state_policy, registered_secret, next_version, ext, successor) == field(next_state));
     }
 }

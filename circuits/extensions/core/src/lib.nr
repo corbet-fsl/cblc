@@ -3,6 +3,7 @@
 pub mod indexed;
 pub mod epoch;
 pub mod standing;
+use standing::Standing;
 use sha2lib::digest;
 use p2hash::poseidon2::Poseidon2;
 
@@ -17,12 +18,15 @@ pub struct Enrollment {
 }
 
 pub struct Opening {
-    pub available: u32, pub reserved: u128, pub debt: u64,
+    // Pool occupancy: the sum of live reservations (one unit per pending first contact).
+    pub reserved: u128,
     pub accepted: u64, pub declined: u64, pub punished: u64, pub inbox: [u8; 32], pub authorization: Field,
     pub outgoing_root: Field, pub outgoing_count: u64,
     pub incoming_root: Field, pub incoming_count: u64,
     pub pair_root: Field, pub pair_count: u64,
-    pub frontier: u64, pub created_at: u64, pub admission_epoch: u64, pub admissions: u32, pub blind: [u8; 32],
+    // Account creation time: set from the server-validated proof window at genesis and
+    // never changed; standing derives the account age from its day.
+    pub created_at: u64, pub standing: Standing, pub blind: [u8; 32],
 }
 
 pub struct Obligation {
@@ -44,13 +48,17 @@ pub struct Acknowledgment { pub issued_at: u64, pub signature: [u8; 64] }
 
 pub struct ExtensionPolicy {
     pub revision: u64, pub quorum: u32, pub change_cost: u32, pub delay: u64, pub batch: u8,
+    // Digest of the rulebook-signed standing policy (czkp::standing::Policy::digest).
+    pub standing: [u8; 32],
 }
 
 pub fn extension_hash(p: ExtensionPolicy) -> Field {
     assert((p.revision > 0) & (p.revision <= SAFE));
     assert((p.quorum > 0) & (p.change_cost > 0));
     assert((p.delay > 0) & (p.delay <= SAFE) & (p.batch >= 2) & (p.batch <= 64));
-    hash([DOMAIN, 31, p.revision as Field, p.quorum as Field, p.change_cost as Field, p.delay as Field, p.batch as Field])
+    let d = limbs(p.standing);
+    assert((d[0] != 0) | (d[1] != 0));
+    hash([DOMAIN, 31, p.revision as Field, p.quorum as Field, p.change_cost as Field, p.delay as Field, p.batch as Field, d[0], d[1]])
 }
 
 // Every outcome has an opening already known from the contact transcript. The
@@ -230,13 +238,15 @@ pub fn state_hash(community: [u8; 32], owner: [u8; 32], policy: [u8; 32],
     secret: Field, version: u64, extension_policy: Field, state: Opening) -> Field {
     let c = limbs(community); let o = limbs(owner); let p = limbs(policy); let b = limbs(state.blind);
     hash([DOMAIN, 30, c[0], c[1], o[0], o[1], p[0], p[1], secret, version as Field,
-        extension_policy, state.available as Field, state.reserved as Field, state.debt as Field,
+        extension_policy, state.reserved as Field,
         state.accepted as Field, state.declined as Field, state.punished as Field,
         limbs(state.inbox)[0], limbs(state.inbox)[1], state.authorization,
         state.outgoing_root, state.outgoing_count as Field,
         state.incoming_root, state.incoming_count as Field,
-        state.pair_root, state.pair_count as Field, state.frontier as Field,
-        state.created_at as Field, state.admission_epoch as Field, state.admissions as Field, b[0], b[1]])
+        state.pair_root, state.pair_count as Field, state.created_at as Field,
+        state.standing.g as Field, state.standing.a as Field, state.standing.c as Field,
+        state.standing.pr as Field, state.standing.pg as Field, state.standing.lc as Field,
+        state.standing.day as Field, b[0], b[1]])
 }
 
 pub fn obligation_hash(event: Field, slot: Obligation, phase: u8) -> Field {
