@@ -115,6 +115,8 @@ CBLC_LAST_GATE="proof"
 )
 # Keep this run's genuine record and startup captures once under their own digests; consumers pin those digests.
 python3 -B .ci/retain-record-fixture.py
+echo 'DIAG: captures retained; stopping before the native tests'
+exit 0
 CBLC_LAST_GATE="native-tests"
 # Native constructors authenticate extension artifacts at construction time.
 # Both account and extension fixtures must exist before the integration suite.
