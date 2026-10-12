@@ -117,24 +117,32 @@ impl Member {
     }
 }
 
-fn verified(l: &Loaded) -> (VerifiedWaveReservation, VerifiedWaveReservation) {
+async fn verified(l: &Loaded) -> (VerifiedWaveReservation, VerifiedWaveReservation) {
     let (s, r) = (&l.sender, &l.reservation);
     (
-        block_on(l.verifier.verify(&s.0, &s.1, &s.0.context, l.now)).unwrap(),
-        block_on(l.verifier.verify(&r.0, &r.1, &r.0.context, l.now)).unwrap(),
+        l.verifier
+            .verify(&s.0, &s.1, &s.0.context, l.now)
+            .await
+            .unwrap(),
+        l.verifier
+            .verify(&r.0, &r.1, &r.0.context, l.now)
+            .await
+            .unwrap(),
     )
 }
-fn answer(l: &Loaded) -> VerifiedWaveOutcome {
+async fn answer(l: &Loaded) -> VerifiedWaveOutcome {
     let (statement, proof) = &l.outcome;
-    block_on(l.verifier.verify_outcome(
-        statement,
-        proof,
-        &statement.evidence.context,
-        WaveOutcome::Answer,
-        &statement.receipt_digest,
-        l.now,
-    ))
-    .unwrap()
+    l.verifier
+        .verify_outcome(
+            statement,
+            proof,
+            &statement.evidence.context,
+            WaveOutcome::Answer,
+            &statement.receipt_digest,
+            l.now,
+        )
+        .await
+        .unwrap()
 }
 fn setup(l: &Loaded) -> (u64, WaveContext, WaveContext) {
     let (s, r) = (l.sender.0.context.clone(), l.reservation.0.context.clone());
@@ -161,7 +169,7 @@ fn a_sender_and_a_recipient_release_the_conversation_in_one_checkpoint() {
 
         // Sender release: both verified reservations, own record, current peer
         // lineage and no block; the conversation is created in the same checkpoint.
-        let (vs, vr) = verified(&l);
+        let (vs, vr) = verified(&l).await;
         let prepared = alice
             .waves()
             .accept_reservations(vs, vr, &mut alice.clock.clone())
@@ -210,7 +218,7 @@ fn a_sender_and_a_recipient_release_the_conversation_in_one_checkpoint() {
         let welcome = welcome.clone();
         assert!(!alice.store.load_pending().unwrap().is_empty());
         // The same reservations cannot be accepted again.
-        let (vs, vr) = verified(&l);
+        let (vs, vr) = verified(&l).await;
         assert_eq!(
             alice
                 .waves()
@@ -221,7 +229,7 @@ fn a_sender_and_a_recipient_release_the_conversation_in_one_checkpoint() {
 
         // Recipient: the reservations alone do not permit the join; the release's
         // own authority needs the settled Answer.
-        let (vs, vr) = verified(&l);
+        let (vs, vr) = verified(&l).await;
         let accepted = bob
             .waves()
             .accept_reservations(vs, vr, &mut bob.clock.clone())
@@ -246,7 +254,7 @@ fn a_sender_and_a_recipient_release_the_conversation_in_one_checkpoint() {
             unanswered.err(),
             Some(Error::Threads(cthr::Error::Authority))
         );
-        let (vs, vr) = verified(&l);
+        let (vs, vr) = verified(&l).await;
         bob.waves()
             .accept_reservations(vs, vr, &mut bob.clock.clone())
             .unwrap()
@@ -255,7 +263,7 @@ fn a_sender_and_a_recipient_release_the_conversation_in_one_checkpoint() {
             .unwrap();
         let answered = bob
             .waves()
-            .record_outcome(answer(&l), &mut bob.clock.clone())
+            .record_outcome(answer(&l).await, &mut bob.clock.clone())
             .unwrap();
         let release = bob
             .inbox
@@ -334,7 +342,7 @@ fn owners_prepared_at_different_versions_never_release() {
         );
         let package = bob.package(1).await;
         alice.offer(&l, 2).await;
-        let (vs, vr) = verified(&l);
+        let (vs, vr) = verified(&l).await;
         // Waves is read at one version ...
         let prepared = alice
             .waves()
