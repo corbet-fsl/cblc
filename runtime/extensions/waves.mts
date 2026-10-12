@@ -83,7 +83,7 @@ export async function waveEvidence(source:WaveSource,event:bigint,{history,chall
 export const wave=(source:WaveSource,event:bigint,context:WaveContextInput,scope:Bytes,issuerKey:Bytes)=>
   waveEvidence(source,event,context,scope,issuerKey);
 /** Outcome statement for a settled reservation (answer, close or silence). */
-export const waveOutcome=(source:WaveSource,event:bigint,context:WaveContextInput,scope:Bytes,issuerKey:Bytes,
+export const waveOutcome=async (source:WaveSource,event:bigint,context:WaveContextInput,scope:Bytes,issuerKey:Bytes,
     outcome:Outcome,resolution?:Settled['resolution'],acknowledgment?:Settled['acknowledgment'])=>{
   if(!Object.hasOwn(OUTCOME_CODE,outcome))throw new Error('Unknown settled outcome');
   return waveEvidence(source,event,context,scope,issuerKey,{outcome,resolution,acknowledgment});
