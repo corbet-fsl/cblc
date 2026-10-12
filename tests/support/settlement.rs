@@ -236,7 +236,7 @@ fn config(epoch: u64, next: bool, pending: u32, members: u32) -> SettlementConfi
             valid_until: (epoch + 1) * PERIOD * 1000,
             public_key_der: Rsa::private_key_from_der(private_key(next))
                 .unwrap()
-                .public_key_to_der_pkcs1()
+                .public_key_to_der()
                 .unwrap(),
         },
         policy_epoch: 1,
