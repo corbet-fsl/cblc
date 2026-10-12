@@ -1,7 +1,10 @@
 #[allow(dead_code)]
 pub mod host_storage;
+#[allow(dead_code)]
+pub mod inbox_support;
 pub mod native;
 pub mod proofs;
+pub mod wave;
 use cblc::admission::{AdmissionGrant, AdmissionTrust, DeviceAuthorization};
 use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};

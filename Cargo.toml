@@ -54,6 +54,14 @@ czkp = { git = "https://git.corbet.ch/corbet-foss/czkp", branch = "main", featur
 crlt = { git = "https://git.corbet.ch/corbet-foss/crlt", branch = "main" }
 cwlt = { git = "https://git.corbet.ch/corbet-foss/cwlt.git", branch = "main", default-features = false, features = ["native-verifier"] }
 csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
+cnbx = { git = "https://git.corbet.ch/corbet-libs/cnbx.git", branch = "release-threads" }
+ckmg = { git = "https://git.corbet.ch/corbet-foss/ckmg.git", branch = "v01" }
+cwst = { git = "https://git.corbet.ch/corbet-foss/cwst.git", branch = "v01" }
+cwvs = { git = "https://git.corbet.ch/corbet-foss/cwvs.git", branch = "release-authority" }
+ctcs = { git = "https://git.corbet.ch/corbet-foss/ctcs.git", branch = "v01" }
+cthr = { git = "https://git.corbet.ch/corbet-foss/cthr.git", branch = "v01" }
+blake3 = "1"
+ed25519-signing = { package = "ed25519-dalek", version = "3" }
 jsonschema = { version = "0.58", default-features = false }
 openssl = "0.10"
 tempfile = "3"

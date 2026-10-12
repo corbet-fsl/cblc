@@ -6,15 +6,15 @@
 import {waveEvidence,waveOutcome,type WaveSource,type Settled} from '../../runtime/extensions/waves.mts';
 type Bytes=Uint8Array;
 type Prove=(kind:'wave'|'outcome',input:object,label:string,measure:boolean)=>Promise<string>;
-export interface WaveFixtureCase {kind:'wave'|'outcome';statement:object;proof:string;expectedOutcome?:string}
+export interface WaveFixtureCase {kind:'wave'|'wave-sender'|'outcome';statement:object;proof:string;expectedOutcome?:string}
 /** JSON for the Rust serde types: safe integers only, nothing else is lossy. */
 export const waveJson=(value:unknown)=>JSON.stringify(value,(_,v)=>{
   if(typeof v==='bigint'){if(v>BigInt(Number.MAX_SAFE_INTEGER))throw new Error('Unsafe integer in a wave statement');return Number(v);}
   return v instanceof Uint8Array?Array.from(v):v;});
 export async function reservationCase(holder:WaveSource,event:bigint,context:{history:Bytes;challenge:Bytes},
-    scope:Bytes,issuerKey:Bytes,prove:Prove):Promise<WaveFixtureCase> {
+    scope:Bytes,issuerKey:Bytes,prove:Prove,kind:'wave'|'wave-sender'='wave'):Promise<WaveFixtureCase> {
   const built=await waveEvidence(holder,event,context,scope,issuerKey);
-  return {kind:'wave',statement:built.statement,proof:await prove('wave',built.input,'wave-reservation',true)};
+  return {kind,statement:built.statement,proof:await prove('wave',built.input,'wave-reservation',true)};
 }
 export async function outcomeCase(holder:WaveSource,event:bigint,context:{history:Bytes;challenge:Bytes},
     scope:Bytes,issuerKey:Bytes,settled:Settled,prove:Prove):Promise<WaveFixtureCase> {

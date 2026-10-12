@@ -118,7 +118,8 @@ python3 -B .ci/retain-record-fixture.py
 CBLC_LAST_GATE="native-tests"
 # Native constructors authenticate extension artifacts at construction time.
 # Both account and extension fixtures must exist before the integration suite.
-cargo test --locked --all-features --no-fail-fast -- --test-threads=2 | tee -a "$proof_fixture_evidence"
+# The wave proof tests need the retained wave fixture and run in the wave-verify job.
+cargo test --locked --all-features --no-fail-fast -- --test-threads=2 --skip the_retained_reservation_and_answer --skip a_sender_and_a_recipient_release --skip owners_prepared_at_different_versions | tee -a "$proof_fixture_evidence"
 CBLC_LAST_GATE="replay"
 node .ci/replay-account-proofs.ts
 CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/replay-extensions.mjs | tee -a "$proof_fixture_evidence"
@@ -171,7 +172,7 @@ CBLC_LAST_GATE="nightly-tests"
 "$NIGHTLY_CARGO" build --locked --example czkp_bb_worker
 export CBLC_BB="$CARGO_TARGET_DIR/debug/examples/czkp_bb_worker"
 test -x "$CBLC_BB"
-"$NIGHTLY_CARGO" test --locked --workspace --all-features -- --test-threads=2
+"$NIGHTLY_CARGO" test --locked --workspace --all-features -- --test-threads=2 --skip the_retained_reservation_and_answer --skip a_sender_and_a_recipient_release --skip owners_prepared_at_different_versions
 node .ci/replay-account-proofs.ts
 CBLC_LAST_GATE="instrumented-build"
 "$NIGHTLY_CARGO" build --locked --all-features --example extension_issuer --example extension_adversaries --message-format=json > instrumented-build.json

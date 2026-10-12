@@ -326,14 +326,16 @@ try{
   members[2]=(await submit(9,[await members[2].activate(acceptedContact.incoming,now++,acceptedContact.senderSignature)],'activate')).next;
   const waveContext={history:bytes(231),challenge:bytes(232)},waveScope=Uint8Array.from(artifacts.scope.circuitDigest),waveIssuer=Uint8Array.from(manifest.issuerKey);
   if(waveArtifacts)waveCases.push(await reservationCase(members[2],acceptedContact.incoming,waveContext,waveScope,waveIssuer,waveProve));
+  // The sender's own reservation of the same wave: it mirrors the recipient's context except for its role and one-use challenge.
+  if(waveArtifacts)waveCases.push(await reservationCase(members[0],acceptedContact.outgoing,{...waveContext,challenge:bytes(233)},waveScope,waveIssuer,waveProve,'wave-sender'));
   const replySlot=members[2].slots.get(acceptedContact.incoming.toString());
-  const resolution={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
+  const resolution={kind:1,issuedAt:BigInt(now),historyDigest:waveContext.history,ed25519ReceiptDigest:zeros()};
   const replyBytes=receiptBytes(community,members[2].owner.member,members[0].owner.member,replySlot,members[2].owner.delegationDigest,resolution);
   resolution.signature=canonicalSignature(sign('sha256',replyBytes,{key:signing[2],dsaEncoding:'ieee-p1363'}));
   const answerDigest=await receiptDigest(replyBytes,resolution.signature);
   const acknowledgment={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[0].owner.member,members[2].owner.member,replySlot,answerDigest,members[0].owner.delegationDigest,now),{key:signing[0],dsaEncoding:'ieee-p1363'}))};
   members[2]=(await submit(9,[await members[2].settle(acceptedContact.incoming,resolution,acknowledgment,now++)],'answer')).next;
-  if(waveArtifacts)waveCases.push(await outcomeCase(members[2],acceptedContact.incoming,{...waveContext,history:resolution.historyDigest},waveScope,waveIssuer,{outcome:'answer',resolution,acknowledgment},waveProve));
+  if(waveArtifacts)waveCases.push(await outcomeCase(members[2],acceptedContact.incoming,waveContext,waveScope,waveIssuer,{outcome:'answer',resolution,acknowledgment},waveProve));
   if(process.env.CBLC_WAVE_ONLY==='1') {
     // Fixture job: the reservation and the Answer are proved; the rest of the harness belongs to verify.
     await retainWave();
