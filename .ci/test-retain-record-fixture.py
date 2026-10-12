@@ -59,3 +59,50 @@ with tempfile.TemporaryDirectory() as temporary:
         pass
     assert (retained / first / "keys.json").read_bytes() == b"tampered"
 print("retained record fixture checks passed")
+
+def startup_capture(directory, marker):
+    (directory / "account").mkdir(parents=True)
+    data = {"init.json": b"init-" + marker, "account/config.json": b"config"}
+    for name, content in data.items():
+        (directory / name).write_bytes(content)
+    files = {name: {"sha256": sha(content), "bytes": len(content)} for name, content in data.items()}
+    (directory / "startup-artifacts.json").write_text(json.dumps({"version": 1, "files": files}, sort_keys=True))
+
+
+with tempfile.TemporaryDirectory() as temporary:
+    root = Path(temporary)
+    source, retained = root / "native-startup-fixture", root / "retained"
+    startup_capture(source, b"one")
+    first = retain.retain(source, retained, retain.verify_startup)
+    assert first == sha((source / "startup-artifacts.json").read_bytes())
+    assert retain.retain(source, retained, retain.verify_startup) == first
+    # A later run replaces the working directory; the first startup capture stays untouched.
+    import shutil
+    shutil.rmtree(source)
+    startup_capture(source, b"two")
+    second = retain.retain(source, retained, retain.verify_startup)
+    assert second != first
+    assert (retained / first / "init.json").read_bytes() == b"init-one"
+    assert (retained / second / "init.json").read_bytes() == b"init-two"
+    # A tampered retained capture is refused and never overwritten.
+    (retained / first / "init.json").write_bytes(b"tampered")
+    shutil.rmtree(source)
+    startup_capture(source, b"one")
+    try:
+        retain.retain(source, retained, retain.verify_startup)
+        raise SystemExit("Tampered retained startup capture was accepted")
+    except ValueError:
+        pass
+    assert (retained / first / "init.json").read_bytes() == b"tampered"
+    # A metadata file that lies about a size is refused before retention.
+    shutil.rmtree(source)
+    startup_capture(source, b"three")
+    metadata = json.loads((source / "startup-artifacts.json").read_text())
+    metadata["files"]["init.json"]["bytes"] += 1
+    (source / "startup-artifacts.json").write_text(json.dumps(metadata))
+    try:
+        retain.retain(source, retained, retain.verify_startup)
+        raise SystemExit("Mismatched startup size was accepted")
+    except ValueError:
+        pass
+print("retained startup fixture checks passed")
