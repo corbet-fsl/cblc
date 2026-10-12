@@ -300,7 +300,7 @@ fn failed_complete_frontier_preparation_rolls_back_every_due_effect() {
         .1;
     connection
         .execute_batch(&format!(
-            "DELETE FROM cssr_records WHERE community_id='community.example' AND key=X'{}'",
+            "DELETE FROM cssr_records WHERE community_id='community-example' AND key=X'{}'",
             HEXLOWER.encode(&missing)
         ))
         .unwrap();
@@ -315,7 +315,7 @@ fn failed_complete_frontier_preparation_rolls_back_every_due_effect() {
         assert!(value(&path, &record_key(8, &deposit.nullifier)).is_none());
         assert!(value(&path, &record_key(5, &deposit.recipient)).is_none());
     }
-    connection.execute_batch(&format!("INSERT INTO cssr_records(community_id,key,value) VALUES('community.example',X'{}',X'{}')", HEXLOWER.encode(&missing), HEXLOWER.encode(&original))).unwrap();
+    connection.execute_batch(&format!("INSERT INTO cssr_records(community_id,key,value) VALUES('community-example',X'{}',X'{}')", HEXLOWER.encode(&missing), HEXLOWER.encode(&original))).unwrap();
     ledger.publish_record_epoch(1, PERIOD, || 200).unwrap();
     assert_applied(&path, &deposits);
     assert_eq!(fact_count(&path), 0);
@@ -440,7 +440,7 @@ fn deleting_daily_metadata_never_reopens_retained_legacy_methods() {
         .filter(|(key, _)| key.starts_with(b"settlement-"))
         .collect();
     assert!(!metadata.is_empty());
-    connection.execute_batch(&format!("DELETE FROM cssr_records WHERE community_id='community.example' AND substr(key,1,11)=X'{}'", HEXLOWER.encode(b"settlement-"))).unwrap();
+    connection.execute_batch(&format!("DELETE FROM cssr_records WHERE community_id='community-example' AND substr(key,1,11)=X'{}'", HEXLOWER.encode(b"settlement-"))).unwrap();
     let missing = connection.snapshot();
     assert_eq!(
         ledger.deposit_batch(&deposits, || now),
@@ -456,7 +456,7 @@ fn deleting_daily_metadata_never_reopens_retained_legacy_methods() {
     ));
     assert_eq!(connection.snapshot(), missing);
     for (key, bytes) in metadata {
-        connection.execute_batch(&format!("INSERT INTO cssr_records(community_id,key,value) VALUES('community.example',X'{}',X'{}')", HEXLOWER.encode(&key), HEXLOWER.encode(&bytes))).unwrap();
+        connection.execute_batch(&format!("INSERT INTO cssr_records(community_id,key,value) VALUES('community-example',X'{}',X'{}')", HEXLOWER.encode(&key), HEXLOWER.encode(&bytes))).unwrap();
     }
     assert_eq!(
         ledger

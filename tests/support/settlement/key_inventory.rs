@@ -113,7 +113,7 @@ fn missing_key_binding_cannot_be_recreated_from_an_issuer_anchor() {
         .unwrap();
     connection
         .execute_batch(&format!(
-            "DELETE FROM cssr_records WHERE community_id='community.example' AND key=X'{}'",
+            "DELETE FROM cssr_records WHERE community_id='community-example' AND key=X'{}'",
             HEXLOWER.encode(key)
         ))
         .unwrap();
@@ -140,7 +140,7 @@ fn missing_key_binding_cannot_be_recreated_from_an_issuer_anchor() {
         Err(Error::Storage)
     ));
     assert_eq!(connection.snapshot(), missing);
-    connection.execute_batch(&format!("INSERT INTO cssr_records(community_id,key,value) VALUES('community.example',X'{}',X'{}')", HEXLOWER.encode(key), HEXLOWER.encode(bytes))).unwrap();
+    connection.execute_batch(&format!("INSERT INTO cssr_records(community_id,key,value) VALUES('community-example',X'{}',X'{}')", HEXLOWER.encode(key), HEXLOWER.encode(bytes))).unwrap();
     activate(&mut reopened, &cfg, false, 100);
     assert_eq!(connection.snapshot(), rows);
 }
@@ -162,7 +162,7 @@ fn orphan_or_conflicting_key_binding_never_becomes_fresh_daily_state() {
         .unwrap();
     let mut conflict: Value = serde_json::from_slice(bytes).unwrap();
     conflict["epoch"] = 2.into();
-    connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community.example' AND key=X'{}'", HEXLOWER.encode(&serde_json::to_vec(&conflict).unwrap()), HEXLOWER.encode(key))).unwrap();
+    connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community-example' AND key=X'{}'", HEXLOWER.encode(&serde_json::to_vec(&conflict).unwrap()), HEXLOWER.encode(key))).unwrap();
     let corrupted = connection.snapshot();
     assert!(matches!(
         ledger.activate_daily_settlement(
@@ -189,13 +189,13 @@ fn orphan_or_conflicting_key_binding_never_becomes_fresh_daily_state() {
 }
 
 fn put_row(connection: &inspection::Connection, key: &[u8], bytes: &[u8]) {
-    connection.execute_batch(&format!("INSERT OR REPLACE INTO cssr_records(community_id,key,value) VALUES('community.example',X'{}',X'{}')", HEXLOWER.encode(key), HEXLOWER.encode(bytes))).unwrap();
+    connection.execute_batch(&format!("INSERT OR REPLACE INTO cssr_records(community_id,key,value) VALUES('community-example',X'{}',X'{}')", HEXLOWER.encode(key), HEXLOWER.encode(bytes))).unwrap();
 }
 
 fn delete_row(connection: &inspection::Connection, key: &[u8]) {
     connection
         .execute_batch(&format!(
-            "DELETE FROM cssr_records WHERE community_id='community.example' AND key=X'{}'",
+            "DELETE FROM cssr_records WHERE community_id='community-example' AND key=X'{}'",
             HEXLOWER.encode(key)
         ))
         .unwrap();

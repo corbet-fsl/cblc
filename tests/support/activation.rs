@@ -35,7 +35,7 @@ fn install(
 }
 
 fn anchor(path: &Path) -> Vec<u8> {
-    let mut store = cssr::LibsqlStore::local(path, "community.example").unwrap();
+    let mut store = cssr::LibsqlStore::local(path, "community-example").unwrap();
     let mut transaction = store.transaction().unwrap();
     let value = transaction.get(b"extension-activation").unwrap().unwrap();
     transaction.rollback().unwrap();
@@ -43,7 +43,7 @@ fn anchor(path: &Path) -> Vec<u8> {
 }
 
 fn replace_anchor(path: &Path, value: Option<&[u8]>) {
-    let mut store = cssr::LibsqlStore::local(path, "community.example").unwrap();
+    let mut store = cssr::LibsqlStore::local(path, "community-example").unwrap();
     let mut transaction = store.transaction().unwrap();
     match value {
         Some(value) => transaction.put(b"extension-activation", value).unwrap(),

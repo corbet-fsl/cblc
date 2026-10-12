@@ -922,7 +922,7 @@ fn admission_rejects_legacy_root_ids_and_mismatched_pseudonyms() {
     rerooted.member_id = B64.encode(&Sha256::digest(
         serde_json::to_vec(&serde_json::json!([
             "cmsg.member.v1",
-            "community.example",
+            "community-example",
             B64.encode(&root.verifying_key().to_bytes())
         ]))
         .unwrap(),

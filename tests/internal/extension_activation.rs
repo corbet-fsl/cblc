@@ -30,10 +30,10 @@ fn fixture() -> (Vec<u8>, ExtensionActivation, ArtifactBinding) {
         checkpoint_period_seconds: 1000,
     };
     let trust = AdmissionTrust {
-        community_id: "community.example".into(),
+        community_id: "community-example".into(),
         policy_digest: data_encoding::BASE64URL_NOPAD.encode(&[3; 32]),
         policy_keys: csgn::Signer::new(
-            "community.example",
+            "community-example",
             csgn::SecretKey::from_seed(&mut [1; 32]),
             0,
             100_000,

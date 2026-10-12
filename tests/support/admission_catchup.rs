@@ -30,11 +30,11 @@ pub(super) fn exercise(
     let temporary = tempfile::tempdir().unwrap();
     let path = temporary.path().join("admission-catchup.db");
     assert_eq!(
-        common::host_storage::startup_clock_floor(&path, "community.example").unwrap(),
+        common::host_storage::startup_clock_floor(&path, "community-example").unwrap(),
         0
     );
     let mut signer = csgn::Signer::new(
-        "community.example",
+        "community-example",
         csgn::SecretKey::from_seed(&mut [21; 32]),
         1,
         100_000,
@@ -73,7 +73,7 @@ pub(super) fn exercise(
         .unwrap();
     drop(ledger);
     assert_eq!(
-        common::host_storage::startup_clock_floor(&path, "community.example").unwrap(),
+        common::host_storage::startup_clock_floor(&path, "community-example").unwrap(),
         110
     );
     let first = rotate(&mut signer, 22, 120, 1000);
@@ -162,7 +162,7 @@ pub(super) fn exercise(
     assert_eq!(ledger.waiting_period().unwrap(), tuned);
     assert_eq!(anchor(&path), original_anchor);
     assert_eq!(
-        common::host_storage::startup_clock_floor(&path, "community.example").unwrap(),
+        common::host_storage::startup_clock_floor(&path, "community-example").unwrap(),
         140
     );
     assert!(matches!(
@@ -257,7 +257,7 @@ pub(super) fn exercise(
     assert_eq!(anchor(&path), original_anchor);
     // The owner probe never supplies a missing or malformed durable floor.
     // Restore exact original bytes between cases; no startup parser lives in the host.
-    let mut store = cssr::LibsqlStore::local(&path, "community.example").unwrap();
+    let mut store = cssr::LibsqlStore::local(&path, "community-example").unwrap();
     let mut tx = store.transaction().unwrap();
     let original_floor = tx.get(b"clock").unwrap().unwrap();
     tx.rollback().unwrap();
@@ -272,19 +272,19 @@ pub(super) fn exercise(
             None => tx.delete(b"clock").unwrap(),
         }
         tx.commit().unwrap();
-        assert!(common::host_storage::startup_clock_floor(&path, "community.example").is_err());
+        assert!(common::host_storage::startup_clock_floor(&path, "community-example").is_err());
         let mut tx = store.transaction().unwrap();
         tx.put(b"clock", &original_floor).unwrap();
         tx.commit().unwrap();
     }
     // Deleting just the durable configuration cannot turn an existing owner
     // into a new bootstrap, even when its public transition target is genuine.
-    let mut store = cssr::LibsqlStore::local(&path, "community.example").unwrap();
+    let mut store = cssr::LibsqlStore::local(&path, "community-example").unwrap();
     let mut tx = store.transaction().unwrap();
     tx.delete(b"config").unwrap();
     tx.commit().unwrap();
     let retained = inspection::Connection::open(&path).unwrap().snapshot();
-    assert!(common::host_storage::startup_clock_floor(&path, "community.example").is_err());
+    assert!(common::host_storage::startup_clock_floor(&path, "community-example").is_err());
     assert!(
         common::host_storage::open_reconciled(
             &path,

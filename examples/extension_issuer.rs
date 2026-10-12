@@ -375,7 +375,7 @@ fn main() {
                     let member = v["member"].as_u64().unwrap() as u8;
                     let name = HEXLOWER.encode(&[member; 48]);
                     let change = Change {
-                        community: "community.example",
+                        community: "community-example",
                         member: &name,
                         field: "age",
                         expected: Pin {
@@ -479,7 +479,7 @@ fn main() {
                             }
                             assert!(verifier.verify_spent(&change, &damaged).await.is_err());
                         }
-                        let store = MemoryStore::new("community.example").unwrap();
+                        let store = MemoryStore::new("community-example").unwrap();
                         let pins = Pins::new(store, verified);
                         pins.pin(change.member, change.field, change.expected.fingerprint)
                             .await

@@ -83,14 +83,14 @@ fn status() -> AccountServiceRequest {
     let device = SigningKey::from_bytes(&[2; 32]);
     let root = SigningKey::from_bytes(&[7; 32]);
     let mut signer = csgn::Signer::new(
-        "community.example",
+        "community-example",
         csgn::SecretKey::from_seed(&mut [1; 32]),
         0,
         100_000,
     )
     .unwrap();
     let trust = AdmissionTrust {
-        community_id: "community.example".into(),
+        community_id: "community-example".into(),
         policy_digest: B64.encode(&[3; 32]),
         policy_keys: signer.key_ring().clone(),
     };

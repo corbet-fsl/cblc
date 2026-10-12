@@ -4,7 +4,7 @@ use crate::storage::MemoryStore;
 
 fn signer() -> csgn::Signer {
     csgn::Signer::new(
-        "community.example",
+        "community-example",
         csgn::SecretKey::from_seed(&mut [1; 32]),
         1,
         2000,
@@ -123,7 +123,7 @@ fn truncated_forked_tampered_retimed_or_unverified_history_refuses() {
         assert!(chain(&bootstrap, &history, 300).is_err());
     }
     let unrelated = csgn::Signer::new(
-        "community.example",
+        "community-example",
         csgn::SecretKey::from_seed(&mut [9; 32]),
         1,
         2000,

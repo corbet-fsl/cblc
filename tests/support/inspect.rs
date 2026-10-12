@@ -44,7 +44,7 @@ impl Connection {
         serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
     }
     pub fn snapshot(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-        self.run("SELECT key,value FROM cssr_records WHERE community_id='community.example' ORDER BY key",&[],false).unwrap().into_iter()
+        self.run("SELECT key,value FROM cssr_records WHERE community_id='community-example' ORDER BY key",&[],false).unwrap().into_iter()
             .map(|row|serde_json::from_value(Value::Array(row)).unwrap()).collect()
     }
 }

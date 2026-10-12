@@ -4,7 +4,7 @@ use super::*;
 fn config() -> StoredConfig {
     StoredConfig {
         format: "cblc.account.database.v5".into(),
-        community_id: "community.example".into(),
+        community_id: "community-example".into(),
         admission_policy_digest: "opaque-policy-digest".into(),
         policy_keys: vec![1, 2, 3],
         proof_scope: AccountProofScope {

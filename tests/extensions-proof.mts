@@ -162,7 +162,7 @@ async function anonymous(candidate,label,measure=false){return {statement:candid
 const extension={revision:1,publicRecordQuorum:2,changeTokenCost:1,depositDelaySeconds:10,minimumDepositBatch:2};
 const policy={initialCredit:3,maximumAvailable:3,outgoingReservation:1,incomingReservation:1,policyRevision:1,policyValidFrom:1,policyValidUntil:2000,
   newcomerPeriod:100,rateWindow:10,newcomerAdmissions:8,maximumAdmissions:8,refillPeriod:10,refillUnits:1,abandonAfter:100};
-const community=new Uint8Array(sha('community.example'));
+const community=new Uint8Array(sha('community-example'));
 const signing=[],entries=[],members=[];
 try{
   for(let i=0;i<4;i++){

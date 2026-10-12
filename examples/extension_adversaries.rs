@@ -122,7 +122,7 @@ fn request(value: &Value, scope: &AccountProofScope, fixture: &Fixture, id: u8) 
     request
 }
 fn replace(database: &inspection::Connection, key: &[u8], bytes: &[u8]) {
-    database.execute_batch(&format!("INSERT OR REPLACE INTO cssr_records(community_id,key,value) VALUES('community.example',X'{}',X'{}')", HEXLOWER.encode(key), HEXLOWER.encode(bytes))).unwrap();
+    database.execute_batch(&format!("INSERT OR REPLACE INTO cssr_records(community_id,key,value) VALUES('community-example',X'{}',X'{}')", HEXLOWER.encode(key), HEXLOWER.encode(bytes))).unwrap();
 }
 fn record_key(kind: u8, owner: &[u8; 32]) -> Vec<u8> {
     let mut bytes = vec![kind];

@@ -53,7 +53,7 @@ pub(super) fn exercise(
     let temporary = tempfile::tempdir().unwrap();
     let path = temporary.path().join("signer-continuity.db");
     let mut signer = csgn::Signer::new(
-        "community.example",
+        "community-example",
         csgn::SecretKey::from_seed(&mut [1; 32]),
         1,
         100_000,
@@ -228,7 +228,7 @@ pub(super) fn exercise(
         )
         .unwrap(),
     );
-    let mut store = cssr::LibsqlStore::local(&path, "community.example").unwrap();
+    let mut store = cssr::LibsqlStore::local(&path, "community-example").unwrap();
     let mut tx = cssr::Storage::transaction(&mut store).unwrap();
     let history_key = b"admission-key-history:v1";
     let original = tx.get(history_key).unwrap().unwrap();

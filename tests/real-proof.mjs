@@ -51,7 +51,7 @@ try {
   await writeFile(resolve(directory,'manifest.json'),manifestBytes);
   await writeFile(resolve(directory,'config.json'),JSON.stringify({directory,manifestSha256:digest(manifestBytes)}));
   scope={circuitDigest:Array.from(Buffer.from(manifest.circuitSha256,'hex')),verifyingKeyDigest:Array.from(Buffer.from(manifest.vkSha256,'hex'))};
-  const community=new Uint8Array(createHash('sha256').update('community.example').digest());
+  const community=new Uint8Array(createHash('sha256').update('community-example').digest());
   const hashes=accountHashes(api),entries=[];
   for(let index=0;index<2;index++) {
     const root=createPrivateKey({format:'der',type:'pkcs8',key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.alloc(32,7+index)])});

@@ -274,18 +274,6 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             .as_ref()
             .map(|owner| self.authority.enter(owner.clone()))
             .transpose()?;
-        eprintln!(
-            "DIAG community cfg={} ledger={} ctx_err={:?} pe={} per={} q={} pc={} im={} rooms={}",
-            config.epoch.community,
-            self.trust.community_id,
-            config.epoch.context().err(),
-            config.policy_epoch,
-            config.period_seconds,
-            config.quota,
-            config.pending_capacity,
-            config.issuance_members_capacity,
-            config.room_epochs.len()
-        );
         config.validate(&self.trust.community_id)?;
         let extensions = self
             .extensions
@@ -295,16 +283,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         // publish its genuine G2 cut. The legacy three-key group stays partial.
         extensions.verifier.require_record_epoch()?;
         let binding = binding(extensions)?;
-        let context = config.epoch.context().map_err(|e| {
-            eprintln!("DIAG context {e:?}");
-            crypto_error(e)
-        })?;
+        let context = config.epoch.context().map_err(crypto_error)?;
         let issuer = match provisioned {
-            KeySource::Encoded(bytes) => Issuer::from_pkcs1_der(config.epoch.clone(), bytes)
-                .map_err(|e| {
-                    eprintln!("DIAG issuer from_pkcs1_der {e:?}");
-                    crypto_error(e)
-                })?,
+            KeySource::Encoded(bytes) => {
+                Issuer::from_pkcs1_der(config.epoch.clone(), bytes).map_err(crypto_error)?
+            }
             KeySource::Issuer(issuer) => {
                 if issuer.epoch() != &config.epoch {
                     return Err(Error::PolicyMismatch);

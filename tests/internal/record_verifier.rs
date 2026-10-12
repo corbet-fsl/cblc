@@ -5,7 +5,7 @@ use crate::{accounting::AccountPolicy, accounting_ledger::AccountLedgerPolicy};
 use csgn::{Kind, SecretKey, Signer};
 
 fn material() -> PublicVerifierMaterial {
-    let community = "community.example";
+    let community = "community-example";
     let account = AccountPolicy {
         initial_credit: 3,
         maximum_available: 4,
@@ -74,7 +74,7 @@ fn material() -> PublicVerifierMaterial {
 }
 fn signer() -> Signer {
     Signer::new(
-        "community.example",
+        "community-example",
         SecretKey::from_seed(&mut [31; 32]),
         1,
         2000,
@@ -170,7 +170,7 @@ fn real_signed_publication_requires_trusted_period_epoch_community_and_native_pi
     // supplied with member input, even if all decoded fields would match.
     let trusted = signer();
     let mut stranger = Signer::new(
-        "community.example",
+        "community-example",
         SecretKey::from_seed(&mut [32; 32]),
         1,
         2000,

@@ -230,7 +230,7 @@ fn config(epoch: u64, next: bool, pending: u32, members: u32) -> SettlementConfi
     SettlementConfig {
         epoch: Epoch {
             purpose: Purpose::OutcomeDeposit,
-            community: "community.example".into(),
+            community: "community-example".into(),
             epoch,
             valid_from: epoch * PERIOD * 1000,
             valid_until: (epoch + 1) * PERIOD * 1000,
@@ -281,7 +281,7 @@ fn pass_request(
 }
 fn sha2_community() -> [u8; 32] {
     use sha2::Digest;
-    sha2::Sha256::digest(b"community.example").into()
+    sha2::Sha256::digest(b"community-example").into()
 }
 fn record_key(kind: u8, value: &[u8; 32]) -> Vec<u8> {
     let mut bytes = vec![kind];
@@ -456,7 +456,7 @@ fn new_member_at_capacity_refuses_without_poisoning_exact_owner_retry() {
     let connection = inspection::Connection::open(&path).unwrap();
     connection
         .execute_batch(&format!(
-            "DELETE FROM cssr_records WHERE community_id='community.example' AND key=X'{}'",
+            "DELETE FROM cssr_records WHERE community_id='community-example' AND key=X'{}'",
             HEXLOWER.encode(&budget.0)
         ))
         .unwrap();
@@ -471,7 +471,7 @@ fn new_member_at_capacity_refuses_without_poisoning_exact_owner_retry() {
         Err(Error::Storage)
     );
     assert_eq!(connection.snapshot(), missing);
-    connection.execute_batch(&format!("INSERT INTO cssr_records(community_id,key,value) VALUES('community.example',X'{}',X'{}')",
+    connection.execute_batch(&format!("INSERT INTO cssr_records(community_id,key,value) VALUES('community-example',X'{}',X'{}')",
         HEXLOWER.encode(&budget.0), HEXLOWER.encode(&budget.1))).unwrap();
     assert_eq!(
         ledger

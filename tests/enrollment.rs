@@ -153,7 +153,7 @@ fn actual_policy_expectations_refuse_even_genuinely_resigned_wrong_epoch_or_pass
     assert!(matches!(check(&d, &foreign, 130), Err(Error::Admission)));
     foreign.trust = f.trust.clone();
     foreign.trust.policy_keys = csgn::Signer::new(
-        "community.example",
+        "community-example",
         csgn::SecretKey::from_seed(&mut [8; 32]),
         0,
         100_000,

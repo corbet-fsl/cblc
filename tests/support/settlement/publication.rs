@@ -380,11 +380,11 @@ fn current_anchor_conflicts_cannot_reset_budget_or_project_a_stale_descriptor() 
         .unwrap();
     let mut wrong: Value = serde_json::from_slice(bytes).unwrap();
     wrong["policy_epoch"] = 2.into();
-    connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community.example' AND key=X'{}'", HEXLOWER.encode(&serde_json::to_vec(&wrong).unwrap()), HEXLOWER.encode(key))).unwrap();
+    connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community-example' AND key=X'{}'", HEXLOWER.encode(&serde_json::to_vec(&wrong).unwrap()), HEXLOWER.encode(key))).unwrap();
     let damaged = connection.snapshot();
     assert_eq!(material(&mut ledger, 1), Err(Error::PolicyMismatch));
     assert_eq!(connection.snapshot(), damaged);
-    connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community.example' AND key=X'{}'", HEXLOWER.encode(bytes), HEXLOWER.encode(key))).unwrap();
+    connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community-example' AND key=X'{}'", HEXLOWER.encode(bytes), HEXLOWER.encode(key))).unwrap();
     assert!(material(&mut ledger, 1).unwrap().settlement.is_some());
     assert_eq!(
         ledger
@@ -404,7 +404,7 @@ fn current_anchor_conflicts_cannot_reset_budget_or_project_a_stale_descriptor() 
         .unwrap();
     let mut wrong: Value = serde_json::from_slice(bytes).unwrap();
     wrong["context"] = serde_json::to_value([0_u8; 32]).unwrap();
-    connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community.example' AND key=X'{}'", HEXLOWER.encode(&serde_json::to_vec(&wrong).unwrap()), HEXLOWER.encode(key))).unwrap();
+    connection.execute_batch(&format!("UPDATE cssr_records SET value=X'{}' WHERE community_id='community-example' AND key=X'{}'", HEXLOWER.encode(&serde_json::to_vec(&wrong).unwrap()), HEXLOWER.encode(key))).unwrap();
     let damaged = connection.snapshot();
     let mut changed = cfg;
     changed.policy_epoch = 2;

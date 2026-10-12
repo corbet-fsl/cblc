@@ -27,10 +27,10 @@ impl Fixture {
         let issuer = SigningKey::from_bytes(&[1; 32]);
         let device = SigningKey::from_bytes(&[2; 32]);
         let trust = AdmissionTrust {
-            community_id: "community.example".into(),
+            community_id: "community-example".into(),
             policy_digest: encoded(3),
             policy_keys: csgn::Signer::new(
-                "community.example",
+                "community-example",
                 csgn::SecretKey::from_seed(&mut [1; 32]),
                 0,
                 100_000,
