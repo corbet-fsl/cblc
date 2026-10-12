@@ -2,13 +2,14 @@
 // integration, v1 migration or production enablement is implied.
 pub mod indexed;
 pub mod epoch;
+pub mod standing;
 use sha2lib::digest;
 use p2hash::poseidon2::Poseidon2;
 
-global DOMAIN: Field = 0x6366726d2e6163636f756e742d73746174652e7632;
+pub global DOMAIN: Field = 0x6366726d2e6163636f756e742d73746174652e7632;
 // Preserve the measured P2 secret and owner/event marker namespaces.
 global LEGACY_DOMAIN: Field = 0x6366726d2e6163636f756e74696e672e706f736569646f6e322e7631;
-global SAFE: u64 = 9007199254740991;
+pub global SAFE: u64 = 9007199254740991;
 
 pub struct Enrollment {
     pub key: [u8; 64], pub secret_hash: [u8; 32], pub start: u64, pub end: u64,

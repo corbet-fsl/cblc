@@ -10,3 +10,5 @@ export CBLC_EXTENSION_DIRECTORY="$PWD/.wave-artifacts"
 test ! -e "$CBLC_EXTENSION_DIRECTORY" || { echo 'Existing wave output refuses overwrite' >&2; exit 2; }
 node runtime/extensions/compile.mts --waves
 node tests/wave-artifacts.mts
+# Standing v5 core: Noir transitions and policy digest against the czkp golden vectors.
+node tests/standing-probe.mts
