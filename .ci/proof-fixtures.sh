@@ -19,7 +19,10 @@ test ! -e "$extension_directory" && test ! -e "$wave_directory" || { echo 'Exist
 CBLC_EXTENSION_DIRECTORY="$extension_directory" node runtime/extensions/compile.mts
 env -u RUSTFLAGS wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
 cargo build --locked --example extension_issuer --features publication
+cargo build --locked --example czkp_bb_worker
 cblc_target_dir="${CARGO_TARGET_DIR:-target}"
+export CBLC_BB="$(realpath "$cblc_target_dir/debug/examples/czkp_bb_worker")"
+test -x "$CBLC_BB"
 case "$cblc_target_dir" in
   /*) cblc_issuer="$cblc_target_dir/debug/examples/extension_issuer" ;;
   *) cblc_issuer="$PWD/$cblc_target_dir/debug/examples/extension_issuer" ;;
