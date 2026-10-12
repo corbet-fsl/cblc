@@ -58,4 +58,40 @@ with tempfile.TemporaryDirectory() as temporary:
     except ValueError:
         pass
     assert (retained / first / "keys.json").read_bytes() == b"tampered"
+
+
+def startup(directory, marker):
+    (directory / "account").mkdir(parents=True)
+    names = {"init.json": b"init-" + marker, "account/config.json": b"config-" + marker}
+    for name, data in names.items():
+        (directory / name).write_bytes(data)
+    files = {name: {"sha256": sha(data), "bytes": len(data)} for name, data in names.items()}
+    (directory / "startup-artifacts.json").write_text(json.dumps({"version": 1, "files": files}, sort_keys=True))
+
+
+with tempfile.TemporaryDirectory() as temporary:
+    root = Path(temporary)
+    source, retained = root / "native-startup-fixture", root / "retained"
+    startup(source, b"one")
+    first = retain.retain(source, retained, retain.verify_startup)
+    assert first == sha((source / "startup-artifacts.json").read_bytes())
+    assert retain.retain(source, retained, retain.verify_startup) == first
+    import shutil
+    shutil.rmtree(source)
+    startup(source, b"two")
+    second = retain.retain(source, retained, retain.verify_startup)
+    assert second != first
+    assert (retained / first / "init.json").read_bytes() == b"init-one"
+    assert (retained / second / "init.json").read_bytes() == b"init-two"
+    assert sorted(path.name for path in retained.iterdir()) == sorted([first, second])
+    # A capture that disagrees with its own receipt is refused, never retained.
+    shutil.rmtree(source)
+    startup(source, b"three")
+    (source / "init.json").write_bytes(b"tampered")
+    try:
+        retain.retain(source, retained, retain.verify_startup)
+        raise SystemExit("A startup capture differing from its receipt was retained")
+    except ValueError:
+        pass
+    assert sorted(path.name for path in retained.iterdir()) == sorted([first, second])
 print("retained record fixture checks passed")

@@ -43,7 +43,28 @@ def verify(directory):
     return hashlib.sha256(metadata_bytes).hexdigest()
 
 
-def retain(source, root):
+def verify_startup(directory):
+    """Check the native startup capture against its own receipt; return its digest."""
+    receipt_path = directory / "startup-artifacts.json"
+    raw = receipt_path.read_bytes()
+    if len(raw) > 65536:
+        raise ValueError("Startup receipt exceeds its bound")
+    files = json.loads(raw)["files"]
+    if not files:
+        raise ValueError("The startup capture lists no artifact files")
+    for name, item in files.items():
+        path = directory / name
+        parts = Path(name).parts
+        if Path(name).is_absolute() or ".." in parts:
+            raise ValueError(f"Unsafe startup artifact name: {name}")
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_size != item["bytes"]
+                or digest(path) != item["sha256"]):
+            raise ValueError(f"Startup artifact differs from its receipt: {name}")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def retain(source, root, verify=verify):
     receipt = verify(source)
     root.mkdir(parents=True, exist_ok=True)
     destination = root / receipt
@@ -71,3 +92,6 @@ if __name__ == "__main__":
     if not artifacts.is_absolute():
         sys.exit("An absolute ARTIFACT_ROOT is required")
     print(f"CBLC_RETAINED_RECORD_FIXTURE {retain(artifacts / 'gather-record-fixture', artifacts / 'gather-record-fixture-retained')}")
+    # The startup capture of the same run is retained the same way, so a consumer
+    # can pin a matching pair of digests that no later run replaces.
+    print(f"CBLC_RETAINED_STARTUP_FIXTURE {retain(artifacts / 'native-startup-fixture', artifacts / 'native-startup-fixture-retained', verify_startup)}")
