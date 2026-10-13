@@ -128,6 +128,7 @@ pub fn open_witness(
         version: u64::from_be_bytes(bytes[32..40].try_into().unwrap()),
         state: bytes[40..72].try_into().unwrap(),
         required_inbox: bytes[72..104].try_into().unwrap(),
+        role: 0,
         blinding: bytes[104..136].try_into().unwrap(),
     };
     let hash = leaf.commitment(&epoch.community, epoch.epoch).unwrap();

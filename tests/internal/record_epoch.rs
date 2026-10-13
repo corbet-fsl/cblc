@@ -23,6 +23,7 @@ fn fixture(count: u32) -> FrozenEpoch {
                 version: 4,
                 state,
                 required_inbox: [6; 32],
+                role: 0,
                 blinding: Sha256::digest([index.to_be_bytes().as_slice(), b"blind"].concat())
                     .into(),
             },
@@ -85,6 +86,7 @@ fn assert_witness(
         version: u64::from_be_bytes(plaintext[32..40].try_into().unwrap()),
         state: take(40),
         required_inbox: take(72),
+        role: 0,
         blinding: take(104),
     };
     assert_eq!(leaf.owner, expected_owner);

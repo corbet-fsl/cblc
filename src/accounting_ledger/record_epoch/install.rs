@@ -86,6 +86,7 @@ pub(in crate::accounting_ledger) fn install_in(
                 version: leaf.version,
                 state: leaf.state,
                 required_inbox: leaf.required_inbox,
+                role: 0,
                 blinding: leaf.blinding,
             },
             index: index as u32,

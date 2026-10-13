@@ -258,6 +258,7 @@ pub(super) fn certify(
             version: accepted.statement.next_version,
             state: accepted.statement.next_state,
             required_inbox: applied.root,
+                role: 0,
             blinding,
         }
     } else {

@@ -41,6 +41,7 @@ pub(in crate::accounting_ledger) fn prepare_in(
             version: frontier.version,
             state: frontier.state,
             required_inbox: crate::extensions::inbox(tx, &owner)?.root,
+            role: 0,
             blinding,
         };
         leaf.commitment(&inputs.community, inputs.epoch)?;
