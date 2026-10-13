@@ -119,11 +119,12 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
       assert.notEqual(sha(foreignKey), sha(verificationKey));
       stage = 'native-js-foreign-key-negative';
       // A key of another circuit may be rejected as malformed (throws) or verify false; both refuse.
-      let foreignAccepted;
+      // A key of another circuit is refused either by a false result or by the verifier's own
+      // key/proof mismatch error. Any other exception (I/O, parse, path) fails the check.
+      let foreignAccepted = false;
       try { foreignAccepted = await verifier.verifyProof({...proof, verificationKey: foreignKey}, OPTIONS); }
       catch (error) {
-        console.error('CBLC-FOREIGN-REJECTION ' + JSON.stringify({name: error?.name, message: String(error?.message).slice(0, 300)}));
-        throw error;
+        if (error?.name !== 'BBApiException' || !/num_public_inputs mismatch with VK/.test(String(error?.message))) throw error;
       }
       assert.equal(foreignAccepted, false);
       stage = 'original-raw-native-verification';
