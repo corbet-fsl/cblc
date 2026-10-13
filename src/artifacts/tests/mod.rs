@@ -400,3 +400,37 @@ fn legacy_group_cannot_route_r2_to_a_legacy_key_or_native_worker() {
         Err(Error::InvalidInput)
     );
 }
+
+#[test]
+fn wave_group_authenticates_its_two_keys_and_pins_the_public_widths() {
+    // Metadata authentication only; these synthetic keys are never a proof.
+    let mut fixture = Fixture::new(true);
+    fixture.keys = br#"{"wave":"0102","outcome":"0304"}"#.to_vec();
+    fixture.manifest["vkSha256"] = json!(hash(&fixture.keys));
+    let group = fixture.with(WaveArtifacts::authenticate).unwrap();
+    assert_eq!(group.issuer_key(), [9; 64]);
+    let wave = group.wave_config(options());
+    let outcome = group.outcome_config(options());
+    assert_eq!(wave.max_public_inputs, 586);
+    assert_eq!(outcome.max_public_inputs, 619);
+    assert_eq!(wave.verification_key, vec![1, 2]);
+    assert_eq!(outcome.verification_key, vec![3, 4]);
+    assert_ne!(
+        wave.scope.verifying_key_digest,
+        outcome.scope.verifying_key_digest
+    );
+    // The account group's key shape is not accepted as a wave group.
+    let account = Fixture::new(true);
+    assert!(account.with(WaveArtifacts::authenticate).is_err());
+    // A missing or empty relation key refuses.
+    for keys in [
+        br#"{"wave":"0102"}"#.to_vec(),
+        br#"{"wave":"","outcome":"0304"}"#.to_vec(),
+        br#"{"wave":"0102","outcome":"0304","update":"05"}"#.to_vec(),
+    ] {
+        let mut broken = Fixture::new(true);
+        broken.keys = keys;
+        broken.manifest["vkSha256"] = json!(hash(&broken.keys));
+        assert!(broken.with(WaveArtifacts::authenticate).is_err());
+    }
+}

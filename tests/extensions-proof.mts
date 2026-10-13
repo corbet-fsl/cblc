@@ -19,6 +19,7 @@ import {STANDING,STANDING_DIGEST,STANDING_TABLES} from './holder/standing-fixtur
 import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
 import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';
 import {ingestedRecordEpoch} from './holder/record-epoch-ingestion.mts';
+import {reservationCase,outcomeCase,waveJson} from './holder/wave-roundtrip.mts';
 import {retainRecordStartup} from './holder/record-startup-artifacts.mts';
 import {selectedProducer, proveUpdateConformance, verifyConformanceSubstitution, retainConformance, alphaStartupRequest, omegaStartupRequest} from './holder/prover-conformance.mts';
 const recordEpochArtifacts=process.argv.length===3&&process.argv[2]==='--record-epoch-artifacts';
@@ -96,6 +97,8 @@ await retainConformance(conformance,manifestBytes,await readFile(resolve(directo
 if(alphaConformance) await retainConformance(alphaConformance,manifestBytes,await readFile(resolve(directory,'circuits.json')),keyBytes,encodeBundle);
 if(omegaConformance) await retainConformance(omegaConformance,manifestBytes,await readFile(resolve(directory,'circuits.json')),keyBytes,encodeBundle);
 const artifacts=await loadArtifacts(configPath),benchmarks=[],publicCases=[],publicTrace=[];
+const waveDirectory=process.env.CBLC_WAVE_DIRECTORY,waveArtifacts=waveDirectory?await loadArtifacts(resolve(waveDirectory,'config.json')):undefined,waveCases=[];
+const waveProve=(kind,input,label,measure)=>proof(kind,input,label,measure,waveArtifacts);
 if(recordEpochArtifacts) {
   for(const kind of kinds) {
     const selected=artifacts.artifacts(kind);
@@ -117,8 +120,8 @@ async function call(request,expected=true,retain=true){assert(!pending);const re
   assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);if(retain){publicCases.push({operation:request.op,ok:result.ok,error:result.error});
   publicTrace.push({request:structuredClone(request),response:result});}return result.value;}
 let activeProver;
-async function proof(kind,input,label,measure=false){
-  const selected=artifacts.artifacts(kind),witness=witnessInputs(selected.circuit,input),expected=publicInputs(selected.circuit,input);
+async function proof(kind,input,label,measure=false,group=artifacts){
+  const selected=group.artifacts(kind),witness=witnessInputs(selected.circuit,input),expected=publicInputs(selected.circuit,input);
   let chosen;
   for(const backendType of measure?['NativeUnixSocket','Wasm']:['NativeUnixSocket']){
     if(activeProver&&(activeProver.kind!==kind||backendType!=='NativeUnixSocket')){await activeProver.prover.destroy();activeProver=undefined;}
@@ -130,6 +133,24 @@ async function proof(kind,input,label,measure=false){
   }
   console.log(`Generated and verified ${label}`);
   return chosen;
+}
+async function retainWave(){
+  if(waveCases.length) {
+    // Retained for the counterpart verifiers: statements, proofs, the pinned scopes and the measured proving times.
+    const fixture=waveJson({extensionScope:artifacts.scope,waveScope:waveArtifacts.scope,issuerKey:manifest.issuerKey,      cases:waveCases,timings:benchmarks.filter(b=>b.kind==='wave'||b.kind==='outcome')});
+    await writeFile(resolve(directory,'wave-roundtrip.json'),fixture,{mode:0o600});
+    if(process.env.ARTIFACT_ROOT) {
+      const digest=sha(Buffer.from(fixture)).toString('hex'),retained=resolve(process.env.ARTIFACT_ROOT,'wave-fixtures',digest);
+      // Content-addressed and write-once: an existing digest is never rewritten.
+      await mkdir(resolve(process.env.ARTIFACT_ROOT,'wave-fixtures'),{recursive:true});
+      await mkdir(retained,{recursive:false});await mkdir(resolve(retained,'setup'));
+      console.log(`WAVE-FIXTURE-DIGEST ${digest}`);
+      for(const name of ['circuits.json','keys.json','manifest.json','config.json',...lock.files.map(file=>`setup/${file.name}`)])
+        await copyFile(resolve(waveDirectory,name),resolve(retained,name));
+      await writeFile(resolve(retained,'wave-roundtrip.json'),fixture,{mode:0o600});
+    }
+    console.log(`Wave reservation and Answer outcome proved and verified by the prover backends: ${waveJson(benchmarks.filter(b=>b.kind==='wave'||b.kind==='outcome'))}`);
+  }
 }
 let now=110;
 async function submit(member,candidates,label,measure=false,expected=true){
@@ -306,6 +327,8 @@ try{
   // A genuine counterpart Answer supplies the second counted first contact.
   const acceptedContact=await contact(0,2);
   members[2]=(await submit(9,[await members[2].activate(acceptedContact.incoming,now++,acceptedContact.senderSignature)],'activate')).next;
+  const waveContext={history:bytes(231),challenge:bytes(232)},waveScope=Uint8Array.from(artifacts.scope.circuitDigest),waveIssuer=Uint8Array.from(manifest.issuerKey);
+  if(waveArtifacts)waveCases.push(await reservationCase(members[2],acceptedContact.incoming,waveContext,waveScope,waveIssuer,waveProve));
   const replySlot=members[2].slots.get(acceptedContact.incoming.toString());
   const resolution={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
   const replyBytes=receiptBytes(community,members[2].owner.member,members[0].owner.member,replySlot,members[2].owner.delegationDigest,resolution);
@@ -313,6 +336,12 @@ try{
   const answerDigest=await receiptDigest(replyBytes,resolution.signature);
   const acknowledgment={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[0].owner.member,members[2].owner.member,replySlot,answerDigest,members[0].owner.delegationDigest,now),{key:signing[0],dsaEncoding:'ieee-p1363'}))};
   members[2]=(await submit(9,[await members[2].settle(acceptedContact.incoming,resolution,acknowledgment,now++)],'answer')).next;
+  if(waveArtifacts)waveCases.push(await outcomeCase(members[2],acceptedContact.incoming,{...waveContext,history:resolution.historyDigest},waveScope,waveIssuer,{outcome:'answer',resolution,acknowledgment},waveProve));
+  if(process.env.CBLC_WAVE_ONLY==='1') {
+    // Fixture job: the reservation and the Answer are proved; the rest of the harness belongs to verify.
+    await retainWave();
+    process.exit(0);
+  }
   now=Math.ceil((now+10)/10)*10;
   const answerCandidate=await members[2].deposit({slot:replySlot,kind:1},members[2].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10);
   const forged=structuredClone(answerCandidate.input);forged.certificate=Array(64).fill(0);
@@ -376,6 +405,7 @@ try{
   await assert.rejects(members[2].expire(reordered.outgoing,now));
   console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, established punishment and negative scenarios');
   }
+  await retainWave();
   await writeFile(resolve(directory,'results.json'),JSON.stringify({benchmarks,checks:publicCases,platform:{node:process.version,cpu:cpus()[0]?.model,memoryBytes:totalmem(),threads:1},scope:artifacts.scope},null,2));
   // Only fictional public requests/proofs cross this fixture pipe. Replaying
   // them measures issuer coverage without generating another set of proofs.

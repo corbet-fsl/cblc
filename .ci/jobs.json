@@ -2,13 +2,28 @@
   "schema": 1,
   "generator": "ccid render v1",
   "tool_revision": "e38f347d6941aa105ac4b55a0d4b8fec2ef22433",
-  "manifest_sha256": "13105d4769d15dff5fe87dcab48e77e81649818b52d43e1c79a8c815ac0ba0ce",
+  "manifest_sha256": "e7afaea70c82bd38231a82b3e42fdca4c64f163014665ec454c58b86f7f7ba1d",
   "jobs": {
     "artifact-conformance": {
       "job": "artifact-conformance",
       "scheduler": "crow",
       "checks": [
         "artifact-conformance"
+      ],
+      "workflow": "repository-jobs",
+      "command": [
+        "bash",
+        ".ci/run-cached.sh"
+      ],
+      "environment": {
+        "CI_TIMEOUT": "7200"
+      }
+    },
+    "proof-fixtures": {
+      "job": "proof-fixtures",
+      "scheduler": "crow",
+      "checks": [
+        "proof-fixtures"
       ],
       "workflow": "repository-jobs",
       "command": [
@@ -64,6 +79,21 @@
       "scheduler": "crow",
       "checks": [
         "wave-artifacts"
+      ],
+      "workflow": "repository-jobs",
+      "command": [
+        "bash",
+        ".ci/run-cached.sh"
+      ],
+      "environment": {
+        "CI_TIMEOUT": "7200"
+      }
+    },
+    "wave-verify": {
+      "job": "wave-verify",
+      "scheduler": "crow",
+      "checks": [
+        "wave-verify"
       ],
       "workflow": "repository-jobs",
       "command": [
