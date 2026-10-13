@@ -43,6 +43,7 @@ mod pin_change;
 pub mod record_epoch;
 mod rotation;
 mod settlement;
+pub mod voucher;
 use rotation::check_root;
 pub use rotation::{RootRotation, root_rotation_bytes};
 #[cfg(feature = "publication")]
@@ -452,14 +453,28 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         if issuer.is_none() {
             record_epoch::require_issuer(&mut transaction, &statement.owner, now)?;
         }
+        if let Some((_, update)) = extension {
+            voucher::precheck(&mut transaction, &statement.owner, &update.effect)?;
+        }
         // Release every SQLite lock before invoking an external or slow
         // verifier. Other owners and competing devices can commit meanwhile.
         transaction.rollback()?;
         if let Some((extensions, update)) = extension {
-            if matches!(update.effect, crate::extensions::Effect::Change { binding } if binding == [0;32])
-                || (!matches!(update.effect, crate::extensions::Effect::Update)
-                    && (statement.genesis || statement.settlement_marker == [0; 32]))
-            {
+            // A change spends under an event marker. Voucher accounting actions settle no
+            // event, so their marker stays empty and the bond tag rides separately.
+            let marker_ok = match update.effect {
+                crate::extensions::Effect::Update => true,
+                crate::extensions::Effect::Change { binding } => {
+                    binding != [0; 32]
+                        && !statement.genesis
+                        && statement.settlement_marker != [0; 32]
+                }
+                crate::extensions::Effect::Admit { .. }
+                | crate::extensions::Effect::Consume { .. } => {
+                    !statement.genesis && statement.settlement_marker == [0; 32]
+                }
+            };
+            if !marker_ok {
                 return Err(Error::InvalidInput);
             }
             extensions.verifier.verify(
@@ -546,6 +561,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         // Only the freeze can attach a lineage; every accepted CAS carries it.
         let mut lineage = prior.and_then(|prior| prior.record_ancestry);
         if let Some((_, update)) = extension {
+            voucher::apply(&mut transaction, &statement.owner, &update.effect)?;
             let reached = extensions::consume(
                 &mut transaction,
                 &statement.owner,

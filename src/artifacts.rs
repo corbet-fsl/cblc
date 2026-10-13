@@ -196,6 +196,8 @@ struct Keys {
     record: String,
     /// Original R2 is a distinct circuit, never the legacy record key.
     record_epoch: Option<String>,
+    /// The unlinkable voucher presentation, available with the record epoch group.
+    voucher_epoch: Option<String>,
 }
 
 /// Immutable extension group, including the pinned certificate issuer key.
@@ -205,6 +207,7 @@ pub struct ExtensionArtifacts {
     pub(crate) issuer: [u8; 64],
     keys: [Vec<u8>; 3],
     record_epoch_key: Option<Vec<u8>>,
+    voucher_epoch_key: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -234,9 +237,8 @@ impl ExtensionArtifacts {
                 .decode(text.as_bytes())
                 .map_err(|_| Error::InvalidInput)?;
         }
-        let record_epoch_key = keys
-            .record_epoch
-            .map(|text| {
+        let optional = |key: Option<String>| {
+            key.map(|text| {
                 if text.is_empty() {
                     return Err(Error::InvalidInput);
                 }
@@ -244,12 +246,16 @@ impl ExtensionArtifacts {
                     .decode(text.as_bytes())
                     .map_err(|_| Error::InvalidInput)
             })
-            .transpose()?;
+            .transpose()
+        };
+        let record_epoch_key = optional(keys.record_epoch)?;
+        let voucher_epoch_key = optional(keys.voucher_epoch)?;
         Ok(Self {
             material,
             issuer,
             keys: decoded,
             record_epoch_key,
+            voucher_epoch_key,
         })
     }
     pub fn scope(&self) -> AccountProofScope {
@@ -271,7 +277,8 @@ impl ExtensionArtifacts {
         anonymous: NativeVerifierOptions,
     ) -> [cvfy::NativeVerifierConfig; 3] {
         [
-            self.material.config(updates, self.keys[0].clone(), 377),
+            self.material
+                .config(updates, self.keys[0].clone(), UPDATE_WIDTH),
             self.material
                 .config(anonymous.clone(), self.keys[1].clone(), 294),
             self.material.config(anonymous, self.keys[2].clone(), 204),
@@ -285,7 +292,22 @@ impl ExtensionArtifacts {
             .as_ref()
             .map(|key| self.material.config(options, key.clone(), 335))
     }
+    pub(crate) fn voucher_epoch_config(
+        &self,
+        options: NativeVerifierOptions,
+    ) -> Option<cvfy::NativeVerifierConfig> {
+        self.voucher_epoch_key.as_ref().map(|key| {
+            self.material
+                .config(options, key.clone(), VOUCHER_EPOCH_WIDTH)
+        })
+    }
 }
+
+/// Public fields of the update relation: the extension policy, the chained inbox values,
+/// the account statement, then the voucher role class and the consumed obligation tag.
+pub const UPDATE_WIDTH: usize = 410;
+/// Public fields of the unlinkable voucher presentation (no owner, no shares).
+pub const VOUCHER_EPOCH_WIDTH: usize = 364;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]

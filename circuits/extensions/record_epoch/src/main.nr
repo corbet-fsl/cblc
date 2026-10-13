@@ -11,7 +11,7 @@ fn main(
     epoch_root: pub [u8;32], leaf_count: pub u32,
     blinded_leaf: pub [u8;32], presentation_key: pub [Field;2],
     present: pub bool, shares: pub [u16;3],
-    version: u64, state: [u8;32], required_inbox: [u8;32], blinding: [u8;32],
+    version: u64, state: [u8;32], required_inbox: [u8;32], role: u8, blinding: [u8;32],
     state_policy: [u8;32], registered_secret: Field, opening: Opening,
 ) {
     let safe: u64=9007199254740991;
@@ -24,7 +24,7 @@ fn main(
     assert((record_issuer_key!=[0;32])&(record_certificate!=[0;64])&(field(state)!=0));
     assert(opening.inbox==required_inbox);
     assert(state_hash(community,owner,state_policy,registered_secret,version,ext,opening)==field(state));
-    assert(leaf(community,epoch,owner,version,state,required_inbox,blinding)==blinded_leaf);
+    assert(leaf(community,epoch,owner,version,state,required_inbox,role,blinding)==blinded_leaf);
     assert((opening.accepted<=safe)&(opening.declined<=safe)&(opening.punished<=safe));
     let total=opening.accepted as u128+opening.declined as u128+opening.punished as u128;
     assert(present==(total>=extension.quorum as u128));

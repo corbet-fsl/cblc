@@ -146,6 +146,7 @@ fn update_fields(
     inbox: &[u8; 32],
     consume: bool,
     binding: &[u8; 32],
+    voucher: (u8, [u8; 32]),
 ) -> Result<Vec<PublicField>, Error> {
     let mut fields = extension_fields(policy)?;
     bytes(&mut fields, previous);
@@ -153,6 +154,10 @@ fn update_fields(
     fields.push(scalar(u64::from(consume)));
     bytes(&mut fields, binding);
     fields.extend(account_fields(account));
+    // Voucher accounting: the sponsor's role class and the consumed obligation tag, both
+    // zero unless the final action says otherwise.
+    fields.push(scalar(u64::from(voucher.0)));
+    bytes(&mut fields, &voucher.1);
     Ok(fields)
 }
 
@@ -174,17 +179,24 @@ fn update_proofs(
         let mut current = account.clone();
         current.previous_state = state;
         let last = index + 1 == count;
-        let binding = if last {
+        let (binding, voucher) = if last {
             if inbox != update.inbox.root
                 || step.inbox != update.inbox.root
                 || step.state != account.next_state
             {
                 return Err(Error::InvalidInput);
             }
-            match update.effect {
-                Effect::Update => [0; 32],
-                Effect::Change { binding } => binding,
+            if let Effect::Consume { obligation } = update.effect {
+                czkp::field(&obligation, true)?;
+                if obligation == [0; 32] {
+                    return Err(Error::InvalidInput);
+                }
             }
+            let binding = match update.effect {
+                Effect::Change { binding } => binding,
+                _ => [0; 32],
+            };
+            (binding, update.effect.voucher_inputs())
         } else {
             if account.genesis || inbox == step.inbox {
                 return Err(Error::InvalidInput);
@@ -192,9 +204,17 @@ fn update_proofs(
             current.next_state = step.state;
             current.next_version = account.previous_version;
             current.settlement_marker = [0; 32];
-            [0; 32]
+            ([0; 32], (0, [0; 32]))
         };
-        let inputs = update_fields(policy, &current, &inbox, &step.inbox, !last, &binding)?;
+        let inputs = update_fields(
+            policy,
+            &current,
+            &inbox,
+            &step.inbox,
+            !last,
+            &binding,
+            voucher,
+        )?;
         prepared.push(PreparedProof {
             inputs,
             proof: decode(&step.proof)?,

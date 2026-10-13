@@ -258,6 +258,7 @@ pub(super) fn certify(
             version: accepted.statement.next_version,
             state: accepted.statement.next_state,
             required_inbox: applied.root,
+            role: super::voucher::role_of(tx, &accepted.statement.owner)?,
             blinding,
         }
     } else {
@@ -366,7 +367,7 @@ impl FrozenEpoch {
         let tree = rs_merkle::MerkleTree::<czkp::record::EpochTree>::from_leaves(&leaves);
         let root = tree.root().ok_or(Error::Storage)?;
         let depth = padded.ilog2() as usize;
-        let packet_bytes = 32 + 16 + 140 + 32 * depth + 64;
+        let packet_bytes = 32 + 16 + 141 + 32 * depth + 64;
         let object_bytes = OBJECT_PREFIX
             .len()
             .checked_add(8)
@@ -405,12 +406,13 @@ impl FrozenEpoch {
             }
             // Fixed width within the epoch: no clear owner, variable integer
             // length, recipient label, or per-member download path.
-            let mut plaintext = Zeroizing::new(Vec::with_capacity(140 + depth * 32 + 64));
+            let mut plaintext = Zeroizing::new(Vec::with_capacity(141 + depth * 32 + 64));
             plaintext.extend_from_slice(&frontier.leaf.owner);
             plaintext.extend_from_slice(&frontier.leaf.version.to_be_bytes());
             plaintext.extend_from_slice(&frontier.leaf.state);
             plaintext.extend_from_slice(&frontier.leaf.required_inbox);
             plaintext.extend_from_slice(&frontier.leaf.blinding);
+            plaintext.push(frontier.leaf.role);
             plaintext.extend_from_slice(&(index as u32).to_be_bytes());
             for sibling in path.proof_hashes() {
                 plaintext.extend_from_slice(sibling);

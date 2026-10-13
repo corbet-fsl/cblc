@@ -1,10 +1,12 @@
+use core::voucher::{Voucher,VoucherAux,BondEntry,entry_hash,bond_commit,bond_key,obligation_tag,member_tag,
+    admit,punish_weight,rewarded};
 use core::{Enrollment,Opening,Obligation,MapWitness,Resolution,Acknowledgment,ExtensionPolicy,
     limbs,field,hash,secret_hash,marker,pair_key,enrollment_leaf,verify_enrollment,
     verify_peer_authority,policy_bytes,state_policy_hash,state_hash,obligation_hash,
     verify_acknowledgment,verify_resolution,extension_hash,advance,delivery,authorization,verify_contact};
 use core::indexed;
 use core::standing::{Standing,StandingPolicy,policy_digest as standing_digest,check_policy,check_state,advance as advance_standing,
-    answer_received,answer_given,unanswered,punished,punish_given,cap};
+    answer_received,answer_given,unanswered,punished,punish_given,cap,obligation_punished};
 global SAFE: u64 = 9007199254740991;
 fn main(
     extension: pub ExtensionPolicy, previous_inbox: pub [u8;32], inbox: pub [u8;32],
@@ -18,13 +20,14 @@ fn main(
     policy_revision: pub u64, policy_valid_from: pub u64, policy_valid_until: pub u64,
     newcomer_period: pub u64, rate_window: pub u64, newcomer_admissions: pub u32,
     maximum_admissions: pub u32, refill_period: pub u64, refill_units: pub u32, abandon_after: pub u64,
+    role: pub u8, obligation: pub [u8; 32],
     owner_secret: [u8; 32], owner_enrollment: Enrollment, peer_enrollment: Enrollment,
     receipt_owner_enrollment: Enrollment,
     delivery_kind: u8, contact_signature: [u8;64],
     old: Opening, new_blind: [u8; 32], action: u8, slot: Obligation,
     own_map: MapWitness, opposite_map: MapWitness, pair_map: MapWitness,
     pair_exists: bool, resolution: Resolution, acknowledgment: Acknowledgment,
-    standing_policy: StandingPolicy,
+    standing_policy: StandingPolicy, aux: VoucherAux,
 ) {
     let ext = extension_hash(extension);
     assert((now > 0) & (now <= SAFE));
@@ -61,11 +64,17 @@ fn main(
         assert((previous_state == [0; 32]) & (settlement_marker == [0; 32]));
         let empty = indexed::initial_root();
         assert((previous_inbox==[0;32]) & (inbox==[0;32]) & !consume_only & (change_binding==[0;32]));
+        // A founder has neither sponsor nor bond; a vouchee has both.
+        let bond = if aux.bond_secret == [0; 32] { 0 } else { bond_commit(aux.bond_secret) };
+        assert((bond == 0) == (aux.sponsor == 0));
+        assert(obligation == [0; 32]);
+        let voucher = Voucher { proven: 0, away: 0, lost: 0, bonus: 0, returned: 0, answers: 0,
+            sponsor: aux.sponsor, bond, bond_root: empty, bond_count: 1 };
         let initial = Opening { reserved: 0, accepted:0, declined:0, punished:0, inbox:[0;32], authorization:0,
             outgoing_root: empty, outgoing_count: 1, incoming_root: empty, incoming_count: 1,
             pair_root: empty, pair_count: 1, created_at: valid_until,
             standing: Standing { g: 0, a: (standing_policy.c0 - 1) << 16, c: 0, pr: 0, pg: 0, lc: 0, day: valid_until / 86400 },
-            blind: new_blind };
+            voucher, blind: new_blind };
         assert(state_hash(community, owner, state_policy, registered_secret, 0, ext, initial) == field(next_state));
     } else {
         assert(next_version == previous_version + if consume_only {0} else {1});
@@ -84,9 +93,16 @@ fn main(
         assert((old.outgoing_count >= 1) & (old.outgoing_count <= 4294967296));
         assert((old.incoming_count >= 1) & (old.incoming_count <= 4294967296));
         assert((old.pair_count >= 1) & (old.pair_count <= 4294967296));
-        assert((action >= 1) & (action <= 11) & (action != 6)); // 6 (refill) retired: slots return on settlement
+        assert((action >= 1) & (action <= 14) & (action != 6)); // 6 (refill) retired: slots return on settlement
+        // 12 admit (sponsor spends a voucher), 13 consume a bond obligation, 14 prove success.
+        let no_slot = (action == 6) | (action == 9) | (action == 11) | (action >= 12);
+        let mut vch = old.voucher;
+        assert((vch.bond_count >= 1) & (vch.bond_count <= 4294967296));
+        assert((vch.away <= SAFE) & (vch.lost <= SAFE) & (vch.bonus <= SAFE) & (vch.returned <= SAFE) & (vch.answers <= SAFE) & (vch.proven <= SAFE));
+        if action != 13 { assert(obligation == [0; 32]); }
+        assert(!aux.count | (action == 3) | (action == 10));
         let amount = if slot.role == 0 { outgoing_reservation } else { incoming_reservation };
-        if (action != 6) & (action != 9) & (action != 11) {
+        if !no_slot {
             assert((slot.role < 2) & (slot.peer != owner));
             assert((slot.nonce != [0; 32]) & (slot.group != [0; 32]) & (slot.contact_policy != [0; 32]));
             assert((slot.admitted_at > 0) & (slot.admitted_at <= now));
@@ -95,7 +111,7 @@ fn main(
         }
         let event = marker(community, owner, owner_secret, slot.peer, slot.nonce);
         let pair = pair_key(community, owner, owner_secret, slot.peer);
-        if (action != 6) & (action != 9) & (action != 11) { assert((event != 0) & (pair != 0)); }
+        if !no_slot { assert((event != 0) & (pair != 0)); }
         let own_root = if slot.role == 0 { old.outgoing_root } else { old.incoming_root };
         let own_count = if slot.role == 0 { old.outgoing_count } else { old.incoming_count };
         let other_root = if slot.role == 0 { old.incoming_root } else { old.outgoing_root };
@@ -130,7 +146,9 @@ fn main(
                 own_map.leaf, own_map.index, own_map.path, own_map.append_path);
             changed_count = own_count + 1;
             if pair_exists {
-                indexed::present(pair_root, pair_count, pair, 1,
+                // 1 plain pair, 5 a pair already counted toward the success proof.
+                assert((pair_map.leaf[1] == 1) | (pair_map.leaf[1] == 5));
+                indexed::present(pair_root, pair_count, pair, pair_map.leaf[1],
                     pair_map.leaf, pair_map.index, pair_map.path);
             } else {
                 pair_root = indexed::insert(pair_root, pair_count, pair, 1,
@@ -149,6 +167,59 @@ fn main(
         } else if action==11 {
             // A final reblind after an atomic sequence of forced inbox transitions.
             assert(settlement_marker==[0;32]);
+        } else if action >= 12 {
+            assert(settlement_marker == [0; 32]);
+            assert(inbox == previous_inbox);
+            if action == 12 {
+                // The sponsor spends one voucher on an actual admission and remembers the bond.
+                assert(aux.bond_secret != [0; 32]);
+                assert(vch.bond != bond_commit(aux.bond_secret));
+                let (spent, entry) = admit(standing_policy, role, vch, pool);
+                vch = spent;
+                vch.bond_root = indexed::insert(old.voucher.bond_root, old.voucher.bond_count,
+                    bond_key(aux.bond_secret), entry_hash(entry), aux.bond_map.leaf, aux.bond_map.index,
+                    aux.bond_map.path, aux.bond_map.append_path);
+                vch.bond_count = old.voucher.bond_count + 1;
+            } else if action == 13 {
+                // One obligation posted through a bond: the tag is the only thing a server saw.
+                assert((aux.kind >= 1) & (aux.kind <= 3));
+                assert(obligation == obligation_tag(aux.bond_secret, aux.kind, aux.n).to_be_bytes());
+                let key = bond_key(aux.bond_secret);
+                let e = aux.entry;
+                indexed::present(vch.bond_root, vch.bond_count, key, entry_hash(e),
+                    aux.bond_map.leaf, aux.bond_map.index, aux.bond_map.path);
+                let mut next = e;
+                if aux.kind == 1 {
+                    // The vouchee proved success: the voucher returns unless it was lost.
+                    assert((aux.n == 0) & !e.done);
+                    next.done = true;
+                    if !e.overshoot {
+                        assert(vch.away > 0);
+                        vch.away = vch.away - 1;
+                    }
+                    vch.returned = vch.returned + 1;
+                } else if aux.kind == 2 {
+                    // The vouchee was punished: a fraction before the v5 curve, decaying like v5.
+                    assert(aux.n == e.punished_seen + 1);
+                    next.punished_seen = aux.n;
+                    standing = obligation_punished(standing, punish_weight(e.limit));
+                } else {
+                    // The vouchee's own vouchee succeeded: a capped permanent bonus.
+                    assert(aux.n == e.rewards_seen + 1);
+                    next.rewards_seen = aux.n;
+                    vch.bonus = rewarded(standing_policy, vch.bonus);
+                }
+                vch.bond_root = indexed::update(vch.bond_root, vch.bond_count, key, entry_hash(e),
+                    entry_hash(next), aux.bond_map.leaf, aux.bond_map.index, aux.bond_map.path);
+            } else {
+                // The account's own success proof; every threshold is a public policy value.
+                assert(vch.proven == 0);
+                assert((day > 0) & (day >= joined + standing_policy.v_days));
+                assert(pool > standing_policy.v_brake_cap);
+                assert(old.punished <= standing_policy.v_max_punished);
+                assert(vch.answers >= standing_policy.v_k);
+                vch.proven = day;
+            }
         } else if (action==7) | (action==8) | (action==10) {
             // A contact-authorized outcome always addresses an existing transcript.
             // Issuer deposits are authenticated separately; ingestion cannot choose
@@ -160,8 +231,10 @@ fn main(
                 verify_contact(community,owner,slot,peer_enrollment,contact_signature);
                 if action==7 {assert((slot.role==1) & ((slot.phase==1)|(slot.phase==2)) & (slot.outcome==0));}
                 else {assert(slot.answered & !slot.self_punished);}
-                assert((pair_map.leaf[1]==1)|(pair_map.leaf[1]==2));
-                pair_root=indexed::update(pair_root,pair_count,pair,pair_map.leaf[1],2,pair_map.leaf,pair_map.index,pair_map.path);
+                assert((pair_map.leaf[1]==1)|(pair_map.leaf[1]==2)|(pair_map.leaf[1]==5)|(pair_map.leaf[1]==6));
+                // 2 punished by me; the counted flag (4) survives.
+                let marked = if (pair_map.leaf[1]==5)|(pair_map.leaf[1]==6) {6} else {2};
+                pair_root=indexed::update(pair_root,pair_count,pair,pair_map.leaf[1],marked,pair_map.leaf,pair_map.index,pair_map.path);
                 authorized=authorization(community,owner,owner_secret,slot,kind);
                 next_slot.self_punished=true;
                 // Punishing costs the punisher the same as the target: one given punishment.
@@ -208,6 +281,11 @@ fn main(
                     } else {assert((slot.phase==4)|(slot.phase==5));}
                     next_slot.phase=3; next_slot.answered=true;
                     standing = answer_received(standing, standing_policy, joined);
+                    if aux.count {
+                        pair_root = count_answer(community, slot, peer_enrollment, old.created_at, vch.sponsor,
+                            pair_root, pair_count, pair, pair_map);
+                        vch.answers = vch.answers + 1;
+                    }
                 }
                 if (kind==2)&(slot.phase==1) {next_slot.phase=2;}
                 next_slot.outcome=kind;
@@ -275,6 +353,11 @@ fn main(
                 if resolution.kind == 1 {
                     standing = if slot.role == 0 { answer_received(standing, standing_policy, joined) }
                         else { answer_given(standing, standing_policy) };
+                    if aux.count {
+                        pair_root = count_answer(community, slot, peer_enrollment, old.created_at, vch.sponsor,
+                            pair_root, pair_count, pair, pair_map);
+                        vch.answers = vch.answers + 1;
+                    }
                 }
                 assert(event == field(settlement_marker));
             }
@@ -286,7 +369,18 @@ fn main(
             outgoing_count: if slot.role == 0 { changed_count } else { old.outgoing_count },
             incoming_root: if slot.role == 1 { changed_root } else { old.incoming_root },
             incoming_count: if slot.role == 1 { changed_count } else { old.incoming_count },
-            pair_root, pair_count, created_at: old.created_at, standing, blind: new_blind };
+            pair_root, pair_count, created_at: old.created_at, standing, voucher: vch, blind: new_blind };
         assert(state_hash(community, owner, state_policy, registered_secret, next_version, ext, successor) == field(next_state));
     }
+}
+
+// Count one answered conversation toward the success proof: the peer is a distinct member
+// whose enrollment began before this account joined, and is not the sponsor. The counted
+// flag lives in the pair map (value 1 becomes 5), so one peer counts once.
+fn count_answer(community: [u8; 32], slot: Obligation, peer: Enrollment, created_at: u64, sponsor: Field,
+    pair_root: Field, pair_count: u64, pair: Field, witness: MapWitness) -> Field {
+    assert(enrollment_leaf(community, slot.peer, peer) == slot.peer_authority);
+    assert(peer.start < created_at);
+    assert(member_tag(community, slot.peer) != sponsor);
+    indexed::update(pair_root, pair_count, pair, 1, 5, witness.leaf, witness.index, witness.path)
 }

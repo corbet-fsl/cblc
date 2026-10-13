@@ -40,7 +40,7 @@ const bytes=n=>new Uint8Array(32).fill(n);
 const toArray=Array.from.bind(Array);
 const programs=JSON.parse(await readFile(resolve(directory,'circuits.json')));
 if(Object.hasOwn(programs,'record_epoch')!==recordEpochEnabled)throw new Error('Matching record epoch compile and fixture selectors required');
-const kinds=recordEpochEnabled?['update','deposit','record','record_epoch']:['update','deposit','record'];
+const kinds=recordEpochEnabled?['update','deposit','record','record_epoch','voucher_epoch']:['update','deposit','record'];
 if(recordEpochEnabled) {
   // Count the actual compiled public ABI, never a claimed proof or zero witness.
   const width=type=>{
@@ -49,7 +49,7 @@ if(recordEpochEnabled) {
     if(type.kind==='struct')return type.fields.reduce((count,field)=>count+width(field.type),0);
     throw new Error('Unsupported compiled public ABI');
   };
-  const expected={update:377,deposit:294,record:204,record_epoch:335};
+  const expected={update:410,deposit:294,record:204,record_epoch:335,voucher_epoch:364};
   for(const kind of kinds) {
     assert(programs[kind]?.bytecode,'Missing original compiled circuit');
     const count=programs[kind].abi.parameters.filter(parameter=>parameter.visibility==='public')

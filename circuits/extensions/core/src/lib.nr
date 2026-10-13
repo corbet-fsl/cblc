@@ -3,7 +3,9 @@
 pub mod indexed;
 pub mod epoch;
 pub mod standing;
+pub mod voucher;
 use standing::Standing;
+use voucher::Voucher;
 use sha2lib::digest;
 use p2hash::poseidon2::Poseidon2;
 
@@ -26,7 +28,7 @@ pub struct Opening {
     pub pair_root: Field, pub pair_count: u64,
     // Account creation time: set from the server-validated proof window at genesis and
     // never changed; standing derives the account age from its day.
-    pub created_at: u64, pub standing: Standing, pub blind: [u8; 32],
+    pub created_at: u64, pub standing: Standing, pub voucher: Voucher, pub blind: [u8; 32],
 }
 
 pub struct Obligation {
@@ -246,7 +248,11 @@ pub fn state_hash(community: [u8; 32], owner: [u8; 32], policy: [u8; 32],
         state.pair_root, state.pair_count as Field, state.created_at as Field,
         state.standing.g as Field, state.standing.a as Field, state.standing.c as Field,
         state.standing.pr as Field, state.standing.pg as Field, state.standing.lc as Field,
-        state.standing.day as Field, b[0], b[1]])
+        state.standing.day as Field,
+        state.voucher.proven as Field, state.voucher.away as Field, state.voucher.lost as Field,
+        state.voucher.bonus as Field, state.voucher.returned as Field, state.voucher.answers as Field,
+        state.voucher.sponsor, state.voucher.bond, state.voucher.bond_root,
+        state.voucher.bond_count as Field, b[0], b[1]])
 }
 
 pub fn obligation_hash(event: Field, slot: Obligation, phase: u8) -> Field {

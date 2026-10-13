@@ -17,7 +17,7 @@ const programs={};
 // The existing three-circuit fixture stays byte-identical by default. The
 // explicit mode compiles only the original fourth relation, not optimized v01
 // update/deposit variants or a replacement for main's 32-level account maps.
-for(const kind of waves?['wave','outcome']:recordEpoch?['update','deposit','record','record_epoch']:['update','deposit','record']) {
+for(const kind of waves?['wave','outcome']:recordEpoch?['update','deposit','record','record_epoch','voucher_epoch']:['update','deposit','record']) {
   const result=await compile(createFileManager(resolve('circuits/extensions',kind)));
   if(!result.program?.bytecode) throw new Error('Missing compiled extension program');
   programs[kind]=result.program;

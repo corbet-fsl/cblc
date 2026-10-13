@@ -122,11 +122,11 @@ fn authenticated_snapshots_bind_group_and_each_native_key_without_host_files() {
     f.keys[0] ^= 1;
     f.manifest["issuerKey"] = json!(vec![4; 64]);
     let configs = artifacts.configs(options(), options());
-    for (config, (key, inputs)) in
-        configs
-            .into_iter()
-            .zip([(vec![1, 2], 377), (vec![3, 4], 294), (vec![5, 6], 204)])
-    {
+    for (config, (key, inputs)) in configs.into_iter().zip([
+        (vec![1, 2], UPDATE_WIDTH),
+        (vec![3, 4], 294),
+        (vec![5, 6], 204),
+    ]) {
         assert_eq!(config.verification_key, key);
         assert_eq!(config.max_public_inputs, inputs);
         assert_eq!(config.scope.circuit_digest, scope.circuit_digest);
@@ -315,6 +315,9 @@ fn optional_original_r2_key_is_authenticated_distinct_and_never_substituted() {
     let config = artifacts.record_epoch_config(options()).unwrap();
     assert_eq!(config.verification_key, [7, 8]);
     assert_eq!(config.max_public_inputs, 335);
+    // Without a voucher key the presentation is simply unavailable.
+    assert!(artifacts.voucher_epoch_config(options()).is_none());
+    assert_eq!((UPDATE_WIDTH, VOUCHER_EPOCH_WIDTH), (410, 364));
     assert_eq!(
         config.scope.circuit_digest,
         artifacts.scope().circuit_digest

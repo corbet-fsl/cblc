@@ -6,20 +6,16 @@ import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {compile,createFileManager} from '@noir-lang/noir_wasm';
 import {Noir} from '@noir-lang/noir_js';
+import {policyInput} from './support/standing-input.mts';
 
 // Poseidon2 digest of the default parameters under the core domain; czkp pins the same value.
-const DEFAULT_DIGEST: string|undefined = '0x2ef15bfbf6246793c45fafb51762ab9ed4d891ecb67ba2d0ca4e0d6d23f98eb2';
+const DEFAULT_DIGEST: string|undefined = '0x2a69ec139a3bef6718bbc299558584ca4ab0726946cb474cefe4abe3842003eb';
 const golden=JSON.parse(await readFile(resolve('tests/vectors/standing/golden.json'),'utf8'));
 const compiled=await compile(createFileManager(resolve('circuits/extensions/standing_probe')));
 assert.ok(compiled.program?.bytecode,'standing probe compiles');
 const noir=new Noir(compiled.program as any);
-const s=(n:number|bigint)=>String(n);
 const OPS:Record<string,number>={day:0,recv:1,give:2,miss:3,credit:4,punished:5,punish_given:6};
-const policyInput=(set:any)=>{const p=set.params;return {
-  c0:s(p.c0),h_a:s(p.h_A),h_g:s(p.h_G),n_half:s(p.n_half),n_c:s(p.n_c),e_q:s(p.e_q),r_max:s(p.r_max),r_age:s(p.r_age),
-  c_max_q:s(p.c_max_q),c_vet:s(p.c_vet),age_vet:s(p.age_vet),boost_q:s(p.boost_q),boost_days:s(p.boost_days),
-  slope_q:s(p.slope_q),mid_q:s(p.mid_q),kappa_q:s(p.kappa_q),loan_use_q:s(p.loan_use_q),factor:s(set.factor),
-  trust:set.trust.map(s),g_table:set.g_table.map(s),a_table:set.a_table.map(s)};};
+const s=(n:number|bigint)=>String(n);
 const stateInput=(v:any)=>({g:s(v.G),a:s(v.A),c:s(v.C),pr:s(v.Pr),pg:s(v.Pg),lc:s(v.Lc),day:s(v.day)});
 let digests=new Map<string,string>();
 let steps=0;

@@ -169,6 +169,22 @@ pub enum Effect {
     Update,
     /// Spend the configured units and bind permission to this opaque field commitment.
     Change { binding: [u8; 32] },
+    /// The sponsor spends one voucher on an actual admission. The role class is the
+    /// sponsor's current role; the ledger accepts it only if it equals its own record.
+    Admit { role: u8 },
+    /// Consume one bond-addressed obligation. The tag is the only identifier the ledger
+    /// ever sees; it must be present in the obligation mailbox and is removed with the update.
+    Consume { obligation: [u8; 32] },
+}
+impl Effect {
+    /// The role class and obligation tag the update circuit exposes as public inputs.
+    pub fn voucher_inputs(&self) -> (u8, [u8; 32]) {
+        match self {
+            Effect::Admit { role } => (*role, [0; 32]),
+            Effect::Consume { obligation } => (0, *obligation),
+            Effect::Update | Effect::Change { .. } => (0, [0; 32]),
+        }
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]

@@ -22,13 +22,17 @@ export async function loadArtifacts(configPath) {
   }
   if(!setup['g1.dat']||!setup['g2.dat']||manifest.numPoints*32!==setup['g1.dat'].length||setup['g2.dat'].length!==128)throw new Error('Setup completeness');
   const circuits=json(circuitBytes),keys=json(vkBytes);
-  const recordEpochCircuit=Object.hasOwn(circuits,'record_epoch'),recordEpochKey=Object.hasOwn(keys,'record_epoch');
-  if(recordEpochCircuit!==recordEpochKey||(recordEpochCircuit&&(
-    typeof circuits.record_epoch?.bytecode!=='string'||!circuits.record_epoch.bytecode||
-    typeof keys.record_epoch!=='string'||!keys.record_epoch)))throw new Error('Incomplete record epoch artifact pair');
+  // Epoch-presented relations ship together with their keys or not at all.
+  const epochKinds=['record_epoch','voucher_epoch'];
+  const epochAvailable=Object.fromEntries(epochKinds.map(kind=>[kind,Object.hasOwn(circuits,kind)]));
+  for(const kind of epochKinds) {
+    if(epochAvailable[kind]!==Object.hasOwn(keys,kind)||(epochAvailable[kind]&&(
+      typeof circuits[kind]?.bytecode!=='string'||!circuits[kind].bytecode||
+      typeof keys[kind]!=='string'||!keys[kind])))throw new Error('Incomplete record epoch artifact pair');
+  }
   return {manifest,scope:{circuitDigest:Array.from(unhex(manifest.circuitSha256)),verifyingKeyDigest:Array.from(unhex(manifest.vkSha256))},
-    artifacts(kind){if(!['update','deposit','record','record_epoch','wave','outcome'].includes(kind))throw new Error('Circuit domain');
-      if(kind==='record_epoch'&&!recordEpochCircuit)throw new Error('Record epoch circuit unavailable');
+    artifacts(kind){if(!['update','deposit','record','record_epoch','voucher_epoch','wave','outcome'].includes(kind))throw new Error('Circuit domain');
+      if(epochKinds.includes(kind)&&!epochAvailable[kind])throw new Error('Record epoch circuit unavailable');
       if(!circuits[kind]||!keys[kind])throw new Error('Circuit unavailable in this artifact group');
       return {manifest,circuit:circuits[kind],verificationKey:unhex(keys[kind]),setup,limits:{memoryPages:65536,maxProofBytes:1024*1024}};}};
 }

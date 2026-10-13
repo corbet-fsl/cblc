@@ -5,17 +5,20 @@ use crate::{hash, DOMAIN, SAFE};
 
 pub global Q: u64 = 65536;
 global HALF: u64 = 32768;
-global TAG: Field = 41;
+global TAG: Field = 42;
 pub global TRUST_ENTRIES: u32 = 65;
 pub global TABLE_PAD: u32 = 64;
-// 17 parameters, the clean-conversation factor and the three tables.
-global FIELDS: u32 = 2 + 17 + 1 + 65 + 64 + 64;
+// 17 parameters, the clean-conversation factor, the 14 voucher parameters and the three tables.
+global FIELDS: u32 = 2 + 17 + 1 + 14 + 65 + 64 + 64;
 
 pub struct StandingPolicy {
     pub c0: u64, pub h_a: u64, pub h_g: u64, pub n_half: u64, pub n_c: u64, pub e_q: u64,
     pub r_max: u64, pub r_age: u64, pub c_max_q: u64, pub c_vet: u64, pub age_vet: u64,
     pub boost_q: u64, pub boost_days: u64, pub slope_q: u64, pub mid_q: u64,
     pub kappa_q: u64, pub loan_use_q: u64, pub factor: u64,
+    // Voucher allowance clamp per role (member, admin, root), success proof and reward.
+    pub v_slope: [u64; 3], pub v_min: [u64; 3], pub v_max: [u64; 3],
+    pub v_days: u64, pub v_k: u64, pub v_max_punished: u64, pub v_brake_cap: u64, pub v_reward_cap: u64,
     pub trust: [u64; 65], pub g_table: [u64; 64], pub a_table: [u64; 64],
 }
 
@@ -34,9 +37,19 @@ pub fn policy_digest(p: StandingPolicy) -> Field {
         p.c_vet, p.age_vet, p.boost_q, p.boost_days, p.slope_q, p.mid_q, p.kappa_q,
         p.loan_use_q, p.factor];
     for i in 0..18 { v[2 + i] = head[i] as Field; }
-    for i in 0..65 { v[20 + i] = p.trust[i] as Field; }
-    for i in 0..64 { v[85 + i] = p.g_table[i] as Field; }
-    for i in 0..64 { v[149 + i] = p.a_table[i] as Field; }
+    for i in 0..3 {
+        v[20 + i] = p.v_slope[i] as Field;
+        v[23 + i] = p.v_min[i] as Field;
+        v[26 + i] = p.v_max[i] as Field;
+    }
+    v[29] = p.v_days as Field;
+    v[30] = p.v_k as Field;
+    v[31] = p.v_max_punished as Field;
+    v[32] = p.v_brake_cap as Field;
+    v[33] = p.v_reward_cap as Field;
+    for i in 0..65 { v[34 + i] = p.trust[i] as Field; }
+    for i in 0..64 { v[99 + i] = p.g_table[i] as Field; }
+    for i in 0..64 { v[163 + i] = p.a_table[i] as Field; }
     hash(v)
 }
 
@@ -50,6 +63,12 @@ pub fn check_policy(p: StandingPolicy) {
     for i in 0..65 { assert(p.trust[i] <= Q); }
     assert(p.trust[0] == Q);
     for i in 0..64 { assert((p.g_table[i] <= Q) & (p.a_table[i] <= Q)); }
+    // Voucher ranges (czkp VoucherParams::valid). The floor of 14 days is a platform rule.
+    assert((p.v_days >= 14) & (p.v_days <= 365) & (p.v_k >= 1) & (p.v_k <= 20));
+    assert((p.v_max_punished <= 8) & (p.v_brake_cap >= 1) & (p.v_brake_cap <= 4) & (p.v_reward_cap <= 16));
+    for r in 0..3 {
+        assert((p.v_slope[r] <= 64 * Q) & (p.v_max[r] >= 1) & (p.v_max[r] <= 100000) & (p.v_min[r] <= p.v_max[r]));
+    }
 }
 
 pub fn check_state(s: Standing, joined: u64) {
@@ -148,4 +167,10 @@ pub fn reach(s: Standing, p: StandingPolicy, joined: u64) -> u64 {
 // Size of the shared pool of pending first contacts; never below one.
 pub fn cap(s: Standing, p: StandingPolicy, joined: u64) -> u64 {
     1 + ((trust(s, p, joined) as u128 * reach(s, p, joined) as u128 + 2147483648) >> 32) as u64
+}
+
+// A vouchee's punishment weighs on its sponsor: fractions are summed before the curve and
+// decay with clean conversations exactly like received punishments.
+pub fn obligation_punished(s: Standing, weight_q: u64) -> Standing {
+    Standing { g: s.g, a: s.a, c: s.c, pr: s.pr + weight_q, pg: s.pg, lc: s.lc, day: s.day }
 }

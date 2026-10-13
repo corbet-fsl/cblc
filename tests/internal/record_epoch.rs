@@ -23,6 +23,7 @@ fn fixture(count: u32) -> FrozenEpoch {
                 version: 4,
                 state,
                 required_inbox: [6; 32],
+                role: 0,
                 blinding: Sha256::digest([index.to_be_bytes().as_slice(), b"blind"].concat())
                     .into(),
             },
@@ -86,9 +87,10 @@ fn assert_witness(
         state: take(40),
         required_inbox: take(72),
         blinding: take(104),
+        role: plaintext[136],
     };
     assert_eq!(leaf.owner, expected_owner);
-    let index = u32::from_be_bytes(plaintext[136..140].try_into().unwrap()) as usize;
+    let index = u32::from_be_bytes(plaintext[137..141].try_into().unwrap()) as usize;
     assert!(index < publication.descriptor.leaf_count as usize);
     czkp::record::verify_certificate(
         &publication.descriptor.issuer_key,
@@ -103,7 +105,7 @@ fn assert_witness(
         &plaintext[plaintext.len() - 64..],
     )
     .unwrap();
-    let path = plaintext[140..plaintext.len() - 64]
+    let path = plaintext[141..plaintext.len() - 64]
         .as_chunks::<32>()
         .0
         .to_vec();

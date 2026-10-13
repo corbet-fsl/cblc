@@ -168,7 +168,7 @@ fn ingestion_preserves_versions_and_clears_only_intermediate_bindings() {
     let proofs = prepare(&update(), &bundle_bytes(steps())).unwrap();
     assert_eq!(proofs.len(), 2);
     for proof in &proofs {
-        assert_eq!(proof.inputs.len(), 377);
+        assert_eq!(proof.inputs.len(), 410);
     }
     let first = values(&proofs[0].inputs);
     let last = values(&proofs[1].inputs);
@@ -190,6 +190,39 @@ fn ingestion_preserves_versions_and_clears_only_intermediate_bindings() {
     assert_eq!(&last[331..363], &[6; 32]);
     assert_eq!(proofs[0].proof, [1, 2]);
     assert_eq!(proofs[1].proof, [3, 4]);
+    // No voucher effect: role class and obligation stay empty on every step.
+    for proof in &proofs {
+        let tail = values(&proof.inputs);
+        assert_eq!(tail[377], 0);
+        assert_eq!(&tail[378..410], &[0; 32]);
+    }
+}
+
+#[test]
+fn voucher_effects_ride_only_the_final_step() {
+    let with = |effect| {
+        let mut statement = update();
+        if let ExtensionStatement::Update { update, .. } = &mut statement {
+            update.effect = effect;
+        }
+        statement
+    };
+    let admit = with(Effect::Admit { role: 2 });
+    let proofs = prepare(&admit, &bundle_bytes(steps())).unwrap();
+    let (first, last) = (values(&proofs[0].inputs), values(&proofs[1].inputs));
+    assert_eq!((first[377], last[377]), (0, 2));
+    assert_eq!(&last[378..410], &[0; 32]);
+    let consume = with(Effect::Consume {
+        obligation: [9; 32],
+    });
+    let proofs = prepare(&consume, &bundle_bytes(steps())).unwrap();
+    let (first, last) = (values(&proofs[0].inputs), values(&proofs[1].inputs));
+    assert_eq!(&first[378..410], &[0; 32]);
+    assert_eq!((last[377], last[378..410].to_vec()), (0, vec![9; 32]));
+    let consume = with(Effect::Consume {
+        obligation: [0; 32],
+    });
+    assert!(prepare(&consume, &bundle_bytes(steps())).is_err());
 }
 
 #[test]
