@@ -11,13 +11,17 @@ import {boundedFile} from '../../runtime/bounded-file.ts';
 const RETAINED_CAPTURE = 'a5bf61f841533ef711a78d06384fe93bc5bd02d761baffaeabb5a85a271cb04b';
 const sha = value => createHash('sha256').update(value).digest();
 
-export async function originalForeignVerificationKey() {
+// The pinned capture's own `update` key is now the key under test, so the foreign key is the first
+// other circuit key of the same authenticated group (a valid key of a different relation).
+export async function originalForeignVerificationKey(own) {
   const bytes = await boundedFile(resolve(process.env.ARTIFACT_ROOT, 'gather-record-fixture-retained', RETAINED_CAPTURE, 'keys.json'), 1024 * 1024);
-  console.error('CBLC-FOREIGN-KEYS-SHA ' + sha(bytes).toString('hex'));
-  if (sha(bytes).toString('hex') !== 'e1533badd256e63b7817018ba59a5cd822f3e936a723d7f31bd85a49a6190ae0') {
+  if (sha(bytes).toString('hex') !== 'bf8b938fe8678d3b248e9459b97ff64027792d43a5eeee1fea2c13d40da3fb48') {
     throw new Error('Original negative verification-key group differs');
   }
-  const key = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes)).update;
+  const group = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes));
+  const ownHex = Buffer.from(own).toString('hex');
+  const key = Object.keys(group).sort().map(name => group[name]).find(value => typeof value === 'string' && value !== ownHex);
+  if (key === undefined) throw new Error('Original negative verification key missing');
   if (!/^[0-9a-f]+$/.test(key) || key.length % 2 !== 0 || key.length > 2 * 1024 * 1024) {
     throw new Error('Original negative verification key bound');
   }

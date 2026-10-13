@@ -115,7 +115,7 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
     let nativeVerification;
     if (nativeSetup) {
       stage = 'foreign-key-identity';
-      const foreignKey = await originalForeignVerificationKey();
+      const foreignKey = await originalForeignVerificationKey(verificationKey);
       assert.notEqual(sha(foreignKey), sha(verificationKey));
       stage = 'native-js-foreign-key-negative';
       await refuses({...proof, verificationKey: foreignKey});
