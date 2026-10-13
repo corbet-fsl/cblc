@@ -81,7 +81,8 @@ for community, expected in (
         if (native["positiveVerdict"] is not True
                 or native["proofSubstitution"] != "native-js-verified-false"
                 or native["publicInputMutation"] != "native-js-verified-false"
-                or native["foreignVerificationKey"] != "native-js-verified-false"):
+                or native["foreignVerificationKey"] != "native-js-verified-false"
+                or native["sameShapeForeignVerificationKey"] != "native-js-verified-false"):
             raise ValueError("Original native verification missing")
         matches.append((path.name, data))
     if len(matches) != 1:

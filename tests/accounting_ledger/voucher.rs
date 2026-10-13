@@ -35,8 +35,14 @@ fn roles_default_to_member_and_reject_unknown_classes() {
     assert_eq!(ledger.role(&owner).unwrap(), 0);
     ledger.set_role(&owner, 2).unwrap();
     assert_eq!(ledger.role(&owner).unwrap(), 2);
-    assert!(matches!(ledger.set_role(&owner, 3), Err(Error::InvalidInput)));
-    assert!(matches!(ledger.set_role(&[0; 32], 1), Err(Error::InvalidInput)));
+    assert!(matches!(
+        ledger.set_role(&owner, 3),
+        Err(Error::InvalidInput)
+    ));
+    assert!(matches!(
+        ledger.set_role(&[0; 32], 1),
+        Err(Error::InvalidInput)
+    ));
     ledger.set_role(&owner, 0).unwrap();
     assert_eq!(ledger.role(&owner).unwrap(), 0);
 }
@@ -49,5 +55,8 @@ fn a_tag_posts_exactly_once_for_all_time() {
     ledger.post_obligation(&tag).unwrap();
     assert!(ledger.obligation_waiting(&tag).unwrap());
     assert!(matches!(ledger.post_obligation(&tag), Err(Error::Replay)));
-    assert!(matches!(ledger.post_obligation(&[0; 32]), Err(Error::InvalidInput)));
+    assert!(matches!(
+        ledger.post_obligation(&[0; 32]),
+        Err(Error::InvalidInput)
+    ));
 }

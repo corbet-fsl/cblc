@@ -557,7 +557,12 @@ fn main() {
                     if v["op"] == "voucherEpoch" {
                         ledger.check_voucher_epoch(&presentation, &proof, &binding, || now)?;
                     } else {
-                        ledger.post_presented_obligation(&presentation, &proof, &binding, || now)?;
+                        ledger.post_presented_obligation(
+                            &presentation,
+                            &proof,
+                            &binding,
+                            || now,
+                        )?;
                     }
                     Ok(json!(true))
                 }

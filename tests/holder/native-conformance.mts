@@ -27,6 +27,26 @@ export async function originalForeignVerificationKey(own) {
   }
   return Buffer.from(key, 'hex');
 }
+// A verification key of the same shape as `own` (same header: circuit size, public-input count and
+// offset) for a different relation: two distinct selector commitments exchanged. Both are valid curve
+// points, so the verifier parses the key and only the cryptographic check can refuse the proof.
+// Layout: three 32-byte header fields, then 64-byte commitments (x, y).
+export function sameShapeForeignVerificationKey(own) {
+  const field = 32, header = 3 * field, point = 2 * field;
+  if (own.length < header + 4 * point || (own.length - header) % point !== 0) {
+    throw new Error(`Unexpected verification key layout: ${own.length} bytes`);
+  }
+  const out = Uint8Array.from(own);
+  const count = (own.length - header) / point;
+  for (let index = 0; index + 1 < count; index++) {
+    const a = header + index * point, b = a + point;
+    if (Buffer.compare(Buffer.from(own.subarray(a, a + point)), Buffer.from(own.subarray(b, b + point))) === 0) continue;
+    out.set(own.subarray(b, b + point), a);
+    out.set(own.subarray(a, a + point), b);
+    return out;
+  }
+  throw new Error('Verification key has no two distinct commitments');
+}
 const fields = values => values.map(value => {
   const encoded = BigInt(value).toString(16).padStart(64, '0');
   assert.equal(encoded.length, 64);

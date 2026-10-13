@@ -96,7 +96,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         }
         let mut transaction = self.connection.transaction()?;
         if waiting(&mut transaction, tag)?
-            || transaction.get::<bool>(&key(POSTED, &[tag]))?.unwrap_or(false)
+            || transaction
+                .get::<bool>(&key(POSTED, &[tag]))?
+                .unwrap_or(false)
         {
             return Err(Error::Replay);
         }

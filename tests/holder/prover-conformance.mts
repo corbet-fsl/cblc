@@ -11,7 +11,7 @@ import {ExtensionWitness, extensionHashes, checkpointFromVerified} from '@corbet
 import {OPTIONS, hex, unhex} from '@corbet-labs/czkp/encoding';
 import {publicInputs, witnessInputs} from '@corbet-labs/czkp/abi';
 import {boundedFile} from '../../runtime/bounded-file.ts';
-import {originalForeignVerificationKey, verifyOriginalNative} from './native-conformance.mts';
+import {originalForeignVerificationKey, sameShapeForeignVerificationKey, verifyOriginalNative} from './native-conformance.mts';
 import {STANDING,STANDING_DIGEST,STANDING_TABLES} from './standing-fixture.mts';
 
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -127,10 +127,18 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
         if (error?.name !== 'BBApiException' || !/num_public_inputs mismatch with VK/.test(String(error?.message))) throw error;
       }
       assert.equal(foreignAccepted, false);
+      stage = 'native-js-same-shape-foreign-key-negative';
+      // Same header as the genuine key: the refusal cannot come from an arity or size check, so no
+      // exception is tolerated here. The cryptographic check itself must return false.
+      const sameShape = sameShapeForeignVerificationKey(verificationKey);
+      assert.equal(sameShape.length, verificationKey.length);
+      assert.notEqual(sha(sameShape), sha(verificationKey));
+      assert.equal(await verifier.verifyProof({...proof, verificationKey: sameShape}, OPTIONS), false);
       stage = 'original-raw-native-verification';
       nativeVerification = await verifyOriginalNative(proof, verificationKey, nativeSetup.setup, nativeSetup.circuitDigest);
       nativeVerification.publicInputMutation = 'native-js-verified-false';
       nativeVerification.foreignVerificationKey = 'native-js-verified-false';
+      nativeVerification.sameShapeForeignVerificationKey = 'native-js-verified-false';
     }
     const receipt = {version: 1, relation: 'original-update-genesis', authority: 'none',
       ...producer.receipt, verifierTarget: OPTIONS.verifierTarget, publicInputCount: expected.length,
