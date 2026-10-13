@@ -71,13 +71,13 @@ export async function verifyRecordPresentation(presentation,expected,epoch,owner
 
 export const RECORD_EPOCH_DOMAIN=0x63626c632e7265636f72642d65706f63682e7632n;
 export async function recordLeafCommitment(community,epoch,leaf,hash) {
-  if(!exact(leaf,['owner','version','state','requiredInbox','blinding']))throw new Error('Frozen leaf shape');
+  if(!exact(leaf,['owner','version','state','requiredInbox','role','blinding']))throw new Error('Frozen leaf shape');
   const state=recordBytes(leaf.state),blinding=recordBytes(leaf.blinding);
   if(fieldValue(Uint8Array.from(state))===0n||!blinding.some(Boolean))throw new Error('Frozen leaf bounds');
   if(typeof hash!=='function')throw new Error('Maintained Poseidon2 backend required');
-  return fieldBytes(await hash([RECORD_EPOCH_DOMAIN,1n,...limbs32(Uint8Array.from(recordBytes(community))),BigInt(safe(epoch,true)),
+  return fieldBytes(await hash([RECORD_EPOCH_DOMAIN,2n,...limbs32(Uint8Array.from(recordBytes(community))),BigInt(safe(epoch,true)),
     ...limbs32(Uint8Array.from(recordBytes(leaf.owner))),BigInt(safe(leaf.version)),fieldValue(Uint8Array.from(state)),
-    ...limbs32(Uint8Array.from(recordBytes(leaf.requiredInbox))),...limbs32(Uint8Array.from(blinding))]));
+    ...limbs32(Uint8Array.from(recordBytes(leaf.requiredInbox))),BigInt(safe(leaf.role)),...limbs32(Uint8Array.from(blinding))]));
 }
 export async function recordNode(left,right,hash){
   if(typeof hash!=='function')throw new Error('Maintained Poseidon2 backend required');

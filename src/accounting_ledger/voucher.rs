@@ -10,6 +10,8 @@ use crate::extensions::Effect;
 
 const ROLE: u8 = 11;
 const MAILBOX: u8 = 12;
+/// Every tag ever posted. A consumed tag stays here so a replayed presentation cannot post twice.
+const POSTED: u8 = 13;
 /// Role classes: member, admin, root (czkp::voucher).
 pub const MAX_ROLE: u8 = 2;
 
@@ -93,12 +95,31 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             return Err(Error::InvalidInput);
         }
         let mut transaction = self.connection.transaction()?;
-        if waiting(&mut transaction, tag)? {
+        if waiting(&mut transaction, tag)?
+            || transaction.get::<bool>(&key(POSTED, &[tag]))?.unwrap_or(false)
+        {
             return Err(Error::Replay);
         }
+        transaction.put(&key(POSTED, &[tag]), &true)?;
         transaction.put(&key(MAILBOX, &[tag]), &true)?;
         transaction.commit()?;
         Ok(())
+    }
+
+    /// Verify a `Post` presentation against the current epoch, then post its tag. The
+    /// proof already shows that the hidden member holds the bond and the right to post.
+    pub fn post_presented_obligation(
+        &mut self,
+        presentation: &crate::extensions::VoucherPresentation,
+        proof: &[u8],
+        expected_binding: &[u8; 32],
+        clock: impl Fn() -> u64,
+    ) -> Result<(), Error> {
+        let crate::extensions::VoucherPurpose::Post { tag } = presentation.purpose else {
+            return Err(Error::InvalidInput);
+        };
+        self.check_voucher_epoch(presentation, proof, expected_binding, clock)?;
+        self.post_obligation(&tag)
     }
 
     /// Whether an obligation tag is waiting; the only read a poller needs.

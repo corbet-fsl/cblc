@@ -39,6 +39,6 @@ export async function prepareRecordEpoch(holder,presentationPublicKey,witness,sc
   await verifyRecordCertificate(record);
   const input=recordEpochPublicInputs(record,scope,issuerKey);
   return {statement:{kind:'recordEpoch',policy:state.extension,record},input:{...input,extension,
-    version,state:commitment,required_inbox:selected.requiredInbox,blinding:selected.blinding,
+    version,state:commitment,required_inbox:selected.requiredInbox,role:selected.role,blinding:selected.blinding,
     state_policy,registered_secret,opening}};
 }

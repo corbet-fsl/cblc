@@ -509,6 +509,42 @@ fn main() {
                     });
                     Ok(json!(token.request.expires_at))
                 }
+                // Voucher accounting at the ledger. Roles come from the community's authority,
+                // never from a member request; here the fixture plays that authority.
+                "setRole" => {
+                    let owner: [u8; 32] = serde_json::from_value(v["owner"].clone()).unwrap();
+                    let role = v["role"].as_u64().unwrap() as u8;
+                    let ledger = ledger.as_mut().unwrap();
+                    ledger.set_role(&owner, role)?;
+                    Ok(json!(ledger.role(&owner)?))
+                }
+                // A bare tag post stands for a presentation the relying service has already
+                // verified (the "voucherEpoch" op below proves that path with a real proof).
+                "postObligation" => {
+                    let tag: [u8; 32] = serde_json::from_value(v["tag"].clone()).unwrap();
+                    ledger.as_mut().unwrap().post_obligation(&tag)?;
+                    Ok(json!(true))
+                }
+                "obligationWaiting" => {
+                    let tag: [u8; 32] = serde_json::from_value(v["tag"].clone()).unwrap();
+                    Ok(json!(ledger.as_mut().unwrap().obligation_waiting(&tag)?))
+                }
+                "voucherEpoch" | "postPresentedObligation" if record_epochs => {
+                    let presentation: VoucherPresentation =
+                        serde_json::from_value(v["presentation"].clone()).unwrap();
+                    let proof = HEXLOWER
+                        .decode(v["proof"].as_str().unwrap().as_bytes())
+                        .unwrap();
+                    let binding: [u8; 32] = serde_json::from_value(v["binding"].clone()).unwrap();
+                    let now = v["now"].as_u64().unwrap();
+                    let ledger = ledger.as_mut().unwrap();
+                    if v["op"] == "voucherEpoch" {
+                        ledger.check_voucher_epoch(&presentation, &proof, &binding, || now)?;
+                    } else {
+                        ledger.post_presented_obligation(&presentation, &proof, &binding, || now)?;
+                    }
+                    Ok(json!(true))
+                }
                 _ => Err(Error::InvalidInput),
             }
         })();

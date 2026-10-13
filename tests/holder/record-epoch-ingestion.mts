@@ -69,7 +69,7 @@ export async function ingestedRecordEpoch({members,call,submit,anonymous,proof,a
     certificate:witness.certificate,shares:local.statement.record.shares};
   await verifyRecordCertificate(pending);
   const impossible={...recordEpochPublicInputs(pending,artifacts.scope,issuerKey),extension:ext,
-    version,state,state_policy,registered_secret,opening,required_inbox:witness.leaf.requiredInbox,blinding:witness.leaf.blinding};
+    version,state,state_policy,registered_secret,opening,required_inbox:witness.leaf.requiredInbox,role:witness.leaf.role,blinding:witness.leaf.blinding};
   await assert.rejects(new Noir(programs.record_epoch).execute(witnessInputs(programs.record_epoch,impossible)));
   // This later genuine deposit extends the frozen required root. Its companion
   // is the original valid replay, preserving the actual minimum-batch protocol.

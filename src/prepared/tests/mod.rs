@@ -73,6 +73,7 @@ fn scope() -> crate::accounting::AccountProofScope {
 }
 
 mod record_epoch;
+mod voucher_epoch;
 fn update() -> ExtensionStatement {
     ExtensionStatement::Update {
         policy: policy(),

@@ -57,6 +57,7 @@ pub struct NativeExtensionVerifier {
     deposits: cvfy::NativeVerifier,
     records: cvfy::NativeVerifier,
     record_epochs: Option<cvfy::NativeVerifier>,
+    voucher_epochs: Option<cvfy::NativeVerifier>,
     update_timeout: Duration,
     anonymous_timeout: Duration,
 }
@@ -82,6 +83,9 @@ impl NativeExtensionVerifier {
         if let Some(record) = &self.record_epochs {
             owners.push(record.cancellation());
         }
+        if let Some(voucher) = &self.voucher_epochs {
+            owners.push(voucher.cancellation());
+        }
         NativeExtensionCancellation(owners)
     }
     pub fn new(
@@ -96,6 +100,10 @@ impl NativeExtensionVerifier {
             .record_epoch_config(anonymous.clone())
             .map(|config| cvfy::NativeVerifier::with_capacity(config, capacity.clone()))
             .transpose()?;
+        let voucher_epochs = artifacts
+            .voucher_epoch_config(anonymous.clone())
+            .map(|config| cvfy::NativeVerifier::with_capacity(config, capacity.clone()))
+            .transpose()?;
         let [updates, deposits, records] = artifacts.configs(updates, anonymous);
         Ok(Self {
             scope: artifacts.scope(),
@@ -105,6 +113,7 @@ impl NativeExtensionVerifier {
             deposits: cvfy::NativeVerifier::with_capacity(deposits, capacity.clone())?,
             records: cvfy::NativeVerifier::with_capacity(records, capacity)?,
             record_epochs,
+            voucher_epochs,
             update_timeout,
             anonymous_timeout,
         })
@@ -142,6 +151,10 @@ impl ExtensionVerifier for NativeExtensionVerifier {
             ExtensionStatement::Record { .. } => &self.records,
             ExtensionStatement::RecordEpoch { .. } => self
                 .record_epochs
+                .as_ref()
+                .ok_or(Error::UnsupportedCapability)?,
+            ExtensionStatement::VoucherEpoch { .. } => self
+                .voucher_epochs
                 .as_ref()
                 .ok_or(Error::UnsupportedCapability)?,
             ExtensionStatement::Update { .. } => return Err(Error::InvalidInput),

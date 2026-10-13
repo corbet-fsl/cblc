@@ -9,6 +9,8 @@ mod integrity;
 mod recipient;
 #[path = "accounting_ledger/refusals.rs"]
 mod refusals;
+#[path = "accounting_ledger/voucher.rs"]
+mod voucher;
 #[path = "accounting_ledger/wire.rs"]
 mod wire;
 use cblc::{Error, accounting::*, accounting_ledger::*};

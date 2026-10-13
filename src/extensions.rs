@@ -247,6 +247,52 @@ pub struct PublicRecord {
     pub inbox: Inbox,
     pub shares: Option<[u16; 3]>,
 }
+/// What an unlinkable voucher presentation proves about a hidden member of the current epoch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum VoucherPurpose {
+    /// The member may issue a link of `uses` admissions at its current cap.
+    Issue { uses: u32 },
+    /// The member may post the bond obligation addressed by `tag`.
+    Post { tag: [u8; 32] },
+}
+
+/// Public inputs of one voucher presentation. The owner never appears: the relation
+/// proves some member of this epoch qualifies, bound to the relying party's `binding`.
+/// Deserialization and validation do not authenticate the epoch; the relying ledger
+/// compares it with its own current descriptor.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct VoucherPresentation {
+    pub epoch: czkp::record::Epoch,
+    pub blinded_leaf: [u8; 32],
+    pub certificate: Vec<u8>,
+    pub purpose: VoucherPurpose,
+    pub now: u64,
+    pub binding: [u8; 32],
+}
+
+impl VoucherPresentation {
+    /// Shape checks that need no key: bounded counts, nonzero tag and binding.
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.certificate.len() != 64
+            || self.binding == [0; 32]
+            || self.blinded_leaf == [0; 32]
+            || self.now == 0
+            || self.now > czkp::MAX_INTEGER
+        {
+            return Err(Error::InvalidInput);
+        }
+        match self.purpose {
+            VoucherPurpose::Issue { uses } if uses >= 1 => Ok(()),
+            VoucherPurpose::Post { tag } if tag != [0; 32] => Ok(()),
+            _ => Err(Error::InvalidInput),
+        }
+    }
+}
+
 /// Complete, domain-separated verifier input. The backend must bind every field.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -270,6 +316,11 @@ pub enum ExtensionStatement {
     RecordEpoch {
         policy: ExtensionPolicy,
         record: czkp::record::Record,
+    },
+    /// Unlinkable voucher presentation over the same epoch tree (no owner, no shares).
+    VoucherEpoch {
+        policy: ExtensionPolicy,
+        presentation: VoucherPresentation,
     },
 }
 #[cfg(feature = "host")]

@@ -2,20 +2,22 @@
 // holder. No public checkpoint/opening API or completed custody adapter.
 // Persistence of existing witnesses, not a new account or proof protocol.
 // Only an encrypted member wallet may store these private checkpoint bytes.
-import { ExtensionWitness } from '@corbet-labs/cwlt/extensions';
+import { VoucherWitness, entryPayload } from '@corbet-labs/cwlt/voucher-wallet';
 import { validateStatement } from '../../runtime/accounting/statement.mjs';
 import { hex, unhex } from '@corbet-labs/czkp/encoding';
-import { fieldBytes, fieldValue } from '@corbet-labs/czkp/primitives';
+import { fieldBytes, fieldValue, limbs32 } from '@corbet-labs/czkp/primitives';
 import { IndexedMap, SparseTree, integer, policyDigest, statePolicyDigest, SAFE } from '@corbet-labs/cwlt/hashes';
 import { checkEnrollmentShape, copyEnrollmentCheckpoint, enrollmentRoot, verifyEnrollmentLeaf, verifyEnrollmentPath } from './enrollment.mjs';
 
-const TOP = ['version','kind','extension','standing','community','owner','policyDigest','enrollmentRoot','now','accountVersion','commitment','opening','maps','slots'];
-const OPENING = ['reserved','createdAt','blind','accepted','declined','punished','inbox','authorization','standing'];
+const TOP = ['version','kind','extension','standing','community','owner','policyDigest','enrollmentRoot','now','accountVersion','commitment','opening','maps','slots','bondBook'];
+const OPENING = ['reserved','createdAt','blind','accepted','declined','punished','inbox','authorization','standing','voucher'];
+const VOUCHER = ['proven','away','lost','bonus','returned','answers','sponsor','bond'];
+const BOND_ENTRY = ['limit','done','overshoot','punished_seen','rewards_seen'];
 const STANDING = ['g','a','c','pr','pg','lc','day'];
 const STANDING_PARAMS = ['c0','hA','hG','nHalf','nC','eQ','rMax','rAge','cMaxQ','cVet','ageVet','boostQ','boostDays','slopeQ','midQ','kappaQ','loanUseQ'];
 const SLOT = ['peer','nonce','group','contactPolicy','role','phase','amount','admittedAt','expiresAt','peerAuthority','ownerAuthority','peerEnrollment','ownerEnrollment','outcome','answered','selfPunished'];
 const ENROLLMENT = ['member','key','secretHash','start','end','delegationDigest','index','leaf','path'];
-const MAPS = ['outgoing','incoming','pairs'];
+const MAPS = ['outgoing','incoming','pairs','bonds'];
 const CEILINGS = { maxBytes: 1024 * 1024, maxMapEntries: 65536, maxSlots: 65535 };
 const fail = () => { throw new Error('Invalid account checkpoint'); };
 const exact = (value, keys) => {
@@ -52,7 +54,8 @@ function readTime(value) {
 }
 function wireOpening(value) {
   return { reserved: writeDecimal(value.reserved, 128), createdAt: writeDecimal(value.createdAt, 64),
-    standing: Object.fromEntries(STANDING.map(k => [k, writeDecimal(value.standing[k], 64)])), blind: bytes(value.blind), accepted: writeDecimal(value.accepted, 64), declined: writeDecimal(value.declined, 64), punished: writeDecimal(value.punished, 64), inbox: bytes(value.inbox), authorization: writeDecimal(value.authorization) };
+    standing: Object.fromEntries(STANDING.map(k => [k, writeDecimal(value.standing[k], 64)])), blind: bytes(value.blind), accepted: writeDecimal(value.accepted, 64), declined: writeDecimal(value.declined, 64), punished: writeDecimal(value.punished, 64), inbox: bytes(value.inbox), authorization: writeDecimal(value.authorization),
+    voucher: Object.fromEntries(VOUCHER.map(k => [k, writeDecimal(value.voucher[k], k === 'sponsor' || k === 'bond' ? undefined : 64)])) };
 }
 function wireSlot(value) {
   return { peer: bytes(value.peer), nonce: bytes(value.nonce), group: bytes(value.group), contactPolicy: bytes(value.contactPolicy),
@@ -75,6 +78,16 @@ function readEnrollment(value) {
     index: decimal(value.index, 32), leaf: decimal(value.leaf), path: value.path.map(n => decimal(n)) };
   checkEnrollmentShape(entry); return entry;
 }
+function wireBond(value) {
+  return { limit: writeDecimal(value.limit, 64), done: value.done, overshoot: value.overshoot,
+    punished_seen: writeDecimal(value.punished_seen, 64), rewards_seen: writeDecimal(value.rewards_seen, 64) };
+}
+function readBond(value) {
+  exact(value, BOND_ENTRY);
+  if (typeof value.done !== 'boolean' || typeof value.overshoot !== 'boolean') fail();
+  return { limit: readTime(value.limit), done: value.done, overshoot: value.overshoot,
+    punished_seen: readTime(value.punished_seen), rewards_seen: readTime(value.rewards_seen) };
+}
 function wireMap(value, limit) {
   if (!(value.leaves instanceof Map) || value.leaves.size < 1 || value.leaves.size > limit
       || value.count !== BigInt(value.leaves.size)) fail();
@@ -92,7 +105,8 @@ export function encodeExtensionCheckpoint(value, limits) {
     policyDigest: bytes(value.policyHash), enrollmentRoot: bytes(fieldBytes(value.checkpoint.root)),
     now: writeDecimal(value.now, 64), accountVersion: writeDecimal(value.version, 64), commitment: bytes(fieldBytes(value.commitment)),
     opening: wireOpening(value.opening), maps: Object.fromEntries(MAPS.map(name => [name, wireMap(value[name], bound.maxMapEntries)])),
-    slots: Array.from(value.slots, ([event, slot]) => { decimal(event); return [event, wireSlot(slot)]; }) };
+    slots: Array.from(value.slots, ([event, slot]) => { decimal(event); return [event, wireSlot(slot)]; }),
+    bondBook: Array.from(value.bondBook ?? [], ([key, book]) => { decimal(key); return [key, bytes(book.secret), wireBond(book.entry)]; }) };
   const encoded = new TextEncoder().encode(JSON.stringify(snapshot));
   if (encoded.length > bound.maxBytes) fail();
   return encoded;
@@ -150,9 +164,10 @@ export async function restoreExtensionCheckpoint(options) {
     policyHash = readBytes(snapshot.policyDigest), root = fieldValue(readBytes(snapshot.enrollmentRoot)),
     commitment = fieldValue(readBytes(snapshot.commitment)), now = readTime(snapshot.now), version = readTime(snapshot.accountVersion);
   const o = snapshot.opening;
-  exact(o.standing, STANDING);
+  exact(o.standing, STANDING); exact(o.voucher, VOUCHER);
   const opening = { reserved: decimal(o.reserved, 128), createdAt: readTime(o.createdAt),
-    standing: Object.fromEntries(STANDING.map(k => [k, readTime(o.standing[k])])), blind: readBytes(o.blind), accepted: decimal(o.accepted,64), declined: decimal(o.declined,64), punished: decimal(o.punished,64), inbox:readBytes(o.inbox), authorization:decimal(o.authorization) };
+    standing: Object.fromEntries(STANDING.map(k => [k, readTime(o.standing[k])])), blind: readBytes(o.blind), accepted: decimal(o.accepted,64), declined: decimal(o.declined,64), punished: decimal(o.punished,64), inbox:readBytes(o.inbox), authorization:decimal(o.authorization),
+    voucher: Object.fromEntries(VOUCHER.map(k => [k, k === 'sponsor' || k === 'bond' ? decimal(o.voucher[k]) : readTime(o.voucher[k])])) };
   const leaves = Object.fromEntries(MAPS.map(name => [name, mapLeaves(snapshot.maps[name], bound.maxMapEntries)]));
   const entries = new Map();
   for (let index = 0; index < checkpoint.entries.length; index++) {
@@ -204,16 +219,36 @@ export async function restoreExtensionCheckpoint(options) {
     pairs.set(pair,(pairs.get(pair)===2n||slot.selfPunished)?2n:1n);
     if (slot.phase === 1 || slot.phase === 2 || slot.phase === 8) reserved += slot.amount;
   }
-  for(const [pair,value] of pairs)if(payloads.pairs.get(pair)!==value)fail();
-  if (payloads.outgoing.size || payloads.incoming.size || pairs.size !== payloads.pairs.size || reserved !== opening.reserved) fail();
+  // A pair payload is the slot-derived value (1 plain, 2 self-punished), plus 4 once the pair
+  // counted toward the success proof (5, 6). The count of counted pairs is the answers counter.
+  let counted = 0n;
+  for(const [pair,value] of pairs){
+    const stored = payloads.pairs.get(pair);
+    if(stored!==value&&stored!==value+4n)fail();
+    if(stored>=5n)counted++;
+  }
+  if(counted!==opening.voucher.answers)fail();
+  // The sponsor's bond book: each entry must reproduce its bond-map leaf exactly.
+  if(!Array.isArray(snapshot.bondBook))fail();
+  const bondBook = new Map();
+  for(const item of snapshot.bondBook){
+    if(!Array.isArray(item)||item.length!==3)fail();
+    const secret = readBytes(item[1]), entry = readBond(item[2]);
+    const key = await hashes.hash(62, limbs32(secret));
+    if(item[0]!==key.toString()||bondBook.has(item[0])||payloads.bonds.get(key)!==await entryPayload(hashes, entry))fail();
+    payloads.bonds.delete(key);
+    bondBook.set(item[0],{secret,entry});
+  }
+  if (payloads.outgoing.size || payloads.incoming.size || payloads.bonds.size || pairs.size !== payloads.pairs.size || reserved !== opening.reserved) fail();
   const maps = {};
   for (const name of MAPS) maps[name] = await restoreMap(leaves[name], hashes);
   Object.assign(opening, { outgoingRoot: maps.outgoing.root, outgoingCount: maps.outgoing.count,
     incomingRoot: maps.incoming.root, incomingCount: maps.incoming.count, pairRoot: maps.pairs.root, pairCount: maps.pairs.count });
+  Object.assign(opening.voucher, { bondRoot: maps.bonds.root, bondCount: maps.bonds.count });
   const statePolicyHash = await statePolicyDigest(community, policy);
-  const restored=new ExtensionWitness();
+  const restored=new VoucherWitness();
   Object.assign(restored,{hashes, community, policy, extension, standing: standingParams, transition, checkpoint, ownerIndex, ownerSecret, owner, policyHash, statePolicyHash,
-    now, version, commitment, opening, slots, ...maps});
+    now, version, commitment, opening, slots, bondBook, ...maps});
   if(await restored.commit(opening,version)!==commitment)fail();
   return restored;
 }

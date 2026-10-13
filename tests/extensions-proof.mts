@@ -14,7 +14,7 @@ import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
 import {createProver} from '@corbet-labs/czkp/prove';
 import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
-import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mjs';
+import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mts';
 import {STANDING,STANDING_DIGEST,STANDING_TABLES} from './holder/standing-fixture.mts';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
 import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';

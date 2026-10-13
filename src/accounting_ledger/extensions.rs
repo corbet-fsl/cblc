@@ -348,6 +348,72 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         Ok(presentation.record.shares)
     }
 
+    /// Verify an unlinkable voucher presentation against the ledger's current epoch.
+    /// The relying party supplies its own expected `binding`; the epoch descriptor,
+    /// extension policy and time are authenticated here, before and after the expensive
+    /// check. Nothing about the hidden member is learned or stored.
+    pub fn check_voucher_epoch(
+        &mut self,
+        presentation: &crate::extensions::VoucherPresentation,
+        proof: &[u8],
+        expected_binding: &[u8; 32],
+        clock: impl Fn() -> u64,
+    ) -> Result<(), Error> {
+        let clock = observed_clock(self.observed_time.clone(), clock);
+        let now = clock();
+        check_time(now, 0)?;
+        presentation.validate()?;
+        if &presentation.binding != expected_binding
+            || proof.is_empty()
+            || proof.len() > self.policy.max_proof_bytes
+        {
+            return Err(Error::Admission);
+        }
+        let extensions = self
+            .extensions
+            .as_ref()
+            .ok_or(Error::UnsupportedCapability)?;
+        let check = |tx: &mut Transaction<'_>, now: u64| -> Result<(), Error> {
+            check_time(now, clock_floor(tx)?)?;
+            check_config(tx, &self.config)?;
+            check_extension_config(tx, Some(extensions))?;
+            let epoch = super::record_epoch::current_descriptor(
+                tx,
+                &self.community,
+                &extensions.verifier.scope(),
+                &self.config,
+                &extensions.config,
+            )?;
+            // The presentation time is the member's own claim of "now": it may lag the
+            // ledger clock by the authorization window and may never lead it.
+            if presentation.epoch != epoch
+                || presentation.epoch.community != self.community
+                || presentation.now > now
+                || now - presentation.now > self.policy.max_authorization_seconds
+            {
+                return Err(Error::Admission);
+            }
+            epoch.check_time(now)
+        };
+        let mut tx = self.connection.transaction()?;
+        check(&mut tx, now)?;
+        tx.rollback()?;
+        extensions.budget.check(&presentation.blinded_leaf)?;
+        extensions.verifier.verify_anonymous(
+            &ExtensionStatement::VoucherEpoch {
+                policy: extensions.policy.clone(),
+                presentation: presentation.clone(),
+            },
+            proof,
+        )?;
+        let completed = clock();
+        check_time(completed, now)?;
+        let mut tx = self.connection.transaction()?;
+        check(&mut tx, completed)?;
+        tx.rollback()?;
+        Ok(())
+    }
+
     /// A pure proof check against current state. It records no display/request history.
     /// Stale records and unconsumed obligations are rejected before and after verification.
     pub(crate) fn public_record(

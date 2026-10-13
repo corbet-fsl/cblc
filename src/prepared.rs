@@ -5,7 +5,7 @@ use crate::{
     accounting::{AccountProofScope, AccountStatement, statement_bytes},
     extensions::{
         EXTENSION_PROOF_BYTES, Effect, ExtendedUpdate, ExtensionPolicy, ExtensionStatement,
-        RecordUse,
+        RecordUse, VoucherPurpose,
     },
 };
 use data_encoding::HEXLOWER;
@@ -339,6 +339,56 @@ pub(crate) fn extension_proofs(
                     .unwrap_or([0; 3])
                     .map(|v| scalar(u64::from(v))),
             );
+            fields
+        }
+        ExtensionStatement::VoucherEpoch {
+            policy,
+            presentation,
+        } => {
+            let mut fields = extension_fields(policy)?;
+            presentation.validate()?;
+            let epoch = &presentation.epoch;
+            if epoch.proof_scope != *scope
+                || epoch.epoch == 0
+                || epoch.starts_at == 0
+                || epoch.starts_at >= epoch.expires_at
+                || epoch.root == [0; 32]
+                || epoch.leaf_count == 0
+                || epoch.leaf_count > czkp::record::MAX_LEAVES
+            {
+                return Err(Error::PolicyMismatch);
+            }
+            // As for the record epoch, the issuer certificate over the blinded leaf is
+            // checked natively every time; the circuit binds the same public bytes.
+            czkp::record::verify_certificate(
+                &epoch.issuer_key,
+                &epoch.community,
+                epoch.epoch,
+                &presentation.blinded_leaf,
+                &presentation.certificate,
+            )?;
+            for value in [
+                epoch.issuer_key.as_slice(),
+                presentation.certificate.as_slice(),
+                epoch.proof_scope.circuit_digest.as_slice(),
+                epoch.proof_scope.verifying_key_digest.as_slice(),
+                epoch.community.as_slice(),
+            ] {
+                bytes(&mut fields, value);
+            }
+            fields.extend([epoch.epoch, epoch.starts_at, epoch.expires_at].map(scalar));
+            bytes(&mut fields, &epoch.root);
+            fields.push(scalar(u64::from(epoch.leaf_count)));
+            bytes(&mut fields, &presentation.blinded_leaf);
+            let (purpose, uses, tag) = match presentation.purpose {
+                VoucherPurpose::Issue { uses } => (0, u64::from(uses), [0; 32]),
+                VoucherPurpose::Post { tag } => (1, 0, tag),
+            };
+            fields.push(scalar(purpose));
+            fields.push(scalar(uses));
+            fields.push(scalar(presentation.now));
+            bytes(&mut fields, &tag);
+            bytes(&mut fields, &presentation.binding);
             fields
         }
     };
