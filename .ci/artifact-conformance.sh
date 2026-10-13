@@ -16,7 +16,7 @@ node tests/extensions-proof.mts --record-epoch-artifacts
 python3 -B - "$CBLC_EXTENSION_DIRECTORY/keys.json" <<'PY'
 import hashlib
 import sys
-ACCEPTED_KEY_GROUP_SHA256 = "3b0c627844f05d0c9f295a987a4125d21dfb693498614d11f09a1119c5c09993"
+ACCEPTED_KEY_GROUP_SHA256 = "bf8b938fe8678d3b248e9459b97ff64027792d43a5eeee1fea2c13d40da3fb48"
 with open(sys.argv[1], "rb") as stream:
     data = stream.read(1024 * 1024 + 1)
 if len(data) > 1024 * 1024 or hashlib.sha256(data).hexdigest() != ACCEPTED_KEY_GROUP_SHA256:
