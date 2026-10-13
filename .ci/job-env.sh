@@ -21,10 +21,17 @@ node --version | grep -q '^v24\.' || { echo 'CI requires Node major 24' >&2; exi
 command -v jq >/dev/null || { echo 'missing jq' >&2; exit 2; }
 command -v wasm-pack >/dev/null || { echo 'missing wasm-pack' >&2; exit 2; }
 
-# retain_fixture NAME PATH...: keep the named directories once under this commit.
+# The fixtures depend on the code, circuits and locks only, so .ci edits keep them valid.
+fixture_key() {
+  git ls-files -s -- src tests examples circuits runtime experiments .cargo Cargo.toml Cargo.lock package.json package-lock.json build.rs | sha256sum | cut -c1-40
+}
+FIXTURE_KEY="$(fixture_key)"
+echo "Fixture key: $FIXTURE_KEY"
+
+# retain_fixture NAME PATH...: keep the named directories once under the fixture key.
 # An existing retained set is never overwritten (proofs are not reproducible bytes).
 retain_fixture() {
-  local name=$1 root="$ARTIFACT_ROOT/job-fixtures/$CI_COMMIT_SHA" staging path
+  local name=$1 root="$ARTIFACT_ROOT/job-fixtures/$FIXTURE_KEY" staging path
   shift
   mkdir -p "$root"
   if [ -e "$root/$name" ]; then echo "Fixture already retained: $root/$name"; return 0; fi
@@ -35,7 +42,7 @@ retain_fixture() {
 }
 # restore_fixture NAME: copy the retained directories into the workspace.
 restore_fixture() {
-  local source="$ARTIFACT_ROOT/job-fixtures/$CI_COMMIT_SHA/$1" path
+  local source="$ARTIFACT_ROOT/job-fixtures/$FIXTURE_KEY/$1" path
   test -d "$source" || { echo "Retained fixture missing: $source (run its job first)" >&2; exit 2; }
   while IFS= read -r path; do
     test ! -e "./$(basename "$path")" || { echo "Existing fixture refuses overwrite: $path" >&2; exit 2; }
