@@ -261,9 +261,12 @@ fn a_sender_and_a_recipient_release_the_conversation_in_one_checkpoint() {
             .commit(&mut bob.store, [5; 32], &mut bob.clock.clone())
             .await
             .unwrap();
+        let outcome = answer(&l).await;
+        assert_eq!(outcome.context(), &l.reservation.0.context);
+        assert_ne!(*outcome.receipt_digest(), [0; 32]);
         let answered = bob
             .waves()
-            .record_outcome(answer(&l).await, &mut bob.clock.clone())
+            .record_outcome(outcome, &mut bob.clock.clone())
             .unwrap();
         let release = bob
             .inbox

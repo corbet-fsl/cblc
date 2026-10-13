@@ -961,7 +961,7 @@ checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 [[package]]
 name = "cnbx"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-libs/cnbx.git?branch=release-threads#da07ac76557e50b90d3553d05e6f04bbbc36cabc"
+source = "git+https://git.corbet.ch/corbet-libs/cnbx.git?branch=release-threads#b8546fb3eb2ac112d987e0fad6cb7a4b4722fcfd"
 dependencies = [
  "cdlv",
  "cgrp",
@@ -1493,7 +1493,7 @@ dependencies = [
 [[package]]
 name = "cwvs"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cwvs.git?branch=release-authority#d45a29d29aa961ae2dd7608fc58fc302a8cedf8c"
+source = "git+https://git.corbet.ch/corbet-foss/cwvs.git?branch=release-authority#259708f3ae2ba801f4ddb639e5848431c1f658b6"
 dependencies = [
  "cdlv",
  "ckmg",
@@ -5040,7 +5040,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",
