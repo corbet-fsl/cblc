@@ -30,9 +30,10 @@ export async function originalForeignVerificationKey(own) {
 // A verification key of the same shape as `own` (same header: circuit size, public-input count and
 // offset) for a different relation: two distinct selector commitments exchanged. Both are valid curve
 // points, so the verifier parses the key and only the cryptographic check can refuse the proof.
-// Layout: three 32-byte header fields, then 64-byte commitments (x, y).
+// Layout: three 32-byte header fields, then 128-byte commitments: each coordinate is two 32-byte words
+// (136-bit limbs), so a point is x_lo, x_hi, y_lo, y_hi.
 export function sameShapeForeignVerificationKey(own) {
-  const field = 32, header = 3 * field, point = 2 * field;
+  const field = 32, header = 3 * field, point = 4 * field;
   if (own.length < header + 4 * point || (own.length - header) % point !== 0) {
     throw new Error(`Unexpected verification key layout: ${own.length} bytes`);
   }

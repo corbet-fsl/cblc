@@ -135,25 +135,7 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
       assert.notEqual(sha(sameShape), sha(verificationKey));
       let sameShapeVerified;
       try { sameShapeVerified = await verifier.verifyProof({...proof, verificationKey: sameShape}, OPTIONS); }
-      catch (error) {
-        const P = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
-        const be = (u, o) => BigInt('0x' + Buffer.from(u.subarray(o, o + 32)).toString('hex'));
-        const R = (1n << 256n) % P;
-        const rev = (u, o) => BigInt('0x' + Buffer.from(u.subarray(o, o + 32)).reverse().toString('hex'));
-        const forms = {be: be, le: rev, beMont: (u, o) => (be(u, o) * 0n) };
-        for (let h = 0; h < 256; h += 8) {
-          for (const [name, rd] of [['be', be], ['le', rev]]) {
-            let ok = 0, bad = 0;
-            for (let o = h; o + 64 <= verificationKey.length; o += 64) {
-              const x = rd(verificationKey, o), y = rd(verificationKey, o + 32);
-              ((x === 0n && y === 0n) || (y * y - x * x * x - 3n) % P === 0n) ? ok++ : bad++;
-            }
-            if (ok > 3) console.error(`SAME-SHAPE-DISCOVERY len=${verificationKey.length} header=${h} ${name} onCurve=${ok} off=${bad}`);
-          }
-        }
-        console.error(`SAME-SHAPE-DISCOVERY head ${Buffer.from(verificationKey.subarray(0, 160)).toString('hex')}`);
-        console.error(`SAME-SHAPE-DISCOVERY threw ${error?.name}: ${String(error?.message).slice(0, 300)}`); throw error; }
-      console.error(`SAME-SHAPE-DISCOVERY returned ${sameShapeVerified}`);
+      catch (error) { console.error(`same-shape key threw ${error?.name}: ${String(error?.message).slice(0, 300)}`); throw error; }
       assert.equal(sameShapeVerified, false);
       stage = 'original-raw-native-verification';
       nativeVerification = await verifyOriginalNative(proof, verificationKey, nativeSetup.setup, nativeSetup.circuitDigest);
