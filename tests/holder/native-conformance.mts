@@ -7,10 +7,13 @@ import {realpath, stat} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {boundedFile} from '../../runtime/bounded-file.ts';
 
+// Immutable native capture (worker.json digest) that this conformance is pinned to.
+const RETAINED_CAPTURE = 'a5bf61f841533ef711a78d06384fe93bc5bd02d761baffaeabb5a85a271cb04b';
 const sha = value => createHash('sha256').update(value).digest();
 
 export async function originalForeignVerificationKey() {
-  const bytes = await boundedFile(resolve(process.env.ARTIFACT_ROOT, 'gather-record-fixture/keys.json'), 1024 * 1024);
+  const bytes = await boundedFile(resolve(process.env.ARTIFACT_ROOT, 'gather-record-fixture-retained', RETAINED_CAPTURE, 'keys.json'), 1024 * 1024);
+  console.error('CBLC-FOREIGN-KEYS-SHA ' + sha(bytes).toString('hex'));
   if (sha(bytes).toString('hex') !== 'e1533badd256e63b7817018ba59a5cd822f3e936a723d7f31bd85a49a6190ae0') {
     throw new Error('Original negative verification-key group differs');
   }
@@ -29,17 +32,17 @@ const fields = values => values.map(value => {
 async function execute(worker, request) {
   if (await realpath(worker) !== worker) throw new Error('Original verifier path differs');
   const file = await stat(worker);
-  if (!file.isFile() || file.size !== 65702792 || (file.mode & 0o777) !== 0o755) {
+  if (!file.isFile() || file.size !== 68078712 || (file.mode & 0o777) !== 0o755) {
     throw new Error('Original verifier file differs');
   }
   const digest = createHash('sha256');
   let read = 0;
   for await (const chunk of createReadStream(worker)) {
     read += chunk.length;
-    if (read > 65702792) throw new Error('Original verifier grew');
+    if (read > 68078712) throw new Error('Original verifier grew');
     digest.update(chunk);
   }
-  if (read !== 65702792 || digest.digest('hex') !== '747881540393b97845026c4c7c1831527a9356d1157aaa91ad2edd05599fb000') {
+  if (read !== 68078712 || digest.digest('hex') !== 'fd4c24cc01f158f4362c21c642f57021b60854c6d6b06afea85d44686c4fe951') {
     throw new Error('Original verifier bytes differ');
   }
   const input = Buffer.from(JSON.stringify(request));
@@ -72,8 +75,8 @@ export async function verifyOriginalNative(proof, verificationKey, setup, circui
   if (!worker) throw new Error('Original conformance worker unavailable');
   const receipt = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(
     await boundedFile('artifact-conformance-worker.json', 65536)));
-  if (receipt.metadataSha256 !== '7270351d40c1ed49b1499ec82e59449e6d28ca715d5590485dee56e7ef757ff2'
-      || receipt.workerSha256 !== '747881540393b97845026c4c7c1831527a9356d1157aaa91ad2edd05599fb000') {
+  if (receipt.metadataSha256 !== 'a5bf61f841533ef711a78d06384fe93bc5bd02d761baffaeabb5a85a271cb04b'
+      || receipt.workerSha256 !== 'fd4c24cc01f158f4362c21c642f57021b60854c6d6b06afea85d44686c4fe951') {
     throw new Error('Original conformance worker identity differs');
   }
   const scope = {circuitDigest: Array.from(circuitDigest), verifyingKeyDigest: Array.from(sha(verificationKey))};
