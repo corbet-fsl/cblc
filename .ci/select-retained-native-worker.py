@@ -30,12 +30,12 @@ if digest(metadata, 65536) != PINNED:
     raise SystemExit("Original verification worker receipt differs")
 receipt = json.loads(metadata.read_text())
 expected = {
-    "sourceCommit": "d6014acbef63f4cd0929b20091884dd422421fc3",
-    "sourceArchiveSha256": "4b82df6659ae25f6cbfc509089baf7d6f8a3458975eea28f9e9044ac4d2d8157",
-    "cargoLockSha256": "d0a8d444db7322653d92cbfb491e529a2b1a919917e1751ba03e1d55f3b3f172",
+    "sourceCommit": "1be151807376447a1f0e0fe6d66040533f3ca0fd",
+    "sourceArchiveSha256": "c1441690c4f28df9c6059a4c473b53ffefe2b9b15ed7550d827baafb8b931bcb",
+    "cargoLockSha256": "daec7730c7f33d48d4e7c11b73ecd7df94a4854dc1b7b477e5eec0a6237f0027",
     "nativeSdkSha256": "d3d70f5c3a9e55d241ce8842b2a8fd254ca651bcd38a8434faa9f363f68e756f",
-    "workerSha256": "747881540393b97845026c4c7c1831527a9356d1157aaa91ad2edd05599fb000",
-    "workerBytes": 65702792,
+    "workerSha256": "fd4c24cc01f158f4362c21c642f57021b60854c6d6b06afea85d44686c4fe951",
+    "workerBytes": 68078712,
     "workerMode": 493,
 }
 print("CBLC-WORKER-RECEIPT " + json.dumps({key: receipt.get(key) for key in expected}, sort_keys=True), file=__import__("sys").stderr)
