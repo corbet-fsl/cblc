@@ -10,8 +10,9 @@ import {boundedFile} from '../../runtime/bounded-file.ts';
 const sha = value => createHash('sha256').update(value).digest();
 
 export async function originalForeignVerificationKey() {
-  const bytes = await boundedFile(resolve(process.env.ARTIFACT_ROOT, 'gather-record-fixture/keys.json'), 1024 * 1024);
-  if (sha(bytes).toString('hex') !== 'e1533badd256e63b7817018ba59a5cd822f3e936a723d7f31bd85a49a6190ae0') {
+  const bytes = await boundedFile(resolve(process.env.ARTIFACT_ROOT, 'gather-record-fixture-retained',
+    'd0af9dd2c095b7573a70632ae2abfd583b85a0453e477e553a3e002f626d337e', 'keys.json'), 1024 * 1024);
+  if (sha(bytes).toString('hex') !== 'bf8b938fe8678d3b248e9459b97ff64027792d43a5eeee1fea2c13d40da3fb48') {
     throw new Error('Original negative verification-key group differs');
   }
   const key = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes)).update;
