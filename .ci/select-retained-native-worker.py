@@ -22,7 +22,7 @@ if not root.is_absolute():
     raise SystemExit("Original artifact destination unavailable")
 # The live producer directory is rewritten by every verify run; the pinned capture is kept
 # immutably under its own receipt digest (retain-record-fixture.py).
-PINNED = "7270351d40c1ed49b1499ec82e59449e6d28ca715d5590485dee56e7ef757ff2"
+PINNED = "a5bf61f841533ef711a78d06384fe93bc5bd02d761baffaeabb5a85a271cb04b"
 retained = root / "gather-record-fixture-retained" / PINNED
 source = (retained if retained.is_dir() else root / "gather-record-fixture").resolve(strict=True)
 metadata = source / "worker.json"
@@ -38,6 +38,7 @@ expected = {
     "workerBytes": 65702792,
     "workerMode": 493,
 }
+print("CBLC-WORKER-RECEIPT " + json.dumps({key: receipt.get(key) for key in expected}, sort_keys=True), file=__import__("sys").stderr)
 if any(receipt[key] != value for key, value in expected.items()):
     raise SystemExit("Original native verifier identity differs")
 worker = (source / "worker").resolve(strict=True)
