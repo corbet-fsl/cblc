@@ -6,6 +6,7 @@
 # (`cargo deny check advisories licenses`).
 : "${CI_COMMIT_SHA:?Missing verified source revision}"
 source "$(dirname "${BASH_SOURCE[0]}")/job-env.sh"
+cargo deny --locked check advisories 2>&1 | grep -vE "^\s*$" | head -60 || true  # CBLC-DIAG-ADVISORY: remove when advisories is green
 python3 -B .ci/test-proof-cache.py
 python3 -B .ci/test-native-sdk.py
 python3 -B .ci/check-native-sdk.py
