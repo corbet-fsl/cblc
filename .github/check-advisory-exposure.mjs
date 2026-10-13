@@ -7,6 +7,7 @@ const reviewed = {
   'RUSTSEC-2024-0436': ['paste', '1.0.15'],
   'RUSTSEC-2026-0173': ['proc-macro-error2', '2.0.1'],
   'RUSTSEC-2025-0055': ['tracing-subscriber', '0.2.25'],
+  'RUSTSEC-2023-0071': ['rsa', '0.10.0-rc.19'],
 };
 const policy = readFileSync('deny.toml', 'utf8');
 for (const [, id] of policy.matchAll(/id = "(RUSTSEC-[0-9-]+)"/g)) {
