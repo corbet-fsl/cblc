@@ -47,6 +47,18 @@ restore_fixture() {
   while IFS= read -r path; do
     test ! -e "./$(basename "$path")" || { echo "Existing fixture refuses overwrite: $path" >&2; exit 2; }
     cp -a "$path" ./
+    # Retained configs name their directory absolutely (the generating job's workspace):
+    # point each one at its restored location.
+    while IFS= read -r config; do
+      python3 -B - "$config" <<'PY'
+import json, os, sys
+path = os.path.abspath(sys.argv[1])
+value = json.load(open(path))
+if isinstance(value.get("directory"), str) and os.path.isabs(value["directory"]):
+    value["directory"] = os.path.dirname(path)
+    json.dump(value, open(path, "w"), separators=(",", ":"))
+PY
+    done < <(find "./$(basename "$path")" -name config.json)
   done < <(find "$source" -mindepth 1 -maxdepth 1)
 }
 # Build the native BB worker once; export CBLC_BB.
