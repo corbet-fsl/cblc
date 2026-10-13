@@ -330,7 +330,10 @@ try{
   // The sender's own reservation of the same wave: it mirrors the recipient's context except for its role and one-use challenge.
   if(waveArtifacts)waveCases.push(await reservationCase(members[0],acceptedContact.outgoing,{...waveContext,challenge:bytes(233)},waveScope,waveIssuer,waveProve,'wave-sender'));
   const replySlot=members[2].slots.get(acceptedContact.incoming.toString());
-  const resolution={kind:1,issuedAt:BigInt(now),historyDigest:waveContext.history,ed25519ReceiptDigest:zeros()};
+  // The responder's digest of the initiator's original signed contact receipt: a real
+  // Answer settles exactly that receipt, so it is never the zero placeholder.
+  const originalReceipt=Uint8Array.from(createHash('sha256').update(acceptedContact.senderSignature).digest());
+  const resolution={kind:1,issuedAt:BigInt(now),historyDigest:waveContext.history,ed25519ReceiptDigest:originalReceipt};
   const replyBytes=receiptBytes(community,members[2].owner.member,members[0].owner.member,replySlot,members[2].owner.delegationDigest,resolution);
   resolution.signature=canonicalSignature(sign('sha256',replyBytes,{key:signing[2],dsaEncoding:'ieee-p1363'}));
   const answerDigest=await receiptDigest(replyBytes,resolution.signature);
