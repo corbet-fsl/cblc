@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Real account proofs and the extension proof scenario; retains .proof-test and
 # .extension-test write-once for verify and coverage.
+: "${CI_COMMIT_SHA:?Missing verified source revision}"
 source "$(dirname "${BASH_SOURCE[0]}")/job-env.sh"
 python3 -B .ci/check-native-sdk.py
 npm ci --ignore-scripts --no-audit --no-fund

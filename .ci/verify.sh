@@ -4,6 +4,7 @@
 # write-once under this commit); the nightly coverage run is the coverage job.
 # The advisory DB gate lives in the separate fresh [checks.advisories]
 # (`cargo deny check advisories licenses`).
+: "${CI_COMMIT_SHA:?Missing verified source revision}"
 source "$(dirname "${BASH_SOURCE[0]}")/job-env.sh"
 python3 -B .ci/test-proof-cache.py
 python3 -B .ci/test-native-sdk.py

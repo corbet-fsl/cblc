@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Nightly source and runtime coverage over real native round trips. Restores the
 # fixtures retained by proof-scenario and record-epoch for this commit.
+: "${CI_COMMIT_SHA:?Missing verified source revision}"
 source "$(dirname "${BASH_SOURCE[0]}")/job-env.sh"
 npm ci --ignore-scripts --no-audit --no-fund
 # V8 instrumentation measures legacy SDK fixture helpers only.

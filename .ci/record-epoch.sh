@@ -2,6 +2,7 @@
 # The record-epoch relation: real proofs, the native record capture (retained under
 # its own digest for artifact-conformance) and the .record-epoch-test fixture
 # (retained write-once for verify and coverage).
+: "${CI_COMMIT_SHA:?Missing verified source revision}"
 source "$(dirname "${BASH_SOURCE[0]}")/job-env.sh"
 python3 -B .ci/check-native-sdk.py
 npm ci --ignore-scripts --no-audit --no-fund
