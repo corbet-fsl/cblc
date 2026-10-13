@@ -76,7 +76,53 @@ kind = "commands"
 commands = [["bash", ".ci/verify.sh"]]
 cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["node", "--version"], ["python3", "--version"], ["wasm-pack", "--version"], ["jq", "--version"], ["clang", "--version"], ["pkg-config", "--version"]]
 cache_env = ["BB_LIB_DIR", "BB_NATIVE_RUSTFLAGS", "LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
+cache_outputs = ["dependency-metadata.json"]
+
+# Real account and extension proofs; retains .proof-test and .extension-test write-once per commit.
+[checks.proof-scenario]
+kind = "commands"
+commands = [["bash", ".ci/proof-scenario.sh"]]
+cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["node", "--version"], ["python3", "--version"], ["wasm-pack", "--version"], ["jq", "--version"], ["clang", "--version"], ["pkg-config", "--version"]]
+cache_env = ["BB_LIB_DIR", "BB_NATIVE_RUSTFLAGS", "LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
+cache_pure = false
+
+[jobs.proof-scenario]
+environment = { CI_TIMEOUT = "7200" }
+scheduler = "crow"
+checks = ["proof-scenario"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
+
+# Record-epoch proofs and the native record capture; retains .record-epoch-test write-once per commit.
+[checks.record-epoch]
+kind = "commands"
+commands = [["bash", ".ci/record-epoch.sh"]]
+cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["node", "--version"], ["python3", "--version"], ["wasm-pack", "--version"], ["jq", "--version"], ["clang", "--version"], ["pkg-config", "--version"]]
+cache_env = ["BB_LIB_DIR", "BB_NATIVE_RUSTFLAGS", "LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
+cache_pure = false
+
+[jobs.record-epoch]
+environment = { CI_TIMEOUT = "7200" }
+scheduler = "crow"
+checks = ["record-epoch"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
+
+# Nightly source and runtime coverage over the retained fixtures of this commit.
+[checks.coverage]
+kind = "commands"
+commands = [["bash", ".ci/coverage.sh"]]
+cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["node", "--version"], ["python3", "--version"], ["wasm-pack", "--version"], ["jq", "--version"], ["clang", "--version"], ["pkg-config", "--version"]]
+cache_env = ["BB_LIB_DIR", "BB_NATIVE_RUSTFLAGS", "LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
+cache_pure = false
 cache_outputs = ["coverage.json", "coverage.lcov", "coverage.txt", "dependency-metadata.json", "instrumented-build.json", "runtime-coverage/coverage-final.json", "runtime-coverage/coverage-summary.json", "runtime-coverage/lcov.info", "runtime-coverage/v8.json.tar.gz"]
+
+[jobs.coverage]
+environment = { CI_TIMEOUT = "7200" }
+scheduler = "crow"
+checks = ["coverage"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
 
 [checks.advisories]
 kind = "commands"
@@ -86,8 +132,9 @@ commands = [["cargo", "deny", "--locked", "check", "advisories", "licenses"]]
 tool_revision = "e38f347d6941aa105ac4b55a0d4b8fec2ef22433"
 
 [jobs.verify]
-# Real native/Wasm proof generation plus fresh instrumented replay can exceed
-# the default 45 minutes; preserve every gate with a bounded two-hour budget.
+# Proof generation and the instrumented coverage run are separate jobs
+# (proof-scenario, record-epoch, coverage); verify keeps the static gates, the
+# native integration tests and the replays over the retained fixtures.
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "crow"
 checks = ["verify", "advisories"]

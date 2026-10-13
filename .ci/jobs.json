@@ -2,7 +2,7 @@
   "schema": 1,
   "generator": "ccid render v1",
   "tool_revision": "e38f347d6941aa105ac4b55a0d4b8fec2ef22433",
-  "manifest_sha256": "e7afaea70c82bd38231a82b3e42fdca4c64f163014665ec454c58b86f7f7ba1d",
+  "manifest_sha256": "9643cf4c6da5e96a2ca9813f787548b8af928a799108196b428cd060bcb86265",
   "jobs": {
     "artifact-conformance": {
       "job": "artifact-conformance",
@@ -19,11 +19,56 @@
         "CI_TIMEOUT": "7200"
       }
     },
+    "coverage": {
+      "job": "coverage",
+      "scheduler": "crow",
+      "checks": [
+        "coverage"
+      ],
+      "workflow": "repository-jobs",
+      "command": [
+        "bash",
+        ".ci/run-cached.sh"
+      ],
+      "environment": {
+        "CI_TIMEOUT": "7200"
+      }
+    },
     "proof-fixtures": {
       "job": "proof-fixtures",
       "scheduler": "crow",
       "checks": [
         "proof-fixtures"
+      ],
+      "workflow": "repository-jobs",
+      "command": [
+        "bash",
+        ".ci/run-cached.sh"
+      ],
+      "environment": {
+        "CI_TIMEOUT": "7200"
+      }
+    },
+    "proof-scenario": {
+      "job": "proof-scenario",
+      "scheduler": "crow",
+      "checks": [
+        "proof-scenario"
+      ],
+      "workflow": "repository-jobs",
+      "command": [
+        "bash",
+        ".ci/run-cached.sh"
+      ],
+      "environment": {
+        "CI_TIMEOUT": "7200"
+      }
+    },
+    "record-epoch": {
+      "job": "record-epoch",
+      "scheduler": "crow",
+      "checks": [
+        "record-epoch"
       ],
       "workflow": "repository-jobs",
       "command": [

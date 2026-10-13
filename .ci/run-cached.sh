@@ -7,7 +7,7 @@ exec 2>&1
 : "${CI_COMMIT_SHA:?Missing verified source revision}"
 : "${CI_REPOSITORY_URL:?Missing canonical repository identity}"
 : "${CHECKS:?Missing declared check selection}"
-if [ "$CHECKS" != "verify,advisories" ] && [ "$CHECKS" != "resolve-npm" ] && [ "$CHECKS" != "resolve-dependencies" ] && [ "$CHECKS" != "artifact-conformance" ] && [ "$CHECKS" != "wave-artifacts" ] && [ "$CHECKS" != "proof-fixtures" ] && [ "$CHECKS" != "wave-verify" ]; then
+if [ "$CHECKS" != "verify,advisories" ] && [ "$CHECKS" != "resolve-npm" ] && [ "$CHECKS" != "resolve-dependencies" ] && [ "$CHECKS" != "artifact-conformance" ] && [ "$CHECKS" != "wave-artifacts" ] && [ "$CHECKS" != "proof-fixtures" ] && [ "$CHECKS" != "wave-verify" ] && [ "$CHECKS" != "proof-scenario" ] && [ "$CHECKS" != "record-epoch" ] && [ "$CHECKS" != "coverage" ]; then
   echo "CHECKS must be verify,advisories or an explicit dependency-resolution job, got: $CHECKS" >&2
   exit 2
 fi
