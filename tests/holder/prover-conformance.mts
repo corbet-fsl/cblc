@@ -243,7 +243,7 @@ export async function alphaStartupRequest() {
 // authority and must never relabel the alpha proof or renew its configured time.
 export async function omegaStartupRequest() {
   const bytes = await boundedFile('tests/holder/fixtures/omega-native-request.json', 65536);
-  if (sha(bytes) !== '257c8476d9d21696fc8699497ca70446507ebfa34972f8ed9df70c5236fa1ce4') {
+  if (sha(bytes) !== '5b9ad2ec2cf552391a97e07b3003a97e3d26802f5ab680957b553ccc62ce3cc7') {
     throw new Error('Reviewed omega fixture configuration differs');
   }
   const request = json(bytes);
