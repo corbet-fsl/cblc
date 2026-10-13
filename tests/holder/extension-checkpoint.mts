@@ -102,7 +102,7 @@ function wireMap(value, limit) {
 export function encodeExtensionCheckpoint(value, limits) {
   const bound = bounds(limits);
   if (!(value.slots instanceof Map) || value.slots.size > bound.maxSlots) fail();
-  const snapshot = { version: 1, kind:'cblc.account-extension.v1', extension:structuredClone(value.extension), standing:structuredClone(value.standing), community: bytes(value.community), owner: bytes(value.owner.member),
+  const snapshot = { version: 1, kind:'cblc.account-extension.v1', extension:structuredClone(value.extension), standing:Object.fromEntries(STANDING_PARAMS.map(k=>[k,value.standing[k]])), community: bytes(value.community), owner: bytes(value.owner.member),
     policyDigest: bytes(value.policyHash), enrollmentRoot: bytes(fieldBytes(value.checkpoint.root)),
     now: writeDecimal(value.now, 64), accountVersion: writeDecimal(value.version, 64), commitment: bytes(fieldBytes(value.commitment)),
     opening: wireOpening(value.opening), maps: Object.fromEntries(MAPS.map(name => [name, wireMap(value[name], bound.maxMapEntries)])),
