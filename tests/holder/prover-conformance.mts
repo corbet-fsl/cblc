@@ -116,7 +116,11 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
       const foreignKey = await originalForeignVerificationKey();
       assert.notEqual(sha(foreignKey), sha(verificationKey));
       stage = 'native-js-foreign-key-negative';
-      await refuses({...proof, verificationKey: foreignKey});
+      // The retained negative key comes from an older circuit generation, so a verifier may also reject it
+      // by an error (different shape); either way the proof must not verify.
+      let foreignVerified = false;
+      try { foreignVerified = await verifier.verifyProof({...proof, verificationKey: foreignKey}, OPTIONS); } catch { foreignVerified = false; }
+      assert.equal(foreignVerified, false);
       stage = 'original-raw-native-verification';
       nativeVerification = await verifyOriginalNative(proof, verificationKey, nativeSetup.setup, nativeSetup.circuitDigest);
       nativeVerification.publicInputMutation = 'native-js-verified-false';
