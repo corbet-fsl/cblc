@@ -9,7 +9,7 @@ import {Noir} from '@noir-lang/noir_js';
 import {policyInput} from './support/standing-input.mts';
 
 // Poseidon2 digest of the default parameters under the core domain; czkp pins the same value.
-const DEFAULT_DIGEST: string|undefined = '0x2a69ec139a3bef6718bbc299558584ca4ab0726946cb474cefe4abe3842003eb';
+const DEFAULT_DIGEST: string|undefined = '0x13869f92e82373e15e5b9bbaf09bb0d2f4a71e7af912d20c68ae8ceb98710231';
 const golden=JSON.parse(await readFile(resolve('tests/vectors/standing/golden.json'),'utf8'));
 const compiled=await compile(createFileManager(resolve('circuits/extensions/standing_probe')));
 assert.ok(compiled.program?.bytecode,'standing probe compiles');

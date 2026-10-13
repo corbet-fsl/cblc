@@ -28,7 +28,7 @@
     "changeTokenCost": 1,
     "depositDelaySeconds": 10,
     "minimumDepositBatch": 2,
-    "standingPolicyDigest": [42, 105, 236, 19, 154, 59, 239, 103, 24, 187, 194, 153, 85, 133, 132, 202, 74, 176, 114, 105, 70, 203, 71, 76, 239, 228, 171, 227, 132, 32, 3, 235]
+    "standingPolicyDigest": [19, 134, 159, 146, 232, 35, 115, 225, 94, 91, 155, 186, 240, 155, 176, 210, 244, 167, 30, 122, 249, 18, 210, 12, 104, 174, 140, 235, 152, 113, 2, 49]
   },
   "nativeWrapper": {
     "maxAuthorizationSeconds": 100,

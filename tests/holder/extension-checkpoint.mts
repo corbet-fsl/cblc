@@ -15,6 +15,7 @@ const VOUCHER = ['proven','away','lost','bonus','returned','answers','sponsor','
 const BOND_ENTRY = ['limit','done','overshoot','punished_seen','rewards_seen'];
 const STANDING = ['g','a','c','pr','pg','lc','day'];
 const STANDING_PARAMS = ['c0','hA','hG','nHalf','nC','eQ','rMax','rAge','cMaxQ','cVet','ageVet','boostQ','boostDays','slopeQ','midQ','kappaQ','loanUseQ'];
+const VOUCHER_PARAMS = ['slopeQ','min','max','days','k','maxPunished','brakeCap','rewardCap'];
 const SLOT = ['peer','nonce','group','contactPolicy','role','phase','amount','admittedAt','expiresAt','peerAuthority','ownerAuthority','peerEnrollment','ownerEnrollment','outcome','answered','selfPunished'];
 const ENROLLMENT = ['member','key','secretHash','start','end','delegationDigest','index','leaf','path'];
 const MAPS = ['outgoing','incoming','pairs','bonds'];
@@ -157,7 +158,10 @@ export async function restoreExtensionCheckpoint(options) {
   if(!Array.isArray(extension.standingPolicyDigest)||extension.standingPolicyDigest.length!==32||!extension.standingPolicyDigest.every(n=>Number.isInteger(n)&&n>=0&&n<256)
       ||!extension.standingPolicyDigest.some(Boolean)||JSON.stringify(snapshot.extension.standingPolicyDigest)!==JSON.stringify(extension.standingPolicyDigest))fail();
   const standingParams=structuredClone(options.standing);
-  exact(standingParams,STANDING_PARAMS);exact(snapshot.standing,STANDING_PARAMS);
+  // The voucher parameters come from the same verified rulebook; they are not part of the stored snapshot.
+  exact(standingParams.voucher,VOUCHER_PARAMS);
+  const {voucher:_voucher,...standingNumbers}=standingParams;
+  exact(standingNumbers,STANDING_PARAMS);exact(snapshot.standing,STANDING_PARAMS);
   for(const key of STANDING_PARAMS)if(!Number.isSafeInteger(standingParams[key])||standingParams[key]<0||snapshot.standing[key]!==standingParams[key])fail();
   if(extension.minimumDepositBatch<2||extension.minimumDepositBatch>64||extension.publicRecordQuorum>0xffffffff||extension.changeTokenCost>0xffffffff)fail();
   const community = readBytes(snapshot.community), ownerId = bytes(readBytes(snapshot.owner)),
