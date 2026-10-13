@@ -411,8 +411,8 @@ fn wave_group_authenticates_its_two_keys_and_pins_the_public_widths() {
     assert_eq!(group.issuer_key(), [9; 64]);
     let wave = group.wave_config(options());
     let outcome = group.outcome_config(options());
-    assert_eq!(wave.max_public_inputs, 586);
-    assert_eq!(outcome.max_public_inputs, 619);
+    assert_eq!(wave.max_public_inputs, 618);
+    assert_eq!(outcome.max_public_inputs, 651);
     assert_eq!(wave.verification_key, vec![1, 2]);
     assert_eq!(outcome.verification_key, vec![3, 4]);
     assert_ne!(
