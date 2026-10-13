@@ -403,7 +403,7 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#09dac0718faaa17be3be2e07fb78d199f13faa56"
+source = "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#2a2dbbadabde75225fecc73e8975eff1576bbe2d"
 dependencies = [
  "csgn",
  "serde",
@@ -563,7 +563,7 @@ dependencies = [
 [[package]]
 name = "cmbl"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=main#bdebddaac7ed2f0e2ec19989d3b8a996a538531b"
+source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=main#87995601f9e9373cd8d31777e6e40a6ef1f3024c"
 dependencies = [
  "blake3",
  "blind-rsa-signatures",
@@ -583,7 +583,7 @@ dependencies = [
 [[package]]
 name = "cmmr"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmmr.git?branch=v01#c1bb6bdaed9aa94fe6be7562fe8d45ff76f36f80"
+source = "git+https://git.corbet.ch/corbet-foss/cmmr.git?branch=main#4e7a53703ccdf75a760af9ad6f4a4b9f429c952e"
 dependencies = [
  "serde",
 ]
@@ -669,7 +669,7 @@ dependencies = [
 [[package]]
 name = "cpns"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cpns?branch=main#817205414231a6dd76cf86e63c6bc083b78b844a"
+source = "git+https://git.corbet.ch/corbet-foss/cpns?branch=main#9470e80c458c7769a0ddc33fb1c25fc4fa6113b1"
 dependencies = [
  "getrandom 0.4.3",
  "sha2 0.11.0",
@@ -704,7 +704,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/crlt?branch=main#c0e627b928c122545010dde93caf2b79c6caec06"
+source = "git+https://git.corbet.ch/corbet-foss/crlt?branch=main#3db630da2dfd176bc665d1617b89a7c0c4ebb2c9"
 dependencies = [
  "deadpool",
  "libsql",
@@ -782,7 +782,7 @@ dependencies = [
 [[package]]
 name = "csgn"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/csgn?branch=main#516b1d4102bc89601a8070c821b730e834911014"
+source = "git+https://git.corbet.ch/corbet-foss/csgn?branch=main#71357f023972eea8c90951da05303eabd9d7e0a2"
 dependencies = [
  "ciborium-ll",
  "coset",
@@ -795,7 +795,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cssr?branch=main#38ad22cc87515a72b87ac2777ee2d0fd65f53032"
+source = "git+https://git.corbet.ch/corbet-foss/cssr?branch=main#2e635bc250f8e55ae6ca6f8c1f2b8120eb169f98"
 dependencies = [
  "crlt",
  "czkp",
@@ -814,7 +814,7 @@ checksum = "8fd9f3db6f2cfef61c10613071955154ffdc9e515daebff26de4b54e35038fdd"
 [[package]]
 name = "cthl"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cthl?branch=main#de0f4feac0a4d0dc54f89732aa80a45b8bb37e5b"
+source = "git+https://git.corbet.ch/corbet-foss/cthl?branch=main#9bf449ec8a1848de0d2c990b5a322b08fcd60b7b"
 dependencies = [
  "governor",
 ]
@@ -874,7 +874,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cvfy?branch=main#c77c8bbd0203dfbcc84302acbd732297c0acf193"
+source = "git+https://git.corbet.ch/corbet-foss/cvfy?branch=main#db515b9ff559818e77e513c6160197d39de3f5cf"
 dependencies = [
  "czkp",
  "data-encoding",
@@ -886,7 +886,7 @@ dependencies = [
 [[package]]
 name = "cwlt"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#d81d836d619bb528d387e090bef0b1e6fb1f9d90"
+source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#972cf377c2db0b51add1ad6ee2283a9df05d9df6"
 dependencies = [
  "cvfy",
  "czkp",
@@ -900,7 +900,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#a977faf973d3be751df3468f3f39a7bd6df2392b"
+source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#f776a8b96304c87eed6c2c050ee31ac9be05a0f4"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -1198,7 +1198,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2584,7 +2584,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2935,7 +2935,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2992,7 +2992,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3416,7 +3416,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3833,7 +3833,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
