@@ -34,7 +34,8 @@ cargo build --locked --example extension_issuer --features publication
 build_bb_worker
 cblc_issuer="$(issuer_path)"
 CBLC_LAST_GATE="native-tests"
-cargo test --locked --all-features --no-fail-fast -- --test-threads=2
+# The retained wave proof test needs the wave fixture and runs in the wave-verify job.
+cargo test --locked --all-features --no-fail-fast -- --test-threads=2 --skip the_retained_reservation_and_answer
 CBLC_LAST_GATE="replay"
 node .ci/replay-account-proofs.ts
 CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/replay-extensions.mjs
