@@ -250,7 +250,7 @@ export async function omegaStartupRequest() {
   assert.equal(request.purpose, 'cmsg.omega-native-fixture-request.v1');
   assert.equal(request.community, 'omega');
   assert.equal(request.observation, 1791717800);
-  assert.equal(request.accountPolicy.policyValidUntil, 1791804200);
+  assert.equal(request.accountPolicy.policyValidUntil, 2107077800);
   assert.equal(createHash('sha256').update(Buffer.alloc(48, 7)).digest('base64url'), request.accountMemberId);
   return request;
 }
