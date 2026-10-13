@@ -7,6 +7,10 @@ use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};
 use sha2::{Digest, Sha256};
 
+/// Last second the fixture's policy keys can vouch for (long journeys such as the voucher
+/// scenario reach about a month).
+pub const LATEST: u64 = 4_000_000;
+
 pub fn encoded(value: u8) -> String {
     BASE64URL_NOPAD.encode(&[value; 32])
 }
@@ -33,7 +37,7 @@ impl Fixture {
                 "community-example",
                 csgn::SecretKey::from_seed(&mut [1; 32]),
                 0,
-                100_000,
+                LATEST,
             )
             .unwrap()
             .key_ring()
@@ -46,6 +50,9 @@ impl Fixture {
         }
     }
     pub fn grant(&self, member: u8, device: &SigningKey) -> AdmissionGrant {
+        self.grant_until(member, device, 1000)
+    }
+    pub fn grant_until(&self, member: u8, device: &SigningKey, expires_at: u64) -> AdmissionGrant {
         let mut grant = AdmissionGrant {
             version: 3,
             issuer_key_id: BASE64URL_NOPAD
@@ -58,7 +65,7 @@ impl Fixture {
             policy_epoch: 1,
             passport_policy_digest: encoded(10),
             issued_at: 100,
-            expires_at: 1000,
+            expires_at,
             signature: String::new(),
         };
         // Preserve the independently constructed fixture transcript and require
@@ -86,7 +93,7 @@ impl Fixture {
             &self.trust.community_id,
             csgn::SecretKey::from_seed(&mut [1; 32]),
             0,
-            100_000,
+            LATEST,
         )
         .unwrap();
         BASE64URL_NOPAD.encode(
@@ -103,6 +110,14 @@ impl Fixture {
         );
     }
     pub fn authorize(&self, member: u8, device: &SigningKey) -> DeviceAuthorization {
+        self.authorize_until(member, device, 900)
+    }
+    pub fn authorize_until(
+        &self,
+        member: u8,
+        device: &SigningKey,
+        expires_at: u64,
+    ) -> DeviceAuthorization {
         let root = SigningKey::from_bytes(&[member; 32]);
         let mut authorization = DeviceAuthorization {
             version: 1,
@@ -111,7 +126,7 @@ impl Fixture {
             root_public_key: BASE64URL_NOPAD.encode(&root.verifying_key().to_bytes()),
             device_public_key: BASE64URL_NOPAD.encode(&device.verifying_key().to_bytes()),
             issued_at: 100,
-            expires_at: 900,
+            expires_at,
             signature: String::new(),
         };
         let bytes = serde_json::to_vec(&serde_json::json!([

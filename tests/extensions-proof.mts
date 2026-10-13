@@ -12,7 +12,8 @@ import {Noir} from '@noir-lang/noir_js';
 import {OPTIONS,hex,canonicalSignature,zeros} from '@corbet-labs/czkp/encoding';
 import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
 import {createProver} from '@corbet-labs/czkp/prove';
-import {ExtensionWitness,extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
+import {extensionHashes,checkpointFromVerified,contactBytes,receiptBytes,ackBytes} from '@corbet-labs/cwlt/extensions';
+import {VoucherWitness} from '@corbet-labs/cwlt/voucher-wallet';
 import {receiptDigest} from '@corbet-labs/cwlt/hashes';
 import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/extension-checkpoint.mts';
 import {STANDING,STANDING_DIGEST,STANDING_TABLES} from './holder/standing-fixture.mts';
@@ -182,19 +183,22 @@ async function submit(member,candidates,label,measure=false,expected=true){
 }
 async function anonymous(candidate,label,measure=false){return {statement:candidate.statement,proof:encodeBundle([{proof:await proof(candidate.statement.kind,candidate.input,label,measure)}])};}
 const extension={revision:1,publicRecordQuorum:2,changeTokenCost:1,depositDelaySeconds:10,minimumDepositBatch:2,standingPolicyDigest:STANDING_DIGEST};
-const policy={initialCredit:3,maximumAvailable:3,outgoingReservation:1,incomingReservation:1,policyRevision:1,policyValidFrom:1,policyValidUntil:2000,
+const policy={initialCredit:3,maximumAvailable:3,outgoingReservation:1,incomingReservation:1,policyRevision:1,policyValidFrom:1,policyValidUntil:3000000,
   newcomerPeriod:100,rateWindow:10,newcomerAdmissions:8,maximumAdmissions:8,refillPeriod:10,refillUnits:1,abandonAfter:100};
 const community=new Uint8Array(sha('community-example'));
 const signing=[],entries=[],members=[];
+// Member 4 is the vouchee of the voucher journey; member 0 is its root sponsor.
+const MEMBERS=5,SPONSOR=0,VOUCHEE=4,bondSecret=bytes(90);
 try{
-  for(let i=0;i<4;i++){
+  for(let i=0;i<MEMBERS;i++){
     const key=generateKeyPairSync('ec',{namedCurve:'prime256v1'});signing.push(key.privateKey);
     const jwk=key.publicKey.export({format:'jwk'});entries.push({memberId:sha(Buffer.alloc(48,7+i)).toString('base64url'),accountKey:Buffer.concat([Buffer.from(jwk.x,'base64url'),Buffer.from(jwk.y,'base64url')]).toString('hex'),
-      secretHash:hex(await hashes.secretHash(community,bytes(20+i))),issuedAt:1,expiresAt:10000,delegationDigest:hex(bytes(30+i))});
+      secretHash:hex(await hashes.secretHash(community,bytes(20+i))),issuedAt:1,expiresAt:3000000,delegationDigest:hex(bytes(30+i))});
   }
   const checkpoint=await checkpointFromVerified(community,entries,hashes);
   const genesis=[];
-  for(let i=0;i<4;i++)genesis.push(await ExtensionWitness.genesis({hashes,community,policy,extension,standing:STANDING,policyTables:STANDING_TABLES,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++}));
+  for(let i=0;i<MEMBERS;i++)genesis.push(await VoucherWitness.genesis({hashes,community,policy,extension,standing:STANDING,policyTables:STANDING_TABLES,transition,checkpoint,ownerIndex:i,ownerSecret:bytes(20+i),now:now++,
+    bond:i===VOUCHEE?{sponsor:checkpoint.entries[SPONSOR].member,secret:bondSecret}:undefined}));
   const wasmHashes=await Barretenberg.new({backend:BackendType.Wasm,threads:1,skipSrsInit:true});
   try {
     const limits={maxBytes:1024*1024,maxMapEntries:256,maxSlots:64};
@@ -215,7 +219,9 @@ try{
   badActivation.activation.proof=encodeBundle([{state:genesis[0].statement.nextState,inbox:Array(32).fill(0),proof:(forgedGenesis.startsWith('00')?'01':'00')+forgedGenesis.slice(2)}]);
   await call(badActivation,false);
   await call(initialize);
-  for(let i=0;i<4;i++)members[i]=(await submit(7+i,[genesis[i]],'genesis')).next;
+  // The community's authority makes member 0 a root before any epoch leaf is certified.
+  assert.equal(await call({op:'setRole',owner:toArray(genesis[SPONSOR].next.owner.member),role:2}),2);
+  for(let i=0;i<MEMBERS;i++)members[i]=(await submit(7+i,[genesis[i]],'genesis')).next;
   if(recordEpochProofs) {
     // Check the actual current owner projection before the expensive R2 proof
     // journey. The issuer has already authenticated this original empty inbox.
@@ -403,6 +409,58 @@ try{
   assert.equal(members[2].opening.reserved,0n);
   assert.equal(members[2].opening.accepted,0n);assert.equal(members[2].opening.punished,2n);
   await assert.rejects(members[2].expire(reordered.outgoing,now));
+  // ---- Voucher accounting. The root sponsor spends one voucher on the actual admission of the
+  // vouchee, who earns three counted Answers from distinct earlier members, waits out the
+  // membership days and proves success; the success obligation then returns the voucher.
+  assert.equal(await call({op:'setRole',owner:toArray(members[SPONSOR].owner.member),role:2}),2);
+  // The ledger refuses an admission proved for a role class it does not record for the sponsor.
+  const wrongRole=await members[SPONSOR].admit(bytes(91),1,now++);
+  await submit(7+SPONSOR,[wrongRole],'voucher-wrong-role',false,false);
+  const admission=await members[SPONSOR].admit(bondSecret,2,now++);
+  members[SPONSOR]=(await submit(7+SPONSOR,[admission],'voucher-admit')).next;
+  assert.equal(members[SPONSOR].opening.voucher.away,1n);
+  assert.equal(members[SPONSOR].bondBook.size,1);
+  async function counted(sender,recipient) {
+    const c=await contact(sender,recipient);
+    members[recipient]=(await submit(7+recipient,[await members[recipient].activate(c.incoming,now++,c.senderSignature)],'voucher-activate')).next;
+    const slot=members[recipient].slots.get(c.incoming.toString());
+    const answer={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
+    const answerBytes=receiptBytes(community,members[recipient].owner.member,members[sender].owner.member,slot,members[recipient].owner.delegationDigest,answer);
+    answer.signature=canonicalSignature(sign('sha256',answerBytes,{key:signing[recipient],dsaEncoding:'ieee-p1363'}));
+    const digest=await receiptDigest(answerBytes,answer.signature);
+    const ack={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[sender].owner.member,members[recipient].owner.member,slot,digest,members[sender].owner.delegationDigest,now),{key:signing[sender],dsaEncoding:'ieee-p1363'}))};
+    members[recipient]=(await submit(7+recipient,[await members[recipient].settle(c.incoming,answer,ack,now++)],'voucher-answer')).next;
+    now=Math.ceil((now+10)/10)*10;
+    const delivery=await anonymous(await members[recipient].deposit({slot,kind:1},members[recipient].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'voucher-answer-deposit');
+    await call({op:'deposit',batch:[{deposit:delivery.statement.deposit,proof:delivery.proof},batch[1]],now});
+    const queued=await call({op:'inbox',member:7+sender,now,owner:toArray(members[sender].owner.member)});
+    assert.equal(queued.entries.length,1);
+    const step=await members[sender].consumeCounted(queued.entries[0],now);
+    const final=await step.next.reblind(now++);
+    members[sender]=(await submit(7+sender,[step,final],'voucher-counted-answer')).next;
+  }
+  for(const peer of [1,2,3])await counted(VOUCHEE,peer);
+  assert.equal(members[VOUCHEE].opening.voucher.answers,3n);
+  // One month later (a checkpoint of the enrollment roster for that time slot is published first).
+  now=31*86400+20;
+  await call({op:'admitCheckpoint',slot:Math.floor(now/1000),root:initialize.root});
+  members[VOUCHEE]=(await submit(7+VOUCHEE,[await members[VOUCHEE].proveSuccess(now++)],'voucher-success')).next;
+  assert.equal(members[VOUCHEE].opening.voucher.proven,31n);
+  // The success obligation addressed through the bond: it cannot be consumed before it is posted.
+  const SUCCESS=1;
+  const entry=members[SPONSOR].bondBook.values().next().value.entry;
+  const tooEarly=await members[SPONSOR].consumeObligation(bondSecret,SUCCESS,0n,entry,now++);
+  await submit(7+SPONSOR,[tooEarly],'voucher-consume-early',false,false);
+  const tag=Array.from(tooEarly.tag);
+  assert.equal(await call({op:'obligationWaiting',tag}),false);
+  await call({op:'postObligation',tag});
+  assert.equal(await call({op:'obligationWaiting',tag}),true);
+  await call({op:'postObligation',tag},false); // A tag posts once.
+  members[SPONSOR]=(await submit(7+SPONSOR,[await members[SPONSOR].consumeObligation(bondSecret,SUCCESS,0n,entry,now++)],'voucher-consume')).next;
+  assert.equal(members[SPONSOR].opening.voucher.away,0n);
+  assert.equal(members[SPONSOR].opening.voucher.returned,1n);
+  assert.equal(await call({op:'obligationWaiting',tag}),false);
+  await call({op:'postObligation',tag},false); // Not even after it was consumed.
   console.log('Real proofs passed all three outcomes, rounding, forced ingestion, pin spend, established punishment and negative scenarios');
   }
   await retainWave();

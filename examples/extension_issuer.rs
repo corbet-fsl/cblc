@@ -29,6 +29,12 @@ use std::{
     time::Duration,
 };
 
+/// Device grants last to the fixed windows of the short journeys; the voucher journey
+/// runs a month later and gets windows measured from its own time.
+fn until(now: u64, window: u64) -> u64 {
+    if now < 800 { window } else { now + window }
+}
+
 struct RejectLegacy;
 impl AccountProofVerifier for RejectLegacy {
     fn scope(&self) -> AccountProofScope {
@@ -143,8 +149,12 @@ fn main() {
                                 cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
                             );
                     let operation = AccountServiceRequest::ApplyExtended {
-                        grant: fixture.grant(member, &fixture.device),
-                        authorization: fixture.authorize(member, &fixture.device),
+                        grant: fixture.grant_until(member, &fixture.device, until(now, 1000)),
+                        authorization: fixture.authorize_until(
+                            member,
+                            &fixture.device,
+                            until(now, 900),
+                        ),
                         request: Box::new(request.clone()),
                         update: update.clone(),
                     };
@@ -523,6 +533,12 @@ fn main() {
                 "postObligation" => {
                     let tag: [u8; 32] = serde_json::from_value(v["tag"].clone()).unwrap();
                     ledger.as_mut().unwrap().post_obligation(&tag)?;
+                    Ok(json!(true))
+                }
+                "admitCheckpoint" => {
+                    let slot = v["slot"].as_u64().unwrap();
+                    let root: [u8; 32] = serde_json::from_value(v["root"].clone()).unwrap();
+                    ledger.as_mut().unwrap().admit_checkpoint(slot, root)?;
                     Ok(json!(true))
                 }
                 "obligationWaiting" => {
