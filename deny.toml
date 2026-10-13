@@ -1,6 +1,13 @@
 [advisories]
 # Narrow inherited libSQL exceptions; see docs/DEPENDENCIES.md.
 ignore = [
+    # RUSTSEC-2023-0071 (Marvin timing side channel in rsa, no patched release).
+    # Justification: server-side blind-token issuer only; blinded private-key ops;
+    # rate-limited issuance; backend replacement with a constant-time implementation
+    # is a pre-beta debt. cmbl's issuer signs with OpenSSL (blinded by default), and
+    # the rsa crate is reached only through public-key and verification paths.
+    # Review/expiry: 2027-01-31.
+    { id = "RUSTSEC-2023-0071" },
 ]
 
 [licenses]
