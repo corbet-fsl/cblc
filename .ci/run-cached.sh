@@ -90,6 +90,9 @@ fi
 if [ "$CHECKS" = "wave-verify" ]; then
   exec nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; exec "$CCID_BIN" check --repo "$PWD" --check wave-verify'
 fi
+if [ "$CHECKS" = "proof-scenario" ] || [ "$CHECKS" = "record-epoch" ]; then
+  exec nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; exec "$CCID_BIN" check --repo "$PWD" --check "$CHECKS"'
+fi
 if [ "$CHECKS" = "artifact-conformance" ]; then
   exec nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; exec "$CCID_BIN" check --repo "$PWD" --check artifact-conformance'
 fi
@@ -109,4 +112,8 @@ retain_coverage() {
   exit "$status"
 }
 trap retain_coverage EXIT
+if [ "$CHECKS" = "coverage" ]; then
+  nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; "$CCID_BIN" check --repo "$PWD" --check coverage'
+  exit 0
+fi
 nix-shell .ci/check-shell.nix --run 'export PATH="$(dirname "$CCID_BIN"):$PATH"; set -e; "$CCID_BIN" cached --repo "$PWD" --check verify; test -s ".ccid/results/verify.jsonl"; exec "$CCID_BIN" check --repo "$PWD" --check advisories'
