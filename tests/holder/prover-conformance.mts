@@ -133,7 +133,11 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
       const sameShape = sameShapeForeignVerificationKey(verificationKey);
       assert.equal(sameShape.length, verificationKey.length);
       assert.notEqual(sha(sameShape), sha(verificationKey));
-      assert.equal(await verifier.verifyProof({...proof, verificationKey: sameShape}, OPTIONS), false);
+      let sameShapeVerified;
+      try { sameShapeVerified = await verifier.verifyProof({...proof, verificationKey: sameShape}, OPTIONS); }
+      catch (error) { console.error(`SAME-SHAPE-DISCOVERY threw ${error?.name}: ${String(error?.message).slice(0, 300)}`); throw error; }
+      console.error(`SAME-SHAPE-DISCOVERY returned ${sameShapeVerified}`);
+      assert.equal(sameShapeVerified, false);
       stage = 'original-raw-native-verification';
       nativeVerification = await verifyOriginalNative(proof, verificationKey, nativeSetup.setup, nativeSetup.circuitDigest);
       nativeVerification.publicInputMutation = 'native-js-verified-false';
