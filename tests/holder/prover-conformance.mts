@@ -229,7 +229,7 @@ export async function retainConformance(value, manifestBytes, circuitBytes, keyB
 // accepted membership. Only its operational capture path was omitted in source.
 export async function alphaStartupRequest() {
   const bytes = await boundedFile('tests/holder/fixtures/alpha-native-request.json', 65536);
-  if (sha(bytes) !== 'cf1bc7b2d79a2ab8d02ba9c6311dcf9895265d5faa1a2bb27e6b5d8c6129c8e6') {
+  if (sha(bytes) !== '20cf21344c1da993ec36710aa2f5acc1323085477f91b512b8d070eec15641a6') {
     throw new Error('Reviewed alpha fixture configuration differs');
   }
   const request = json(bytes);
@@ -246,7 +246,7 @@ export async function alphaStartupRequest() {
 // authority and must never relabel the alpha proof or renew its configured time.
 export async function omegaStartupRequest() {
   const bytes = await boundedFile('tests/holder/fixtures/omega-native-request.json', 65536);
-  if (sha(bytes) !== '5b9ad2ec2cf552391a97e07b3003a97e3d26802f5ab680957b553ccc62ce3cc7') {
+  if (sha(bytes) !== '22edd4935596ae929812bb0dcf7852b4bc9a753a4597c760536919f5722fbe3f') {
     throw new Error('Reviewed omega fixture configuration differs');
   }
   const request = json(bytes);
