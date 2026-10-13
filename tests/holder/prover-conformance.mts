@@ -93,7 +93,7 @@ export async function proveUpdateConformance(api, program, verificationKey, prod
       transition,
       checkpoint, ownerIndex: 0, ownerSecret: secret, now: target?.observation ?? 110});
     const expected = publicInputs(program, candidate.input);
-    assert.equal(expected.length, 377);
+    assert.equal(expected.length, 410);
     const executed = await new Noir(program).execute(witnessInputs(program, candidate.input));
     witness = executed.witness;
     const backend = new UltraHonkBackend(program.bytecode, api);
