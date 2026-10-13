@@ -19,6 +19,7 @@ import {encodeExtensionCheckpoint,restoreExtensionCheckpoint} from './holder/ext
 import {STANDING,STANDING_DIGEST,STANDING_TABLES} from './holder/standing-fixture.mts';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
 import {exactRecordEpoch} from './holder/record-epoch-scenarios.mts';
+import {prepareVoucherEpoch} from './holder/voucher-epoch.mts';
 import {ingestedRecordEpoch} from './holder/record-epoch-ingestion.mts';
 import {reservationCase,outcomeCase,waveJson} from './holder/wave-roundtrip.mts';
 import {retainRecordStartup} from './holder/record-startup-artifacts.mts';
@@ -264,6 +265,31 @@ try{
     };
     const {gatherFixture,...record}=await exactRecordEpoch({members,call,proof,artifacts,
       issuerKey:manifest.issuerKey,now,deferExpiry:true,retainNativeFixture});
+    // Unlinkable voucher presentation over the same frozen epoch: the root sponsor shows it may
+    // issue a link of five admissions without revealing who it is.
+    {
+      const voucherWitness=await call({op:'recordWitness',member:7},true,false);
+      const binding=bytes(201);
+      const claim=async(holder,over)=>prepareVoucherEpoch(holder,voucherWitness,artifacts.scope,manifest.issuerKey,
+        {purpose:0,uses:5,now,binding,frozenHolder:holder.clone(),...over});
+      const issue=await claim(members[0]);
+      const framed=Buffer.from(JSON.stringify({version:1,proofs:[{proof:await proof('voucher_epoch',issue.input,'voucher-epoch-issue')}]})).toString('hex');
+      const request=over=>({op:'voucherEpoch',presentation:structuredClone(issue.statement.presentation),proof:framed,binding:toArray(binding),now,...over});
+      assert.equal(await call(request({})),true);
+      // The relying side's binding, the epoch descriptor, the claim and the certificate are all enforced.
+      await call(request({binding:toArray(bytes(202))}),false);
+      for(const mutate of [p=>{p.epoch.root[0]^=1;},p=>{p.epoch.epoch+=1;},p=>{p.purpose.uses=6;},p=>{p.certificate[0]^=1;},
+          p=>{p.blindedLeaf[0]^=1;},p=>{p.now+=1000;}]) {
+        const changed=request({});mutate(changed.presentation);await call(changed,false);
+      }
+      await call(request({proof:''}),false);
+      // A claim above the allowance (a root holds 1000) or of no admission at all is not provable.
+      const noir=new Noir(programs.voucher_epoch);
+      await assert.rejects(async()=>noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{uses:1001})).input)));
+      await assert.rejects(async()=>noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{uses:0})).input)));
+      // Posting needs a bond; this member holds none.
+      await assert.rejects(async()=>noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{purpose:1,uses:0,tag:Array(32).fill(5),kind:1,n:0n})).input)));
+    }
     // Preserve the successful first owner fixture even if a later
     // ingestion/race scenario fails. The complete proof report still requires
     // every original remaining scenario to finish successfully.
