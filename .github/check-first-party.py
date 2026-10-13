@@ -8,11 +8,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 FIRST_PARTY = re.compile(r"^(?:git\+)?https://(?:git\.corbet\.ch|github\.com)/(?:corbet-(?:foss|libs)|cmtymeet)/")
-# First-party repositories whose working line is not main (one line per repository).
-WORKING_LINE = {
-    'https://git.corbet.ch/corbet-foss/cmbl': 'v01',
-    'https://git.corbet.ch/corbet-foss/cmmr': 'v01',
-}
+# First-party repositories whose working line is not main (none: every repository converged on main).
+WORKING_LINE = {}
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
