@@ -147,9 +147,28 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
             | AccountServiceRequest::Apply { grant, .. }
             | AccountServiceRequest::ApplyExtended { grant, .. }
             | AccountServiceRequest::Obligations { grant, .. }
+            | AccountServiceRequest::IssueSettlementPass { grant, .. }
             | AccountServiceRequest::Status { grant, .. } => grant,
+            // Anonymous routes have no member to bind; they never arrive on a session.
+            AccountServiceRequest::StageSettlement { .. }
+            | AccountServiceRequest::PostObligation { .. }
+            | AccountServiceRequest::CheckVoucherEpoch { .. } => {
+                return Err(Error::Admission);
+            }
         };
         if grant.pseudonym != data_encoding::HEXLOWER.encode(pseudonym) {
+            return Err(Error::Admission);
+        }
+        self.handle(request)
+    }
+
+    /// Anonymous ingress: only the routes without a member grant. A request that carries a
+    /// grant is refused here, so a session-less transport can never reach a member action.
+    pub fn handle_anonymous(
+        &mut self,
+        request: AccountServiceRequest,
+    ) -> Result<AccountServiceResponse, Error> {
+        if !request.is_anonymous() {
             return Err(Error::Admission);
         }
         self.handle(request)
@@ -234,6 +253,32 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                     &self.clock,
                 )
                 .map(AccountServiceResponse::Status),
+            AccountServiceRequest::IssueSettlementPass {
+                grant,
+                authorization,
+                request,
+            } => self
+                .issue_settlement_pass(&grant, &authorization, &request)
+                .map(|pass| AccountServiceResponse::SettlementPass { pass }),
+            AccountServiceRequest::StageSettlement { submission } => self
+                .stage_settlement(&submission)
+                .map(AccountServiceResponse::Settlement),
+            AccountServiceRequest::PostObligation {
+                presentation,
+                proof,
+                expected_binding,
+            } => self
+                .ledger
+                .post_presented_obligation(&presentation, &proof, &expected_binding, &self.clock)
+                .map(|()| AccountServiceResponse::Posted),
+            AccountServiceRequest::CheckVoucherEpoch {
+                presentation,
+                proof,
+                expected_binding,
+            } => self
+                .ledger
+                .issue_voucher(&presentation, &proof, &expected_binding, &self.clock)
+                .map(|()| AccountServiceResponse::VoucherEpoch),
         }
     }
 

@@ -12,6 +12,11 @@ const ROLE: u8 = 11;
 const MAILBOX: u8 = 12;
 /// Every tag ever posted. A consumed tag stays here so a replayed presentation cannot post twice.
 const POSTED: u8 = 13;
+/// Reserved issue units, keyed by (epoch, nullifier). Only the current epoch's presentations
+/// are accepted, so rows of earlier epochs can never matter again and are pruned.
+const ISSUED: u8 = 14;
+/// Older-epoch rows removed per spend, so pruning needs no scheduler.
+const PRUNE_BATCH: u32 = 64;
 /// Role classes: member, admin, root (czkp::voucher).
 pub const MAX_ROLE: u8 = 2;
 
@@ -57,6 +62,57 @@ pub(crate) fn apply(
     precheck(tx, owner, effect)?;
     if let Effect::Consume { obligation } = effect {
         tx.delete(&key(MAILBOX, &[obligation]))?;
+    }
+    Ok(())
+}
+
+fn issued_key(epoch: u64, nullifier: &[u8; 32]) -> Vec<u8> {
+    key(ISSUED, &[&epoch.to_be_bytes(), nullifier])
+}
+
+fn issue_units(
+    presentation: &crate::extensions::VoucherPresentation,
+) -> Result<&[[u8; 32]], Error> {
+    let crate::extensions::VoucherPurpose::Issue { nullifiers, .. } = &presentation.purpose else {
+        return Err(Error::InvalidInput);
+    };
+    Ok(nullifiers)
+}
+
+/// Refuse a presentation whose units were already spent in its epoch.
+pub(crate) fn check_unspent(
+    tx: &mut Transaction<'_>,
+    presentation: &crate::extensions::VoucherPresentation,
+) -> Result<(), Error> {
+    for nullifier in issue_units(presentation)? {
+        if tx
+            .get::<bool>(&issued_key(presentation.epoch.epoch, nullifier))?
+            .unwrap_or(false)
+        {
+            return Err(Error::Replay);
+        }
+    }
+    Ok(())
+}
+
+/// Record every unit of an already verified issue presentation, atomically with the
+/// caller's transaction, and drop a bounded batch of rows from earlier epochs.
+pub(crate) fn spend_units(
+    tx: &mut Transaction<'_>,
+    presentation: &crate::extensions::VoucherPresentation,
+) -> Result<(), Error> {
+    check_unspent(tx, presentation)?;
+    let epoch = presentation.epoch.epoch;
+    for nullifier in issue_units(presentation)? {
+        tx.put(&issued_key(epoch, nullifier), &true)?;
+    }
+    let old: Vec<(Vec<u8>, bool)> = tx.current_range(
+        &key(ISSUED, &[&0u64.to_be_bytes()]),
+        &key(ISSUED, &[&epoch.to_be_bytes()]),
+        PRUNE_BATCH,
+    )?;
+    for (row, _) in old {
+        tx.delete(&row)?;
     }
     Ok(())
 }
@@ -117,7 +173,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         expected_binding: &[u8; 32],
         clock: impl Fn() -> u64,
     ) -> Result<(), Error> {
-        let crate::extensions::VoucherPurpose::Post { tag } = presentation.purpose else {
+        let crate::extensions::VoucherPurpose::Post { tag } = presentation.purpose.clone() else {
             return Err(Error::InvalidInput);
         };
         self.check_voucher_epoch(presentation, proof, expected_binding, clock)?;

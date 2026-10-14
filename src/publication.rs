@@ -46,9 +46,49 @@ pub struct PublicVerifierMaterial {
     /// Absence does not authorize a mandatory record decision.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record_epoch: Option<czkp::record::Epoch>,
+    /// The portable Wave verifier policy, derived from the fields above by
+    /// [`PublicVerifierMaterial::wave_policy`]. It travels in the document only because
+    /// the device-side verifier (cwlt) cannot link this crate; `validate` recomputes it, so
+    /// a descriptor that differs from the derivation in any field is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wave_verifier: Option<WaveVerifierDescriptor>,
+}
+
+/// Exactly the JSON shape of `cwlt::wave::WavePolicy`: the independently authenticated
+/// parameters a device needs to verify a counterpart's Wave and outcome proofs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WaveVerifierDescriptor {
+    /// SHA-256 of the community identifier, as in every account statement.
+    pub community: [u8; 32],
+    pub extension: ExtensionPolicy,
+    pub proof_scope: AccountProofScope,
+    pub certificate_key: Vec<u8>,
+    pub manifest_sha256: [u8; 32],
+    /// The account state policy digest (`AccountPolicy::state_digest`).
+    pub state_policy: [u8; 32],
+    pub valid_from: u64,
+    pub valid_until: u64,
 }
 
 impl PublicVerifierMaterial {
+    /// Derive the Wave verifier policy from the published material alone: community,
+    /// extension policy, account proof scope, issuer key and manifest pin as published,
+    /// the state policy from the account policy, and the account policy's validity window.
+    pub fn wave_policy(&self) -> Result<WaveVerifierDescriptor, Error> {
+        let community: [u8; 32] = Sha256::digest(self.community.as_bytes()).into();
+        Ok(WaveVerifierDescriptor {
+            community,
+            extension: self.extension_policy.clone(),
+            proof_scope: self.proof_scope.clone(),
+            certificate_key: self.certificate_key.clone(),
+            manifest_sha256: self.manifest_sha256,
+            state_policy: self.policy.account.state_digest(&community)?,
+            valid_from: self.policy.account.policy_valid_from,
+            valid_until: self.policy.account.policy_valid_until,
+        })
+    }
     /// Check public policy validity after authenticating the document through
     /// the independently configured publication ring. No member fact is returned.
     pub fn validate_at(&self, issuer: &str, now: u64) -> Result<(), Error> {
@@ -83,6 +123,11 @@ impl PublicVerifierMaterial {
             return Err(Error::PolicyMismatch);
         }
         self.extension_policy.validate()?;
+        if let Some(descriptor) = &self.wave_verifier
+            && *descriptor != self.wave_policy()?
+        {
+            return Err(Error::PolicyMismatch);
+        }
         if let Some(settlement) = &self.settlement {
             settlement.validate(&self.community, self.policy_epoch)?;
         }

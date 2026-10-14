@@ -51,7 +51,7 @@ if(recordEpochEnabled) {
     if(type.kind==='struct')return type.fields.reduce((count,field)=>count+width(field.type),0);
     throw new Error('Unsupported compiled public ABI');
   };
-  const expected={update:410,deposit:294,record:204,record_epoch:335,voucher_epoch:364};
+  const expected={update:410,deposit:294,record:204,record_epoch:335,voucher_epoch:381};
   for(const kind of kinds) {
     assert(programs[kind]?.bytecode,'Missing original compiled circuit');
     const count=programs[kind].abi.parameters.filter(parameter=>parameter.visibility==='public')

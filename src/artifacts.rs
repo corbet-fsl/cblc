@@ -49,6 +49,87 @@ struct Manifest {
     issuer_key: Option<Vec<u8>>,
 }
 
+/// Noir ABI type, only as far as the public width needs it.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum AbiType {
+    Field,
+    Integer,
+    Boolean,
+    String { length: usize },
+    Array { length: usize, r#type: Box<AbiType> },
+    Struct { fields: Vec<AbiNamed> },
+    Tuple { fields: Vec<AbiType> },
+}
+
+#[derive(Deserialize)]
+struct AbiNamed {
+    r#type: AbiType,
+}
+
+#[derive(Deserialize)]
+struct AbiParameter {
+    r#type: AbiType,
+    visibility: String,
+}
+
+#[derive(Deserialize)]
+struct AbiProgram {
+    abi: AbiParameters,
+}
+
+#[derive(Deserialize)]
+struct AbiParameters {
+    parameters: Vec<AbiParameter>,
+}
+
+impl AbiType {
+    /// Public input fields: one per scalar, byte or array element, as in the Noir ABI.
+    fn width(&self) -> Result<usize, Error> {
+        Ok(match self {
+            Self::Field | Self::Integer | Self::Boolean => 1,
+            Self::String { length } => *length,
+            Self::Array { length, r#type } => length
+                .checked_mul(r#type.width()?)
+                .ok_or(Error::InvalidInput)?,
+            Self::Struct { fields } => fields.iter().try_fold(0usize, |sum, field| {
+                sum.checked_add(field.r#type.width()?)
+                    .ok_or(Error::InvalidInput)
+            })?,
+            Self::Tuple { fields } => fields.iter().try_fold(0usize, |sum, field| {
+                sum.checked_add(field.width()?).ok_or(Error::InvalidInput)
+            })?,
+        })
+    }
+}
+
+/// Number of public input fields of every named relation, read from the authenticated
+/// compiled circuits themselves instead of repeated as constants.
+fn public_widths(
+    circuit: &[u8],
+    kinds: &[&str],
+) -> Result<std::collections::BTreeMap<String, usize>, Error> {
+    let programs: std::collections::BTreeMap<String, AbiProgram> =
+        serde_json::from_slice(circuit).map_err(|_| Error::InvalidInput)?;
+    let mut widths = std::collections::BTreeMap::new();
+    for kind in kinds {
+        let program = programs.get(*kind).ok_or(Error::InvalidInput)?;
+        let mut width = 0usize;
+        for parameter in &program.abi.parameters {
+            if parameter.visibility == "public" {
+                width = width
+                    .checked_add(parameter.r#type.width()?)
+                    .ok_or(Error::InvalidInput)?;
+            }
+        }
+        if width == 0 {
+            return Err(Error::InvalidInput);
+        }
+        widths.insert((*kind).to_owned(), width);
+    }
+    Ok(widths)
+}
+
 #[derive(Deserialize)]
 struct Setup {
     name: String,
@@ -208,6 +289,17 @@ pub struct ExtensionArtifacts {
     keys: [Vec<u8>; 3],
     record_epoch_key: Option<Vec<u8>>,
     voucher_epoch_key: Option<Vec<u8>>,
+    /// Public input fields read from the authenticated circuits' ABI.
+    widths: Widths,
+}
+
+#[derive(Clone)]
+struct Widths {
+    update: usize,
+    deposit: usize,
+    record: usize,
+    record_epoch: usize,
+    voucher_epoch: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -250,12 +342,29 @@ impl ExtensionArtifacts {
         };
         let record_epoch_key = optional(keys.record_epoch)?;
         let voucher_epoch_key = optional(keys.voucher_epoch)?;
+        let mut kinds = vec!["update", "deposit", "record"];
+        if record_epoch_key.is_some() {
+            kinds.push("record_epoch");
+        }
+        if voucher_epoch_key.is_some() {
+            kinds.push("voucher_epoch");
+        }
+        let widths = public_widths(bytes.circuit, &kinds)?;
+        let width = |kind: &str| widths.get(kind).copied().unwrap_or(0);
+        let widths = Widths {
+            update: width("update"),
+            deposit: width("deposit"),
+            record: width("record"),
+            record_epoch: width("record_epoch"),
+            voucher_epoch: width("voucher_epoch"),
+        };
         Ok(Self {
             material,
             issuer,
             keys: decoded,
             record_epoch_key,
             voucher_epoch_key,
+            widths,
         })
     }
     pub fn scope(&self) -> AccountProofScope {
@@ -278,19 +387,21 @@ impl ExtensionArtifacts {
     ) -> [cvfy::NativeVerifierConfig; 3] {
         [
             self.material
-                .config(updates, self.keys[0].clone(), UPDATE_WIDTH),
+                .config(updates, self.keys[0].clone(), self.widths.update),
             self.material
-                .config(anonymous.clone(), self.keys[1].clone(), 294),
-            self.material.config(anonymous, self.keys[2].clone(), 204),
+                .config(anonymous.clone(), self.keys[1].clone(), self.widths.deposit),
+            self.material
+                .config(anonymous, self.keys[2].clone(), self.widths.record),
         ]
     }
     pub(crate) fn record_epoch_config(
         &self,
         options: NativeVerifierOptions,
     ) -> Option<cvfy::NativeVerifierConfig> {
-        self.record_epoch_key
-            .as_ref()
-            .map(|key| self.material.config(options, key.clone(), 335))
+        self.record_epoch_key.as_ref().map(|key| {
+            self.material
+                .config(options, key.clone(), self.widths.record_epoch)
+        })
     }
     pub(crate) fn voucher_epoch_config(
         &self,
@@ -298,16 +409,18 @@ impl ExtensionArtifacts {
     ) -> Option<cvfy::NativeVerifierConfig> {
         self.voucher_epoch_key.as_ref().map(|key| {
             self.material
-                .config(options, key.clone(), VOUCHER_EPOCH_WIDTH)
+                .config(options, key.clone(), self.widths.voucher_epoch)
         })
     }
 }
 
-/// Public fields of the update relation: the extension policy, the chained inbox values,
-/// the account statement, then the voucher role class and the consumed obligation tag.
+/// Public fields of the update relation, as the compiled circuit currently declares them
+/// (the verifier itself reads the width from the authenticated ABI; this is the pin that
+/// tests compare against so a circuit change is never silent).
 pub const UPDATE_WIDTH: usize = 410;
-/// Public fields of the unlinkable voucher presentation (no owner, no shares).
-pub const VOUCHER_EPOCH_WIDTH: usize = 364;
+/// Public fields of the unlinkable voucher presentation (no owner, no shares): the record
+/// epoch statement, purpose, uses, time, tag, binding, sign-off threshold and 16 nullifiers.
+pub const VOUCHER_EPOCH_WIDTH: usize = 381;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -324,6 +437,8 @@ pub struct WaveArtifacts {
     issuer: [u8; 64],
     wave_key: Vec<u8>,
     outcome_key: Vec<u8>,
+    wave_width: usize,
+    outcome_width: usize,
 }
 
 impl WaveArtifacts {
@@ -343,11 +458,14 @@ impl WaveArtifacts {
                 .decode(text.as_bytes())
                 .map_err(|_| Error::InvalidInput)
         };
+        let widths = public_widths(bytes.circuit, &["wave", "outcome"])?;
         Ok(Self {
             material,
             issuer,
             wave_key: decode(keys.wave)?,
             outcome_key: decode(keys.outcome)?,
+            wave_width: widths["wave"],
+            outcome_width: widths["outcome"],
         })
     }
     pub fn scope(&self) -> AccountProofScope {
@@ -359,13 +477,15 @@ impl WaveArtifacts {
     pub fn issuer_key(&self) -> [u8; 64] {
         self.issuer
     }
-    /// Verifier configuration for reservation evidence (618 public fields).
+    /// Verifier configuration for reservation evidence (public fields from the ABI).
     pub fn wave_config(&self, options: NativeVerifierOptions) -> cvfy::NativeVerifierConfig {
-        self.material.config(options, self.wave_key.clone(), 618)
+        self.material
+            .config(options, self.wave_key.clone(), self.wave_width)
     }
-    /// Verifier configuration for settled outcomes (651 public fields).
+    /// Verifier configuration for settled outcomes (public fields from the ABI).
     pub fn outcome_config(&self, options: NativeVerifierOptions) -> cvfy::NativeVerifierConfig {
-        self.material.config(options, self.outcome_key.clone(), 651)
+        self.material
+            .config(options, self.outcome_key.clone(), self.outcome_width)
     }
 }
 

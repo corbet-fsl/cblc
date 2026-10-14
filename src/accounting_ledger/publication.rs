@@ -53,6 +53,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             certificate_key: binding.certificate_key.to_vec(),
             settlement,
             record_epoch,
+            wave_verifier: None,
+        };
+        let material = PublicVerifierMaterial {
+            wave_verifier: Some(material.wave_policy()?),
+            ..material
         };
         material.validate(&self.trust.community_id)?;
         Ok(material)

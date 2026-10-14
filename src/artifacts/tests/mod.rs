@@ -13,9 +13,34 @@ struct Fixture {
 fn hash(bytes: &[u8]) -> String {
     HEXLOWER.encode(&Sha256::digest(bytes))
 }
+/// Compiled-circuit stand-in carrying only the ABI: one public array per relation.
+fn circuits(widths: &[(&str, usize)]) -> Vec<u8> {
+    let programs: serde_json::Map<String, Value> = widths
+        .iter()
+        .map(|(kind, width)| {
+            (
+                (*kind).to_owned(),
+                json!({"abi":{"parameters":[
+                    {"name":"public","visibility":"public",
+                     "type":{"kind":"array","length":width,"type":{"kind":"field"}}},
+                    {"name":"private","visibility":"private","type":{"kind":"field"}}]}}),
+            )
+        })
+        .collect();
+    serde_json::to_vec(&programs).unwrap()
+}
+const WIDTHS: [(&str, usize); 7] = [
+    ("update", 410),
+    ("deposit", 294),
+    ("record", 204),
+    ("record_epoch", 335),
+    ("voucher_epoch", 381),
+    ("wave", 618),
+    ("outcome", 651),
+];
 impl Fixture {
     fn new(extension: bool) -> Self {
-        let circuit = b"{\"publicMetadataOnly\":true}".to_vec();
+        let circuit = circuits(&WIDTHS);
         let keys = if extension {
             br#"{"update":"0102","deposit":"0304","record":"0506"}"#.to_vec()
         } else {
@@ -317,7 +342,7 @@ fn optional_original_r2_key_is_authenticated_distinct_and_never_substituted() {
     assert_eq!(config.max_public_inputs, 335);
     // Without a voucher key the presentation is simply unavailable.
     assert!(artifacts.voucher_epoch_config(options()).is_none());
-    assert_eq!((UPDATE_WIDTH, VOUCHER_EPOCH_WIDTH), (410, 364));
+    assert_eq!((UPDATE_WIDTH, VOUCHER_EPOCH_WIDTH), (410, 381));
     assert_eq!(
         config.scope.circuit_digest,
         artifacts.scope().circuit_digest
@@ -436,4 +461,35 @@ fn wave_group_authenticates_its_two_keys_and_pins_the_public_widths() {
         broken.manifest["vkSha256"] = json!(hash(&broken.keys));
         assert!(broken.with(WaveArtifacts::authenticate).is_err());
     }
+}
+
+#[test]
+fn public_widths_come_from_the_authenticated_abi_not_from_constants() {
+    let mut fixture = Fixture::new(true);
+    fixture.keys = br#"{"update":"01","deposit":"02","record":"03","voucher_epoch":"04"}"#.to_vec();
+    let mut widths = WIDTHS;
+    widths[0].1 = 500;
+    widths[4].1 = 7;
+    fixture.circuit = circuits(&widths);
+    fixture.manifest["circuitSha256"] = json!(hash(&fixture.circuit));
+    fixture.manifest["vkSha256"] = json!(hash(&fixture.keys));
+    let artifacts = fixture.extension().unwrap();
+    let [update, ..] = artifacts.configs(options(), options());
+    assert_eq!(update.max_public_inputs, 500);
+    assert_eq!(
+        artifacts
+            .voucher_epoch_config(options())
+            .unwrap()
+            .max_public_inputs,
+        7
+    );
+    // A relation the keys name but the circuits lack, or one with no public input, refuses.
+    let mut missing = Fixture::new(true);
+    missing.circuit = circuits(&WIDTHS[1..]);
+    missing.manifest["circuitSha256"] = json!(hash(&missing.circuit));
+    assert!(matches!(missing.extension(), Err(Error::InvalidInput)));
+    let mut empty = Fixture::new(true);
+    empty.circuit = circuits(&[("update", 0), ("deposit", 1), ("record", 1)]);
+    empty.manifest["circuitSha256"] = json!(hash(&empty.circuit));
+    assert!(matches!(empty.extension(), Err(Error::InvalidInput)));
 }

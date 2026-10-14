@@ -39,6 +39,62 @@ pub enum AccountServiceRequest {
         authorization: DeviceAuthorization,
         request: AccountStatusRequest,
     },
+    /// Member route: a blinded settlement pass, issued under the member's session.
+    IssueSettlementPass {
+        grant: AdmissionGrant,
+        authorization: DeviceAuthorization,
+        request: crate::settlement::SettlementPassRequest,
+    },
+    /// Anonymous route, no member session: stage one deposit with its settlement token.
+    StageSettlement {
+        submission: crate::settlement::SettlementSubmission,
+    },
+    /// Anonymous route: post the obligation tag of a verified `Post` presentation.
+    /// `expected_binding` is computed by the host from its own request, never taken from
+    /// the client.
+    PostObligation {
+        presentation: crate::extensions::VoucherPresentation,
+        #[serde(with = "hex_bytes")]
+        #[cfg_attr(feature = "schema", schemars(with = "String"))]
+        proof: Vec<u8>,
+        expected_binding: [u8; 32],
+    },
+    /// Anonymous route: verify an `Issue` presentation against the current voucher epoch
+    /// and spend its allowance units. Same binding rule as `PostObligation`.
+    CheckVoucherEpoch {
+        presentation: crate::extensions::VoucherPresentation,
+        #[serde(with = "hex_bytes")]
+        #[cfg_attr(feature = "schema", schemars(with = "String"))]
+        proof: Vec<u8>,
+        expected_binding: [u8; 32],
+    },
+}
+
+impl AccountServiceRequest {
+    /// Routes that carry no member grant and must be reachable without a session.
+    pub fn is_anonymous(&self) -> bool {
+        matches!(
+            self,
+            Self::StageSettlement { .. }
+                | Self::PostObligation { .. }
+                | Self::CheckVoucherEpoch { .. }
+        )
+    }
+}
+
+/// Lower-case hex for proof and pass bytes: far smaller than a JSON number array.
+pub(crate) mod hex_bytes {
+    use data_encoding::HEXLOWER;
+    use serde::{Deserialize, Deserializer, Serializer};
+    pub fn serialize<S: Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&HEXLOWER.encode(bytes))
+    }
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        HEXLOWER
+            .decode(text.as_bytes())
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -63,6 +119,18 @@ pub enum AccountServiceResponse {
         ancestry: Option<Box<crate::extensions::EpochAncestryCertificate>>,
     },
     Obligations(crate::obligations::ObligationsResponse),
+    /// The blinded settlement pass, ready for the member to unblind.
+    SettlementPass {
+        #[serde(with = "hex_bytes")]
+        #[cfg_attr(feature = "schema", schemars(with = "String"))]
+        pass: Vec<u8>,
+    },
+    /// Durable staging result of an anonymous deposit; a replay is an error, not a status.
+    Settlement(crate::settlement::SettlementStatus),
+    /// The obligation tag is now waiting in the bond mailbox.
+    Posted,
+    /// The issue presentation verified and its slices are spent.
+    VoucherEpoch,
 }
 
 /// The existing admitted account's device signs its common-root-derived recipient

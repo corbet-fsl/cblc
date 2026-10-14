@@ -900,7 +900,6 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#f776a8b96304c87eed6c2c050ee31ac9be05a0f4"
 dependencies = [
  "ark-bn254",
  "ark-ff",

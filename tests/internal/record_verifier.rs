@@ -57,6 +57,7 @@ fn material() -> PublicVerifierMaterial {
             .public_key()
             .to_vec(),
         settlement: None,
+        wave_verifier: None,
         record_epoch: Some(Epoch {
             purpose: czkp::record::Purpose::RecordEpochV3,
             community: community_hash,
@@ -379,4 +380,46 @@ fn observed_clock_retains_refused_late_observations_and_does_not_truncate_to_rat
         ),
         130
     );
+}
+
+#[test]
+fn wave_policy_is_derived_from_the_published_material_and_any_flip_is_refused() {
+    let mut published = material();
+    let derived = published.wave_policy().unwrap();
+    let community: [u8; 32] = Sha256::digest(published.community.as_bytes()).into();
+    assert_eq!(derived.community, community);
+    assert_eq!(derived.extension, published.extension_policy);
+    assert_eq!(derived.proof_scope, published.proof_scope);
+    assert_eq!(derived.certificate_key, published.certificate_key);
+    assert_eq!(
+        derived.state_policy,
+        published.policy.account.state_digest(&community).unwrap()
+    );
+    assert_eq!(
+        (derived.valid_from, derived.valid_until),
+        (1, 2000),
+        "the account policy window"
+    );
+    published.wave_verifier = Some(derived.clone());
+    published.validate(&published.community.clone()).unwrap();
+    // The descriptor is published JSON in the cwlt `waveVerifier` shape.
+    let json = serde_json::to_value(&published).unwrap();
+    assert!(json["waveVerifier"]["statePolicy"].is_array());
+    for flip in [
+        |d: &mut crate::publication::WaveVerifierDescriptor| d.community[0] ^= 1,
+        |d: &mut crate::publication::WaveVerifierDescriptor| d.state_policy[0] ^= 1,
+        |d: &mut crate::publication::WaveVerifierDescriptor| d.proof_scope.circuit_digest[0] ^= 1,
+        |d: &mut crate::publication::WaveVerifierDescriptor| {
+            d.proof_scope.verifying_key_digest[0] ^= 1
+        },
+        |d: &mut crate::publication::WaveVerifierDescriptor| d.certificate_key[0] ^= 1,
+        |d: &mut crate::publication::WaveVerifierDescriptor| d.valid_until += 1,
+    ] {
+        let mut forged = published.clone();
+        flip(forged.wave_verifier.as_mut().unwrap());
+        assert_eq!(
+            forged.validate(&forged.community.clone()),
+            Err(Error::PolicyMismatch)
+        );
+    }
 }

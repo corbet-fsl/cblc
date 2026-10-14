@@ -3,6 +3,21 @@ use super::*;
 use crate::extensions::{VoucherPresentation, VoucherPurpose};
 use ed25519_dalek::{Signer, SigningKey};
 
+/// An issue claim with `units` distinct reserved slots (the rest zero).
+fn issue(uses: u32, signoff_standing: u64, units: u8) -> VoucherPurpose {
+    VoucherPurpose::Issue {
+        uses,
+        signoff_standing,
+        nullifiers: (1..=units)
+            .map(|index| {
+                let mut nullifier = [0; 32];
+                nullifier[31] = index;
+                nullifier
+            })
+            .collect(),
+    }
+}
+
 fn presentation(purpose: VoucherPurpose) -> VoucherPresentation {
     let issuer = SigningKey::from_bytes(&[31; 32]);
     let leaf = [7; 32];
@@ -41,7 +56,7 @@ fn statement(presentation: VoucherPresentation) -> ExtensionStatement {
 
 #[test]
 fn voucher_public_abi_has_the_circuit_width_and_order() {
-    let issue = presentation(VoucherPurpose::Issue { uses: 3 });
+    let issue = presentation(issue(3, 4, 3));
     let prepared = prepare(&statement(issue.clone()), &anonymous()).unwrap();
     assert_eq!(prepared.len(), 1);
     let fields = &prepared[0].inputs;
@@ -65,20 +80,45 @@ fn voucher_public_abi_has_the_circuit_width_and_order() {
     assert_eq!(scalar_value(&fields[264]), 9);
     assert_eq!(values(&fields[297..300]), [0, 3, 250]);
     assert_eq!(values(&fields[300..332]), [0; 32]);
+    // Sign-off threshold, then one field per nullifier slot (spent slots first).
+    assert_eq!(scalar_value(&fields[364]), 4);
+    assert_eq!(values(&fields[365..367]), [1, 2]);
+    assert_eq!(values(&fields[367..368]), [3]);
+    assert_eq!(values(&fields[368..381]), [0; 13]);
 
     let post = presentation(VoucherPurpose::Post { tag: [5; 32] });
     let prepared = prepare(&statement(post), &anonymous()).unwrap();
     let fields = &prepared[0].inputs;
     assert_eq!(values(&fields[297..300]), [1, 0, 250]);
     assert_eq!(values(&fields[300..332]), [5; 32]);
+    assert_eq!(scalar_value(&fields[364]), 0);
+    assert_eq!(values(&fields[365..381]), [0; 16]);
 }
 
 #[test]
 fn voucher_presentation_refuses_bad_shape_scope_and_certificate() {
-    let good = presentation(VoucherPurpose::Issue { uses: 1 });
+    let good = presentation(issue(1, 0, 1));
     let mut cases = Vec::new();
     for mutate in [
-        |p: &mut VoucherPresentation| p.purpose = VoucherPurpose::Issue { uses: 0 },
+        |p: &mut VoucherPresentation| p.purpose = issue(0, 0, 1),
+        |p: &mut VoucherPresentation| p.purpose = issue(1, 0, 0),
+        |p: &mut VoucherPresentation| p.purpose = issue(1, 0, 2),
+        |p: &mut VoucherPresentation| p.purpose = issue(2, czkp::MAX_INTEGER + 1, 2),
+        |p: &mut VoucherPresentation| {
+            // A zero nullifier.
+            p.purpose = issue(1, 0, 1);
+            let VoucherPurpose::Issue { nullifiers, .. } = &mut p.purpose else {
+                unreachable!()
+            };
+            nullifiers[0] = [0; 32];
+        },
+        |p: &mut VoucherPresentation| {
+            p.purpose = issue(2, 0, 2);
+            let VoucherPurpose::Issue { nullifiers, .. } = &mut p.purpose else {
+                unreachable!()
+            };
+            nullifiers[1] = nullifiers[0];
+        },
         |p: &mut VoucherPresentation| p.purpose = VoucherPurpose::Post { tag: [0; 32] },
         |p: &mut VoucherPresentation| p.binding = [0; 32],
         |p: &mut VoucherPresentation| p.certificate.truncate(63),

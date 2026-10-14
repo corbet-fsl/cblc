@@ -247,13 +247,24 @@ pub struct PublicRecord {
     pub inbox: Inbox,
     pub shares: Option<[u16; 3]>,
 }
+/// Most allowance units one issue presentation reserves (czkp::voucher::ISSUE_UNITS).
+pub const ISSUE_UNITS: usize = 16;
+
 /// What an unlinkable voucher presentation proves about a hidden member of the current epoch.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum VoucherPurpose {
-    /// The member may issue a link of `uses` admissions at its current cap.
-    Issue { uses: u32 },
+    /// The member may issue a link of `uses` admissions at its current cap. The proof also
+    /// publishes one nullifier per allowance unit it reserves, exactly `uses` of them and at most ISSUE_UNITS (the circuit pads the
+    /// fixed output with zeros), and
+    /// `signoff_standing` greater than zero proves the member's pool cap reaches that
+    /// threshold. The relying party compares the threshold with its own rulebook value.
+    Issue {
+        uses: u32,
+        signoff_standing: u64,
+        nullifiers: Vec<[u8; 32]>,
+    },
     /// The member may post the bond obligation addressed by `tag`.
     Post { tag: [u8; 32] },
 }
@@ -285,9 +296,26 @@ impl VoucherPresentation {
         {
             return Err(Error::InvalidInput);
         }
-        match self.purpose {
-            VoucherPurpose::Issue { uses } if uses >= 1 => Ok(()),
-            VoucherPurpose::Post { tag } if tag != [0; 32] => Ok(()),
+        match &self.purpose {
+            VoucherPurpose::Issue {
+                uses,
+                signoff_standing,
+                nullifiers,
+            } if *uses >= 1
+                && *signoff_standing <= czkp::MAX_INTEGER
+                && nullifiers.len() == *uses as usize
+                && nullifiers.len() <= ISSUE_UNITS =>
+            {
+                // Exactly one canonical, nonzero, distinct nullifier per claimed unit.
+                for (index, nullifier) in nullifiers.iter().enumerate() {
+                    czkp::field(nullifier, true)?;
+                    if *nullifier == [0; 32] || nullifiers[..index].contains(nullifier) {
+                        return Err(Error::InvalidInput);
+                    }
+                }
+                Ok(())
+            }
+            VoucherPurpose::Post { tag } if *tag != [0; 32] => Ok(()),
             _ => Err(Error::InvalidInput),
         }
     }

@@ -8,6 +8,10 @@ global TAG_BOND_COMMIT: Field = 61;
 global TAG_BOND_KEY: Field = 62;
 global TAG_MEMBER: Field = 63;
 global TAG_ENTRY: Field = 64;
+global TAG_ISSUE_NULLIFIER: Field = 65;
+
+// Nullifier slots of one issue presentation (czkp::voucher::ISSUE_UNITS).
+pub global ISSUE_UNITS: u32 = 16;
 
 // Obligation kinds posted through the bond.
 pub global SUCCESS: u8 = 1;
@@ -45,6 +49,13 @@ pub fn bond_key(bond: [u8; 32]) -> Field {
 pub fn obligation_tag(bond: [u8; 32], kind: u8, n: u64) -> Field {
     let b = limbs(bond);
     hash([DOMAIN, TAG_OBLIGATION, b[0], b[1], kind as Field, n as Field])
+}
+
+// Per-unit issue nullifier: a PRF of the owner secret over community, epoch and unit index
+// (czkp::voucher::issue_nullifier).
+pub fn issue_nullifier(owner_secret: [u8; 32], community: [u8; 32], epoch: u64, unit: u64) -> Field {
+    let s = limbs(owner_secret); let c = limbs(community);
+    hash([DOMAIN, TAG_ISSUE_NULLIFIER, s[0], s[1], c[0], c[1], epoch as Field, unit as Field])
 }
 
 pub fn member_tag(community: [u8; 32], member: [u8; 32]) -> Field {

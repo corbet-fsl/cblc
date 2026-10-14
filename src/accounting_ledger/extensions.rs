@@ -359,6 +359,36 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         expected_binding: &[u8; 32],
         clock: impl Fn() -> u64,
     ) -> Result<(), Error> {
+        self.voucher_epoch(presentation, proof, expected_binding, clock, false)
+    }
+
+    /// Verify an `Issue` presentation and spend its allowance units: the nullifiers are
+    /// recorded in the same transaction as the final epoch check, so a unit of an epoch
+    /// is spent exactly once. A reused unit is `Error::Replay`.
+    pub fn issue_voucher(
+        &mut self,
+        presentation: &crate::extensions::VoucherPresentation,
+        proof: &[u8],
+        expected_binding: &[u8; 32],
+        clock: impl Fn() -> u64,
+    ) -> Result<(), Error> {
+        if !matches!(
+            presentation.purpose,
+            crate::extensions::VoucherPurpose::Issue { .. }
+        ) {
+            return Err(Error::InvalidInput);
+        }
+        self.voucher_epoch(presentation, proof, expected_binding, clock, true)
+    }
+
+    fn voucher_epoch(
+        &mut self,
+        presentation: &crate::extensions::VoucherPresentation,
+        proof: &[u8],
+        expected_binding: &[u8; 32],
+        clock: impl Fn() -> u64,
+        spend: bool,
+    ) -> Result<(), Error> {
         let clock = observed_clock(self.observed_time.clone(), clock);
         let now = clock();
         check_time(now, 0)?;
@@ -397,6 +427,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         };
         let mut tx = self.connection.transaction()?;
         check(&mut tx, now)?;
+        if spend {
+            // Refuse a reused unit before the expensive proof check; the authoritative
+            // insert happens again in the final transaction below.
+            super::voucher::check_unspent(&mut tx, presentation)?;
+        }
         tx.rollback()?;
         extensions.budget.check(&presentation.blinded_leaf)?;
         extensions.verifier.verify_anonymous(
@@ -410,7 +445,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         check_time(completed, now)?;
         let mut tx = self.connection.transaction()?;
         check(&mut tx, completed)?;
-        tx.rollback()?;
+        if spend {
+            super::voucher::spend_units(&mut tx, presentation)?;
+            tx.commit()?;
+        } else {
+            tx.rollback()?;
+        }
         Ok(())
     }
 

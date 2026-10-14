@@ -545,7 +545,18 @@ fn main() {
                     let tag: [u8; 32] = serde_json::from_value(v["tag"].clone()).unwrap();
                     Ok(json!(ledger.as_mut().unwrap().obligation_waiting(&tag)?))
                 }
-                "voucherEpoch" | "postPresentedObligation" if record_epochs => {
+                // The published material, as the community's publication workflow projects it
+                // (including the derived Wave verifier policy).
+                "material" => {
+                    let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
+                    let material = ledger.as_mut().unwrap().public_verifier_material(
+                        v["revision"].as_u64().unwrap_or(1),
+                        v["policyEpoch"].as_u64().unwrap_or(1),
+                        &issuer,
+                    )?;
+                    Ok(serde_json::to_value(material).unwrap())
+                }
+                "voucherEpoch" | "postPresentedObligation" | "issueVoucher" if record_epochs => {
                     let presentation: VoucherPresentation =
                         serde_json::from_value(v["presentation"].clone()).unwrap();
                     let proof = HEXLOWER
@@ -556,6 +567,8 @@ fn main() {
                     let ledger = ledger.as_mut().unwrap();
                     if v["op"] == "voucherEpoch" {
                         ledger.check_voucher_epoch(&presentation, &proof, &binding, || now)?;
+                    } else if v["op"] == "issueVoucher" {
+                        ledger.issue_voucher(&presentation, &proof, &binding, || now)?;
                     } else {
                         ledger.post_presented_obligation(
                             &presentation,

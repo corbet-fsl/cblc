@@ -158,6 +158,7 @@ impl SettlementConfig {
 
 /// Member-signed blinded issuance request. It reveals no Deposit or recipient.
 #[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettlementPassRequest {
     pub community: [u8; 32],
@@ -170,18 +171,36 @@ pub struct SettlementPassRequest {
     pub signature: String,
 }
 
+impl std::fmt::Debug for SettlementPassRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The blinded payload and signature are deliberately left out of diagnostics.
+        f.debug_struct("SettlementPassRequest")
+            .field("community", &self.community)
+            .field("operation", &self.operation)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Native anonymous ingress inputs. The transport must have no member session
 /// and use the original separate Tor circuit. Nothing here establishes that
 /// network property or contains the hidden outcome kind.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SettlementSubmission {
     pub deposit: Deposit,
+    #[serde(with = "crate::contracts::hex_bytes")]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub proof: Vec<u8>,
+    #[serde(with = "crate::contracts::hex_bytes")]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub token_proof: Vec<u8>,
     pub operation: [u8; 16],
 }
 
 /// Durable verification staging, NOT inbox application or G2 publication.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StagedSettlement {
     pub deposit_digest: [u8; 32],
@@ -190,6 +209,7 @@ pub struct StagedSettlement {
 
 /// Exact reconciliation of an original durable fact or already-applied effect.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
     tag = "status",
     content = "value",
