@@ -3,6 +3,8 @@
 #[path = "accounting_ledger/bounds.rs"]
 mod bounds;
 mod common;
+#[path = "accounting_ledger/freshness.rs"]
+mod freshness;
 #[path = "accounting_ledger/integrity.rs"]
 mod integrity;
 #[path = "accounting_ledger/recipient.rs"]
