@@ -60,3 +60,32 @@ fn a_tag_posts_exactly_once_for_all_time() {
         Err(Error::InvalidInput)
     ));
 }
+
+#[test]
+fn posted_tags_and_unconsumed_mailbox_rows_age_out_after_the_retention() {
+    let mut ledger = ledger();
+    assert_eq!(ledger.obligation_retention_days(), 90);
+    for bad in [0, 6, 731] {
+        assert!(matches!(
+            ledger.set_obligation_retention_days(bad),
+            Err(Error::InvalidInput)
+        ));
+    }
+    ledger.set_obligation_retention_days(30).unwrap();
+    let day = 86_400;
+    let (old, young) = ([7; 32], [8; 32]);
+    ledger.post_obligation_at(&old, 10 * day).unwrap();
+    // Inside the retention the tag is still waiting and cannot be posted again.
+    ledger.post_obligation_at(&young, 39 * day).unwrap();
+    assert!(ledger.obligation_waiting(&old).unwrap());
+    assert!(matches!(
+        ledger.post_obligation_at(&old, 39 * day),
+        Err(Error::Replay)
+    ));
+    // Past the retention the next post drops the aged rows, including the mailbox row.
+    ledger.post_obligation_at(&[9; 32], 41 * day).unwrap();
+    assert!(!ledger.obligation_waiting(&old).unwrap());
+    assert!(ledger.obligation_waiting(&young).unwrap());
+    // A re-post is harmless garbage again (the sponsor never consumes it twice).
+    ledger.post_obligation_at(&old, 41 * day).unwrap();
+}

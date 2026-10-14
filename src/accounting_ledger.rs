@@ -72,6 +72,7 @@ pub struct AccountLedger<V: AccountProofVerifier> {
     extensions: Option<Extensions>,
     settlement: Option<settlement::Settlement>,
     observed_time: Arc<AtomicU64>,
+    retention_days: u64,
 }
 
 impl AccountLedger<crate::accounting_service::NativeAccountVerifier> {
@@ -310,6 +311,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             extensions: None,
             settlement: None,
             observed_time: Arc::new(AtomicU64::new(0)),
+            retention_days: voucher::DEFAULT_RETENTION_DAYS,
         })
     }
 
