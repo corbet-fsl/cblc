@@ -10,6 +10,7 @@ python3 -B .ci/test-proof-cache.py
 python3 -B .ci/test-native-sdk.py
 python3 -B .ci/check-native-sdk.py
 rustc --version
+bash .ci/update-our-crates.sh
 cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }
 cargo clippy --locked --all-targets --all-features -- -D warnings
 # The portable account contracts must build and keep their wire without `host`.
