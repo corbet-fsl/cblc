@@ -1,5 +1,5 @@
 use core::voucher::{Voucher,VoucherAux,BondEntry,entry_hash,bond_commit,bond_key,obligation_tag,member_tag,
-    admit,punish_weight,rewarded};
+    admit,remaining,punish_weight,rewarded};
 use core::{Enrollment,Opening,Obligation,MapWitness,Resolution,Acknowledgment,ExtensionPolicy,
     limbs,field,hash,secret_hash,marker,pair_key,enrollment_leaf,verify_enrollment,
     verify_peer_authority,policy_bytes,state_policy_hash,state_hash,obligation_hash,
@@ -68,7 +68,7 @@ fn main(
         let bond = if aux.bond_secret == [0; 32] { 0 } else { bond_commit(aux.bond_secret) };
         assert((bond == 0) == (aux.sponsor == 0));
         assert(obligation == [0; 32]);
-        let voucher = Voucher { proven: 0, away: 0, lost: 0, bonus: 0, returned: 0, answers: 0,
+        let voucher = Voucher { proven: 0, away: 0, reserved: 0, lost: 0, bonus: 0, returned: 0, answers: 0,
             sponsor: aux.sponsor, bond, bond_root: empty, bond_count: 1 };
         let initial = Opening { reserved: 0, accepted:0, declined:0, punished:0, inbox:[0;32], authorization:0,
             outgoing_root: empty, outgoing_count: 1, incoming_root: empty, incoming_count: 1,
@@ -93,12 +93,13 @@ fn main(
         assert((old.outgoing_count >= 1) & (old.outgoing_count <= 4294967296));
         assert((old.incoming_count >= 1) & (old.incoming_count <= 4294967296));
         assert((old.pair_count >= 1) & (old.pair_count <= 4294967296));
-        assert((action >= 1) & (action <= 14) & (action != 6)); // 6 (refill) retired: slots return on settlement
-        // 12 admit (sponsor spends a voucher), 13 consume a bond obligation, 14 prove success.
+        assert((action >= 1) & (action <= 16) & (action != 6)); // 6 (refill) retired: slots return on settlement
+        // 12 admit (sponsor spends a voucher), 13 consume a bond obligation, 14 prove success,
+        // 15 reserve the uses of a new link, 16 release the unused uses of an ended link.
         let no_slot = (action == 6) | (action == 9) | (action == 11) | (action >= 12);
         let mut vch = old.voucher;
         assert((vch.bond_count >= 1) & (vch.bond_count <= 4294967296));
-        assert((vch.away <= SAFE) & (vch.lost <= SAFE) & (vch.bonus <= SAFE) & (vch.returned <= SAFE) & (vch.answers <= SAFE) & (vch.proven <= SAFE));
+        assert((vch.away <= SAFE) & (vch.reserved <= SAFE) & (vch.lost <= SAFE) & (vch.bonus <= SAFE) & (vch.returned <= SAFE) & (vch.answers <= SAFE) & (vch.proven <= SAFE));
         if action != 13 { assert(obligation == [0; 32]); }
         assert(!aux.count | (action == 3) | (action == 10));
         let amount = if slot.role == 0 { outgoing_reservation } else { incoming_reservation };
@@ -211,6 +212,14 @@ fn main(
                 }
                 vch.bond_root = indexed::update(vch.bond_root, vch.bond_count, key, entry_hash(e),
                     entry_hash(next), aux.bond_map.leaf, aux.bond_map.index, aux.bond_map.path);
+            } else if action == 15 {
+                // A link of `units` uses is created: remaining allowance covers them.
+                assert((aux.units >= 1) & (aux.units <= remaining(standing_policy, role, vch, pool)));
+                vch.reserved = vch.reserved + aux.units;
+            } else if action == 16 {
+                // Unused uses of an expired, revoked or declined link return.
+                assert((aux.units >= 1) & (aux.units <= vch.reserved));
+                vch.reserved = vch.reserved - aux.units;
             } else {
                 // The account's own success proof; every threshold is a public policy value.
                 assert(vch.proven == 0);

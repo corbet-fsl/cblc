@@ -17,9 +17,9 @@ const policy=policyInput(standing.sets.default);
 const s=(n:number|bigint)=>String(n);
 const bytes=(h:string)=>Array.from(Buffer.from(h.slice(2),'hex')).map(String);
 // Fields of the probe output in order.
-const KEYS=['limit','remaining','weight','rewarded','away','lost','entry_limit','overshoot','tag','commit','key','entry','member_tag','nullifier'];
+const KEYS=['limit','remaining','weight','rewarded','away','lost','reserved','entry_limit','overshoot','tag','commit','key','entry','member_tag','nullifier'];
 const input=(c:any,over:any={})=>({policy,role:s(c.role),
-  v:{proven:s(c.account.proven),away:s(c.account.away),lost:s(c.account.lost),bonus:s(c.account.bonus),
+  v:{proven:s(c.account.proven),away:s(c.account.away),reserved:s(c.account.reserved),lost:s(c.account.lost),bonus:s(c.account.bonus),
      returned:'0',answers:'0',sponsor:'0',bond:'0',bond_root:'0',bond_count:'1'},
   cap:s(c.cap),bond:bytes(c.bond),community:bytes(c.community),member:bytes(c.member),kind:s(c.kind),n:s(c.n),
   weight_limit:s(c.weight_limit),...over});

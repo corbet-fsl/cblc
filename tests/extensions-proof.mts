@@ -120,7 +120,7 @@ lines.on('line',line=>{const waiter=pending;pending=undefined;if(!waiter)throw n
 child.on('exit',code=>{if(pending)pending.reject(new Error(`Issuer exited ${code}`));});
 async function call(request,expected=true,retain=true){assert(!pending);const result=await new Promise((resolve,reject)=>{pending={resolve,reject};child.stdin.write(JSON.stringify(request)+'\n');});
   assert.equal(result.ok,expected,`Issuer ${request.op}: ${result.error??'unexpected success'}`);if(retain){publicCases.push({operation:request.op,ok:result.ok,error:result.error});
-  publicTrace.push({request:structuredClone(request),response:result});}return result.value;}
+  publicTrace.push({request:structuredClone(request),response:result});}return expected?result.value:result.error;}
 let activeProver;
 async function proof(kind,input,label,measure=false,group=artifacts){
   const selected=group.artifacts(kind),witness=witnessInputs(selected.circuit,input),expected=publicInputs(selected.circuit,input);
@@ -139,7 +139,7 @@ async function proof(kind,input,label,measure=false,group=artifacts){
 async function retainWave(){
   if(waveCases.length) {
     // Retained for the counterpart verifiers: statements, proofs, the pinned scopes and the measured proving times.
-    const fixture=waveJson({extensionScope:artifacts.scope,waveScope:waveArtifacts.scope,issuerKey:manifest.issuerKey,      cases:waveCases,timings:benchmarks.filter(b=>b.kind==='wave'||b.kind==='outcome')});
+    const fixture=waveJson({extensionScope:artifacts.scope,waveScope:waveArtifacts.scope,issuerKey:manifest.issuerKey,      cases:waveCases,material:await call({op:'material'},true,false),timings:benchmarks.filter(b=>b.kind==='wave'||b.kind==='outcome')});
     await writeFile(resolve(directory,'wave-roundtrip.json'),fixture,{mode:0o600});
     if(process.env.ARTIFACT_ROOT) {
       const digest=sha(Buffer.from(fixture)).toString('hex'),retained=resolve(process.env.ARTIFACT_ROOT,'wave-fixtures',digest);
@@ -283,10 +283,20 @@ try{
         const changed=request({});mutate(changed.presentation);await call(changed,false);
       }
       await call(request({proof:''}),false);
+      // A flipped nullifier is not what the proof published.
+      {const changed=request({});changed.presentation.purpose.nullifiers[0][0]^=1;await call(changed,false);}
+      // Issuing consumes the claimed units of this epoch; presenting them again is a replay.
+      assert.equal(await call(request({op:'issueVoucher'})),true);
+      assert.match(await call(request({op:'issueVoucher'}),false),/Replay/);
       // A claim above the allowance (a root holds 1000) or of no admission at all is not provable.
       const noir=new Noir(programs.voucher_epoch);
       await assert.rejects(async()=>noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{uses:1001})).input)));
       await assert.rejects(async()=>noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{uses:0})).input)));
+      // A sign-off skip above the member's pool cap is unprovable; one within it is provable.
+      await assert.rejects(async()=>noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{signoffStanding:9007199254740991n})).input)));
+      await noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{firstUnit:5n,signoffStanding:1n})).input));
+      // The units must lie below the remaining allowance (a root holds 1000).
+      await assert.rejects(async()=>noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{firstUnit:999n,uses:5})).input)));
       // Posting needs a bond; this member holds none.
       await assert.rejects(async()=>noir.execute(witnessInputs(programs.voucher_epoch,(await claim(members[0],{purpose:1,uses:0,tag:Array(32).fill(5),kind:1,n:0n})).input)));
     }

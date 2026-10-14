@@ -18,10 +18,12 @@ pub global SUCCESS: u8 = 1;
 pub global PUNISHED: u8 = 2;
 pub global REWARD: u8 = 3;
 
-// The voucher part of the committed account state. `sponsor` is the member tag of the
+// The voucher part of the committed account state. `reserved` counts the uses of open links
+// (reserved at link creation, released by expiry, revocation or decline, moved to `away` by
+// an actual admission). `sponsor` is the member tag of the
 // sponsor and `bond` the commitment to the bond secret; both are zero for a founder.
 pub struct Voucher {
-    pub proven: u64, pub away: u64, pub lost: u64, pub bonus: u64, pub returned: u64,
+    pub proven: u64, pub away: u64, pub reserved: u64, pub lost: u64, pub bonus: u64, pub returned: u64,
     pub answers: u64, pub sponsor: Field, pub bond: Field,
     pub bond_root: Field, pub bond_count: u64,
 }
@@ -79,7 +81,8 @@ pub fn limit(p: StandingPolicy, role: u8, v: Voucher, cap: u64) -> u64 {
 
 pub fn remaining(p: StandingPolicy, role: u8, v: Voucher, cap: u64) -> u64 {
     let l = limit(p, role, v, cap);
-    if l > v.away { l - v.away } else { 0 }
+    let held = v.away + v.reserved;
+    if l > held { l - held } else { 0 }
 }
 
 // Weight (Q16) of a vouchee's punishment on its sponsor: one over the limit at issuance.
@@ -98,8 +101,10 @@ pub fn rewarded(p: StandingPolicy, bonus: u64) -> u64 {
 pub fn admit(p: StandingPolicy, role: u8, v: Voucher, cap: u64) -> (Voucher, BondEntry) {
     let l = limit(p, role, v, cap);
     let overshoot = l <= v.away;
+    // An admission consumes one reserved unit of an open link when there is one.
     let next = Voucher { proven: v.proven,
         away: if overshoot { v.away } else { v.away + 1 },
+        reserved: if v.reserved > 0 { v.reserved - 1 } else { 0 },
         lost: if overshoot { v.lost + 1 } else { v.lost },
         bonus: v.bonus, returned: v.returned, answers: v.answers, sponsor: v.sponsor,
         bond: v.bond, bond_root: v.bond_root, bond_count: v.bond_count };
@@ -122,4 +127,6 @@ pub struct VoucherAux {
     pub sponsor: Field,
     // Count this answered conversation toward the success proof.
     pub count: bool,
+    // Uses reserved (action 15) or released (action 16).
+    pub units: u64,
 }

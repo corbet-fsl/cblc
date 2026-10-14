@@ -8,7 +8,6 @@ use cwlt::wave::{
     ExtensionPolicy, VerifiedWaveOutcome, WaveContext, WaveOutcome, WaveOutcomeStatement,
     WavePolicy, WaveStatement, WaveVerifier,
 };
-use czkp::ProofScope;
 use futures::executor::block_on;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -33,6 +32,8 @@ struct Fixture {
     extension_scope: Scope,
     issuer_key: Vec<u8>,
     cases: Vec<Case>,
+    /// The published verifier material of the issuer that produced the proofs (`material` op).
+    material: serde_json::Value,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,10 +42,30 @@ struct Config {
 }
 
 struct Loaded {
+    group: WaveArtifacts,
+    /// The Wave policy exactly as the published material derives it.
+    policy: WavePolicy,
+    until: u64,
     verifier: WaveVerifier<cvfy::NativeVerifier>,
     reservation: (WaveStatement, Vec<u8>),
     outcome: (WaveOutcomeStatement, Vec<u8>),
     now: u64,
+}
+
+fn build(
+    group: &WaveArtifacts,
+    policy: WavePolicy,
+    now: u64,
+    until: u64,
+) -> Result<WaveVerifier<cvfy::NativeVerifier>, czkp::Error> {
+    let options = common::native::options(1024 * 1024);
+    WaveVerifier::native(
+        policy,
+        now,
+        until,
+        group.wave_config(options.clone()),
+        group.outcome_config(options),
+    )
 }
 
 fn load() -> Loaded {
@@ -96,30 +117,29 @@ fn load() -> Loaded {
         serde_json::from_value(outcome.statement["outcome"].clone()).unwrap();
     let policy: ExtensionPolicy = serde_json::from_value(wave.statement["policy"].clone()).unwrap();
     let c = &reservation.context;
-    let wave_policy = WavePolicy {
-        community: c.community,
-        extension: policy,
-        proof_scope: ProofScope {
-            circuit_digest: fixture.extension_scope.circuit_digest,
-            verifying_key_digest: fixture.extension_scope.verifying_key_digest,
-        },
-        certificate_key: fixture.issuer_key.clone(),
-        manifest_sha256: group.manifest_sha256(),
-        state_policy: reservation.state_policy,
-        valid_from: 1,
-        valid_until: c.expires_at + 1000,
-    };
+    // The policy comes from the published material the issuer generated, never from the
+    // statement being verified; the statement must agree with it, not define it.
+    let wave_policy: WavePolicy =
+        serde_json::from_value(fixture.material["waveVerifier"].clone()).unwrap();
+    assert_eq!(wave_policy.community, c.community);
+    assert_eq!(wave_policy.extension, policy);
+    assert_eq!(wave_policy.state_policy, reservation.state_policy);
+    assert_eq!(wave_policy.certificate_key, fixture.issuer_key);
+    assert_eq!(
+        wave_policy.proof_scope.circuit_digest,
+        fixture.extension_scope.circuit_digest
+    );
+    assert_eq!(
+        wave_policy.proof_scope.verifying_key_digest,
+        fixture.extension_scope.verifying_key_digest
+    );
     let now = settled.evidence.accepted_at.max(reservation.accepted_at) + 1;
-    let options = common::native::options(1024 * 1024);
-    let verifier = WaveVerifier::native(
-        wave_policy,
-        now,
-        c.expires_at + 1000,
-        group.wave_config(options.clone()),
-        group.outcome_config(options),
-    )
-    .unwrap();
+    let until = c.expires_at + 1000;
+    let verifier = build(&group, wave_policy.clone(), now, until).unwrap();
     Loaded {
+        group,
+        policy: wave_policy,
+        until,
         verifier,
         reservation: (reservation, proof(wave)),
         outcome: (settled, proof(outcome)),
@@ -179,4 +199,28 @@ fn the_retained_reservation_and_answer_verify_natively_and_refuse_any_change() {
         ))
         .is_err()
     );
+}
+
+#[test]
+fn a_policy_that_differs_from_the_published_material_refuses_the_proofs() {
+    let l = load();
+    let (statement, proof) = &l.reservation;
+    let expected: WaveContext = statement.context.clone();
+    let refused = |policy: WavePolicy| match build(&l.group, policy, l.now, l.until) {
+        Err(_) => true,
+        Ok(v) => block_on(v.verify(statement, proof, &expected, l.now)).is_err(),
+    };
+    assert!(!refused(l.policy.clone()));
+    let mut flipped = l.policy.clone();
+    flipped.community[0] ^= 1;
+    assert!(refused(flipped));
+    let mut flipped = l.policy.clone();
+    flipped.state_policy[0] ^= 1;
+    assert!(refused(flipped));
+    let mut flipped = l.policy.clone();
+    flipped.proof_scope.circuit_digest[0] ^= 1;
+    assert!(refused(flipped));
+    let mut flipped = l.policy.clone();
+    flipped.proof_scope.verifying_key_digest[0] ^= 1;
+    assert!(refused(flipped));
 }

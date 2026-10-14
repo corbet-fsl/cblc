@@ -5,7 +5,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 1,
@@ -22,6 +23,7 @@
         "nullifier": "0x1905e7488ea7578fbf8a0ce5eae448a45d46d37a8516022203d3503d49c76c19",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x2d024dfebf4262f890ebf5d7376dab7db72a5f5a0e80ab0b3bd5989298114649",
         "weight": 65536
@@ -37,7 +39,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 1,
@@ -53,7 +56,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x229dff791027f446fe7a3964c6f0fdf32a886da1fa799cb5416688aaa1789e60",
         "overshoot": 0,
-        "remaining": 1,
+        "remaining": 0,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2eb25710bc29990f8a413279d8b902b35b7dd23761675065d98e8361f9efd2ff",
         "weight": 65536
@@ -69,7 +73,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 1,
@@ -86,6 +91,7 @@
         "nullifier": "0x0d2486bb0f1b121e54761706a633593ead600bc4908e7fb801762a73f39ddcc8",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0339a452eeda77cf1d3396b5b366f8aff73ff3b91a34ad9fee2c799095c7d8af",
         "weight": 32768
@@ -101,7 +107,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 1,
@@ -118,6 +125,7 @@
         "nullifier": "0x052800fd2a41d9cc47df0eda28795e85245eb25dbad47b56021989138b6d741b",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x1a33c84f154a801a37cc71917936d2c874aed2d03838e0d1880651c27224e00a",
         "weight": 21846
@@ -133,7 +141,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 1,
@@ -150,6 +159,7 @@
         "nullifier": "0x101b22b035942291d151ebc202f177ea8c635d99b2ce93c397d163a95c372b7d",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x0c6d7eb4c71fc4fc2c729fb1214036f37d655657e9d1fdb18acf179b6fdab8e2",
         "weight": 16384
@@ -165,7 +175,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 3,
@@ -182,6 +193,7 @@
         "nullifier": "0x18059c097e24879092b21eb3bf2684f71423f4aef9957ae0cd40ff6396993d0f",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x085e38c4e68888c4595b78adeab022af0e3c8b6255efdd83ac22d8bbea25f830",
         "weight": 13108
@@ -197,7 +209,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 3,
@@ -213,7 +226,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0d1d0db3536b666297298886765a65b1629203255d96df89d9aabeed85f4e21d",
         "overshoot": 0,
-        "remaining": 1,
+        "remaining": 0,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2a64cc915bd7a94cf0225654f4be2124196b2db60758d99b203f417467797633",
         "weight": 10923
@@ -229,7 +243,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 3,
@@ -246,6 +261,7 @@
         "nullifier": "0x26a2f0ecf4098c489af07fb43a8ea65fa9a94ee6b45e0d959761ba5dd7b3bb7a",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x00efe3c5651986e4e4bf9f79ea1b78708bec6a3c838b7ab7ae9984efc2c32b7f",
         "weight": 65536
@@ -261,7 +277,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 3,
@@ -278,6 +295,7 @@
         "nullifier": "0x1006d9fed36703b3011108c5122a4bf98b0d76efdd463405809a43c15e8d6274",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x14e3ae03f2c54869315e497b6b1130ccbd58f1815a1ca0c21e357ae63eda440f",
         "weight": 65536
@@ -293,7 +311,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 3,
@@ -310,6 +329,7 @@
         "nullifier": "0x1560aa5ad98930fa808570a0a384a97bcd2c64a769ef01189f0d91a008fe3199",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x2f8ab7cb6c2c8b6fbd1c42f62ef479401351838b084f0e6c1bc2fba96c487e6a",
         "weight": 32768
@@ -325,7 +345,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 8,
@@ -342,6 +363,7 @@
         "nullifier": "0x1999e07ea250fc96f393953a0a2a8fec45825fb972299380d4104e0a6dda0994",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x0acf347d5348be384016134738e8c107667d4cbc842de476a6dc3e1410b61d6d",
         "weight": 21846
@@ -357,7 +379,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 8,
@@ -373,7 +396,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0844ade7177f64bd59eba392cc4ccd4871c2c1a8609a177a5d161522c58b4603",
         "overshoot": 0,
-        "remaining": 1,
+        "remaining": 0,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0b45c51fc4875329c980d5730e45d2960692a6aaf9ba56a46c460040c19749e7",
         "weight": 16384
@@ -389,7 +413,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 8,
@@ -406,6 +431,7 @@
         "nullifier": "0x1455ac8f7916e8f9ca79e86ecef5ba8ad0a22b01879eb204ec05d740d86721ec",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x15ec9dc9e25e3851b95922cbc22658588182a00e3f04f80ec80ad57da75efebe",
         "weight": 13108
@@ -421,7 +447,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 8,
@@ -438,6 +465,7 @@
         "nullifier": "0x05ccaf49506741df8e1e031d6c917cdcb704d4c7dac7f72021133bf000d467e9",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x229d0f72b04b186c57902c2c6e1c3186f2f5722b1b2851f284d9523e644f2702",
         "weight": 10923
@@ -453,7 +481,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 8,
@@ -470,6 +499,7 @@
         "nullifier": "0x1ce292296502bc8a33246e11cb559101cb1d0b1b9d29b94bbb364f444e34146e",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x18c0d312747c6e6c0c83f85d53dc2b858d822692ed96c955f76ca0411a0f44fe",
         "weight": 65536
@@ -485,7 +515,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 24,
@@ -502,6 +533,7 @@
         "nullifier": "0x24a3fdd33970ad028cbe062126a8a18c2c141a86a1f2277350d2b8d5ec35c520",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x0490aeef675bf2f4bf4c1c73c33d819e24f480a5098b63a1b3589664a4fb232d",
         "weight": 65536
@@ -517,7 +549,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 24,
@@ -533,7 +566,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1a73c6b9d25041245cf71d4e52e1ff946eac166fa8cf754482ccfb6363af1c27",
         "overshoot": 0,
-        "remaining": 2,
+        "remaining": 0,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0696876b4d1b5fb3220506e6fd8e49e88e7375cc532e195190b4dba6ad0678ba",
         "weight": 32768
@@ -549,7 +583,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 24,
@@ -565,7 +600,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1e0d5d6afa46c67262e8ef25637a55fcc5e67235d5e44e33f4a16503969236ef",
         "overshoot": 0,
-        "remaining": 1,
+        "remaining": 0,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x126a734458777e3f9f9d011e882bfdb7926efc40cd180b1ceda4f0becb9eec29",
         "weight": 21846
@@ -581,7 +617,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 24,
@@ -598,6 +635,7 @@
         "nullifier": "0x1a90bccbe98e0d8e5d1b3e3e9fbe1b5292dbd83ba190a946a99d9dadbe0d0bbb",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0a9530fd70c6ddb82d1e6e6f8cefdc6d3714544ec5374425690c8afbbc4d32ee",
         "weight": 16384
@@ -613,7 +651,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 24,
@@ -630,6 +669,7 @@
         "nullifier": "0x11052a628a6e6d149e7f6541832bde685ab4844840d8358b6068d32c1733a01e",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x121b1531102666334764056d2e0707a8fae7dc61182068a46ce95b30b6fd259a",
         "weight": 13108
@@ -645,7 +685,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 41,
@@ -662,6 +703,7 @@
         "nullifier": "0x2bf7d317f8cb9f34878f7544b4a8053b574550104c043bed3dfebfa523ce21eb",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x17926b05a1ff5e94aaa122449362ab5ee6d22e5fd5a9d477d8c3a407330b694c",
         "weight": 10923
@@ -677,7 +719,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 41,
@@ -693,7 +736,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1b0f80b982fb6f4f63dba0a5f5206a50754645bda3c6a1793b80dd101a3f8bc8",
         "overshoot": 0,
-        "remaining": 3,
+        "remaining": 1,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0ab930952604cb1e6059ad3b4052e0b2aaf55ab88d2565a69f1dd442b39f78f2",
         "weight": 65536
@@ -709,7 +753,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 41,
@@ -725,7 +770,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1e8a585956b612996aaaf74faff045db474b21504df5cbca9624d385cf90a048",
         "overshoot": 0,
-        "remaining": 2,
+        "remaining": 1,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x11bd8bacb4f82a33286ab5a2fe49922b46f5ee08cb2f8aca25d698997630e46c",
         "weight": 65536
@@ -741,7 +787,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 41,
@@ -758,6 +805,7 @@
         "nullifier": "0x06f9316d2e00c15535925c057acb25ffa4448d6ca4a0322c25af6627106d44c0",
         "overshoot": 0,
         "remaining": 1,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x02c152823e862b364a3f5d5d1b113b0a463ec7b75e9612f0e1af25ea6267d09d",
         "weight": 32768
@@ -773,7 +821,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 41,
@@ -790,6 +839,7 @@
         "nullifier": "0x249f5d4f398146838d28dc62c352ce3877428a1bdd68dd51b4d4148d87d6c432",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x2651c74b417e5e9ab0cf1d886c3e46b7ad5896ab27135839003ebddb02517dd8",
         "weight": 21846
@@ -805,7 +855,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 80,
@@ -822,6 +873,7 @@
         "nullifier": "0x2384292f32c1e1fc2d800ed34914362a0264d0267b1b6b6764c2d90962882d5e",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x07202f16a128e6ddb38264fe4a6c745e878f4e6c06671255e9823f4040943ac2",
         "weight": 16384
@@ -837,7 +889,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 80,
@@ -853,7 +906,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x2113666abe1363f183088e1818f386592d2078416a4c883066b7a5d58c758430",
         "overshoot": 0,
-        "remaining": 3,
+        "remaining": 1,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2c319089182be5fa49c66640b1120fac6eb02556807f4a839a4446f7add7c951",
         "weight": 13108
@@ -869,7 +923,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 80,
@@ -885,7 +940,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x276ed9c3f2337c4a44d7288ec60b7fe7ab05fdfc1bd3881094813067d0e4b6d8",
         "overshoot": 0,
-        "remaining": 2,
+        "remaining": 1,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0697901e0564a2b1b7dc7524f23e361dfb78c4f393c78bc3eb3ba4b32afd5ce6",
         "weight": 10923
@@ -901,7 +957,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 80,
@@ -918,6 +975,7 @@
         "nullifier": "0x2e417fe3e3a078e1b2879fa4010632bc1cc45efd80c03260a7ad90699e935dc7",
         "overshoot": 0,
         "remaining": 1,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x067e19b156a20c23638723e5de19d4e306836968b461f59b3664aff695a4749f",
         "weight": 65536
@@ -933,7 +991,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 80,
@@ -950,6 +1009,7 @@
         "nullifier": "0x1c54c26fc72e5fbf0335c7852d333e7c8c0c80dd37edb768b99877858d8d3aea",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x1b82253545f247922b1aa66bd8eabbe476ff30c219a0480c779a03a5aad048fd",
         "weight": 65536
@@ -965,7 +1025,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 400,
@@ -982,6 +1043,7 @@
         "nullifier": "0x1905e7488ea7578fbf8a0ce5eae448a45d46d37a8516022203d3503d49c76c19",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x2d024dfebf4262f890ebf5d7376dab7db72a5f5a0e80ab0b3bd5989298114649",
         "weight": 32768
@@ -997,7 +1059,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 400,
@@ -1013,7 +1076,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x229dff791027f446fe7a3964c6f0fdf32a886da1fa799cb5416688aaa1789e60",
         "overshoot": 0,
-        "remaining": 3,
+        "remaining": 1,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2eb25710bc29990f8a413279d8b902b35b7dd23761675065d98e8361f9efd2ff",
         "weight": 21846
@@ -1029,7 +1093,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 400,
@@ -1045,7 +1110,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0d2486bb0f1b121e54761706a633593ead600bc4908e7fb801762a73f39ddcc8",
         "overshoot": 0,
-        "remaining": 2,
+        "remaining": 1,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0339a452eeda77cf1d3396b5b366f8aff73ff3b91a34ad9fee2c799095c7d8af",
         "weight": 16384
@@ -1061,7 +1127,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 400,
@@ -1078,6 +1145,7 @@
         "nullifier": "0x052800fd2a41d9cc47df0eda28795e85245eb25dbad47b56021989138b6d741b",
         "overshoot": 0,
         "remaining": 1,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x1a33c84f154a801a37cc71917936d2c874aed2d03838e0d1880651c27224e00a",
         "weight": 13108
@@ -1093,7 +1161,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 400,
@@ -1110,6 +1179,7 @@
         "nullifier": "0x101b22b035942291d151ebc202f177ea8c635d99b2ce93c397d163a95c372b7d",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x0c6d7eb4c71fc4fc2c729fb1214036f37d655657e9d1fdb18acf179b6fdab8e2",
         "weight": 10923
@@ -1125,7 +1195,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 1,
@@ -1142,6 +1213,7 @@
         "nullifier": "0x18059c097e24879092b21eb3bf2684f71423f4aef9957ae0cd40ff6396993d0f",
         "overshoot": 0,
         "remaining": 50,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x085e38c4e68888c4595b78adeab022af0e3c8b6255efdd83ac22d8bbea25f830",
         "weight": 65536
@@ -1157,7 +1229,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 1,
@@ -1173,7 +1246,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0d1d0db3536b666297298886765a65b1629203255d96df89d9aabeed85f4e21d",
         "overshoot": 0,
-        "remaining": 50,
+        "remaining": 48,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2a64cc915bd7a94cf0225654f4be2124196b2db60758d99b203f417467797633",
         "weight": 65536
@@ -1189,7 +1263,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 1,
@@ -1205,7 +1280,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x26a2f0ecf4098c489af07fb43a8ea65fa9a94ee6b45e0d959761ba5dd7b3bb7a",
         "overshoot": 0,
-        "remaining": 49,
+        "remaining": 48,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x00efe3c5651986e4e4bf9f79ea1b78708bec6a3c838b7ab7ae9984efc2c32b7f",
         "weight": 32768
@@ -1221,7 +1297,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 1,
@@ -1238,6 +1315,7 @@
         "nullifier": "0x1006d9fed36703b3011108c5122a4bf98b0d76efdd463405809a43c15e8d6274",
         "overshoot": 0,
         "remaining": 48,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x14e3ae03f2c54869315e497b6b1130ccbd58f1815a1ca0c21e357ae63eda440f",
         "weight": 21846
@@ -1253,7 +1331,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 1,
@@ -1270,6 +1349,7 @@
         "nullifier": "0x1560aa5ad98930fa808570a0a384a97bcd2c64a769ef01189f0d91a008fe3199",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x2f8ab7cb6c2c8b6fbd1c42f62ef479401351838b084f0e6c1bc2fba96c487e6a",
         "weight": 16384
@@ -1285,7 +1365,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 3,
@@ -1302,6 +1383,7 @@
         "nullifier": "0x1999e07ea250fc96f393953a0a2a8fec45825fb972299380d4104e0a6dda0994",
         "overshoot": 0,
         "remaining": 50,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x0acf347d5348be384016134738e8c107667d4cbc842de476a6dc3e1410b61d6d",
         "weight": 13108
@@ -1317,7 +1399,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 3,
@@ -1333,7 +1416,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0844ade7177f64bd59eba392cc4ccd4871c2c1a8609a177a5d161522c58b4603",
         "overshoot": 0,
-        "remaining": 50,
+        "remaining": 48,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0b45c51fc4875329c980d5730e45d2960692a6aaf9ba56a46c460040c19749e7",
         "weight": 10923
@@ -1349,7 +1433,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 3,
@@ -1365,7 +1450,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1455ac8f7916e8f9ca79e86ecef5ba8ad0a22b01879eb204ec05d740d86721ec",
         "overshoot": 0,
-        "remaining": 49,
+        "remaining": 48,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x15ec9dc9e25e3851b95922cbc22658588182a00e3f04f80ec80ad57da75efebe",
         "weight": 65536
@@ -1381,7 +1467,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 3,
@@ -1398,6 +1485,7 @@
         "nullifier": "0x05ccaf49506741df8e1e031d6c917cdcb704d4c7dac7f72021133bf000d467e9",
         "overshoot": 0,
         "remaining": 48,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x229d0f72b04b186c57902c2c6e1c3186f2f5722b1b2851f284d9523e644f2702",
         "weight": 65536
@@ -1413,7 +1501,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 3,
@@ -1430,6 +1519,7 @@
         "nullifier": "0x1ce292296502bc8a33246e11cb559101cb1d0b1b9d29b94bbb364f444e34146e",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x18c0d312747c6e6c0c83f85d53dc2b858d822692ed96c955f76ca0411a0f44fe",
         "weight": 32768
@@ -1445,7 +1535,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 8,
@@ -1462,6 +1553,7 @@
         "nullifier": "0x24a3fdd33970ad028cbe062126a8a18c2c141a86a1f2277350d2b8d5ec35c520",
         "overshoot": 0,
         "remaining": 50,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x0490aeef675bf2f4bf4c1c73c33d819e24f480a5098b63a1b3589664a4fb232d",
         "weight": 21846
@@ -1477,7 +1569,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 8,
@@ -1493,7 +1586,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1a73c6b9d25041245cf71d4e52e1ff946eac166fa8cf754482ccfb6363af1c27",
         "overshoot": 0,
-        "remaining": 50,
+        "remaining": 48,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0696876b4d1b5fb3220506e6fd8e49e88e7375cc532e195190b4dba6ad0678ba",
         "weight": 16384
@@ -1509,7 +1603,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 8,
@@ -1525,7 +1620,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1e0d5d6afa46c67262e8ef25637a55fcc5e67235d5e44e33f4a16503969236ef",
         "overshoot": 0,
-        "remaining": 49,
+        "remaining": 48,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x126a734458777e3f9f9d011e882bfdb7926efc40cd180b1ceda4f0becb9eec29",
         "weight": 13108
@@ -1541,7 +1637,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 8,
@@ -1558,6 +1655,7 @@
         "nullifier": "0x1a90bccbe98e0d8e5d1b3e3e9fbe1b5292dbd83ba190a946a99d9dadbe0d0bbb",
         "overshoot": 0,
         "remaining": 48,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0a9530fd70c6ddb82d1e6e6f8cefdc6d3714544ec5374425690c8afbbc4d32ee",
         "weight": 10923
@@ -1573,7 +1671,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 8,
@@ -1590,6 +1689,7 @@
         "nullifier": "0x11052a628a6e6d149e7f6541832bde685ab4844840d8358b6068d32c1733a01e",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x121b1531102666334764056d2e0707a8fae7dc61182068a46ce95b30b6fd259a",
         "weight": 65536
@@ -1605,7 +1705,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 24,
@@ -1622,6 +1723,7 @@
         "nullifier": "0x2bf7d317f8cb9f34878f7544b4a8053b574550104c043bed3dfebfa523ce21eb",
         "overshoot": 0,
         "remaining": 50,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x17926b05a1ff5e94aaa122449362ab5ee6d22e5fd5a9d477d8c3a407330b694c",
         "weight": 65536
@@ -1637,7 +1739,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 24,
@@ -1653,7 +1756,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1b0f80b982fb6f4f63dba0a5f5206a50754645bda3c6a1793b80dd101a3f8bc8",
         "overshoot": 0,
-        "remaining": 50,
+        "remaining": 48,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0ab930952604cb1e6059ad3b4052e0b2aaf55ab88d2565a69f1dd442b39f78f2",
         "weight": 32768
@@ -1669,7 +1773,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 24,
@@ -1685,7 +1790,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1e8a585956b612996aaaf74faff045db474b21504df5cbca9624d385cf90a048",
         "overshoot": 0,
-        "remaining": 49,
+        "remaining": 48,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x11bd8bacb4f82a33286ab5a2fe49922b46f5ee08cb2f8aca25d698997630e46c",
         "weight": 21846
@@ -1701,7 +1807,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 24,
@@ -1718,6 +1825,7 @@
         "nullifier": "0x06f9316d2e00c15535925c057acb25ffa4448d6ca4a0322c25af6627106d44c0",
         "overshoot": 0,
         "remaining": 48,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x02c152823e862b364a3f5d5d1b113b0a463ec7b75e9612f0e1af25ea6267d09d",
         "weight": 16384
@@ -1733,7 +1841,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 24,
@@ -1750,6 +1859,7 @@
         "nullifier": "0x249f5d4f398146838d28dc62c352ce3877428a1bdd68dd51b4d4148d87d6c432",
         "overshoot": 1,
         "remaining": 0,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x2651c74b417e5e9ab0cf1d886c3e46b7ad5896ab27135839003ebddb02517dd8",
         "weight": 13108
@@ -1765,7 +1875,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 41,
@@ -1782,6 +1893,7 @@
         "nullifier": "0x2384292f32c1e1fc2d800ed34914362a0264d0267b1b6b6764c2d90962882d5e",
         "overshoot": 0,
         "remaining": 82,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x07202f16a128e6ddb38264fe4a6c745e878f4e6c06671255e9823f4040943ac2",
         "weight": 10923
@@ -1797,7 +1909,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 41,
@@ -1813,7 +1926,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x2113666abe1363f183088e1818f386592d2078416a4c883066b7a5d58c758430",
         "overshoot": 0,
-        "remaining": 82,
+        "remaining": 80,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2c319089182be5fa49c66640b1120fac6eb02556807f4a839a4446f7add7c951",
         "weight": 65536
@@ -1829,7 +1943,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 41,
@@ -1845,7 +1960,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x276ed9c3f2337c4a44d7288ec60b7fe7ab05fdfc1bd3881094813067d0e4b6d8",
         "overshoot": 0,
-        "remaining": 81,
+        "remaining": 80,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0697901e0564a2b1b7dc7524f23e361dfb78c4f393c78bc3eb3ba4b32afd5ce6",
         "weight": 65536
@@ -1861,7 +1977,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 41,
@@ -1878,6 +1995,7 @@
         "nullifier": "0x2e417fe3e3a078e1b2879fa4010632bc1cc45efd80c03260a7ad90699e935dc7",
         "overshoot": 0,
         "remaining": 80,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x067e19b156a20c23638723e5de19d4e306836968b461f59b3664aff695a4749f",
         "weight": 32768
@@ -1893,7 +2011,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 41,
@@ -1909,7 +2028,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1c54c26fc72e5fbf0335c7852d333e7c8c0c80dd37edb768b99877858d8d3aea",
         "overshoot": 0,
-        "remaining": 22,
+        "remaining": 19,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x1b82253545f247922b1aa66bd8eabbe476ff30c219a0480c779a03a5aad048fd",
         "weight": 21846
@@ -1925,7 +2045,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 80,
@@ -1942,6 +2063,7 @@
         "nullifier": "0x1905e7488ea7578fbf8a0ce5eae448a45d46d37a8516022203d3503d49c76c19",
         "overshoot": 0,
         "remaining": 100,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x2d024dfebf4262f890ebf5d7376dab7db72a5f5a0e80ab0b3bd5989298114649",
         "weight": 16384
@@ -1957,7 +2079,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 80,
@@ -1973,7 +2096,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x229dff791027f446fe7a3964c6f0fdf32a886da1fa799cb5416688aaa1789e60",
         "overshoot": 0,
-        "remaining": 100,
+        "remaining": 98,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2eb25710bc29990f8a413279d8b902b35b7dd23761675065d98e8361f9efd2ff",
         "weight": 13108
@@ -1989,7 +2113,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 80,
@@ -2005,7 +2130,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0d2486bb0f1b121e54761706a633593ead600bc4908e7fb801762a73f39ddcc8",
         "overshoot": 0,
-        "remaining": 99,
+        "remaining": 98,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0339a452eeda77cf1d3396b5b366f8aff73ff3b91a34ad9fee2c799095c7d8af",
         "weight": 10923
@@ -2021,7 +2147,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 80,
@@ -2038,6 +2165,7 @@
         "nullifier": "0x052800fd2a41d9cc47df0eda28795e85245eb25dbad47b56021989138b6d741b",
         "overshoot": 0,
         "remaining": 98,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x1a33c84f154a801a37cc71917936d2c874aed2d03838e0d1880651c27224e00a",
         "weight": 65536
@@ -2053,7 +2181,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 80,
@@ -2069,7 +2198,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x101b22b035942291d151ebc202f177ea8c635d99b2ce93c397d163a95c372b7d",
         "overshoot": 0,
-        "remaining": 40,
+        "remaining": 37,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x0c6d7eb4c71fc4fc2c729fb1214036f37d655657e9d1fdb18acf179b6fdab8e2",
         "weight": 65536
@@ -2085,7 +2215,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 400,
@@ -2102,6 +2233,7 @@
         "nullifier": "0x18059c097e24879092b21eb3bf2684f71423f4aef9957ae0cd40ff6396993d0f",
         "overshoot": 0,
         "remaining": 100,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x085e38c4e68888c4595b78adeab022af0e3c8b6255efdd83ac22d8bbea25f830",
         "weight": 32768
@@ -2117,7 +2249,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 400,
@@ -2133,7 +2266,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0d1d0db3536b666297298886765a65b1629203255d96df89d9aabeed85f4e21d",
         "overshoot": 0,
-        "remaining": 100,
+        "remaining": 98,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2a64cc915bd7a94cf0225654f4be2124196b2db60758d99b203f417467797633",
         "weight": 21846
@@ -2149,7 +2283,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 400,
@@ -2165,7 +2300,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x26a2f0ecf4098c489af07fb43a8ea65fa9a94ee6b45e0d959761ba5dd7b3bb7a",
         "overshoot": 0,
-        "remaining": 99,
+        "remaining": 98,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x00efe3c5651986e4e4bf9f79ea1b78708bec6a3c838b7ab7ae9984efc2c32b7f",
         "weight": 16384
@@ -2181,7 +2317,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 400,
@@ -2198,6 +2335,7 @@
         "nullifier": "0x1006d9fed36703b3011108c5122a4bf98b0d76efdd463405809a43c15e8d6274",
         "overshoot": 0,
         "remaining": 98,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x14e3ae03f2c54869315e497b6b1130ccbd58f1815a1ca0c21e357ae63eda440f",
         "weight": 13108
@@ -2213,7 +2351,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 400,
@@ -2229,7 +2368,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1560aa5ad98930fa808570a0a384a97bcd2c64a769ef01189f0d91a008fe3199",
         "overshoot": 0,
-        "remaining": 40,
+        "remaining": 37,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x2f8ab7cb6c2c8b6fbd1c42f62ef479401351838b084f0e6c1bc2fba96c487e6a",
         "weight": 10923
@@ -2245,7 +2385,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 1,
@@ -2262,6 +2403,7 @@
         "nullifier": "0x1999e07ea250fc96f393953a0a2a8fec45825fb972299380d4104e0a6dda0994",
         "overshoot": 0,
         "remaining": 500,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x0acf347d5348be384016134738e8c107667d4cbc842de476a6dc3e1410b61d6d",
         "weight": 65536
@@ -2277,7 +2419,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 1,
@@ -2293,7 +2436,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0844ade7177f64bd59eba392cc4ccd4871c2c1a8609a177a5d161522c58b4603",
         "overshoot": 0,
-        "remaining": 500,
+        "remaining": 498,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0b45c51fc4875329c980d5730e45d2960692a6aaf9ba56a46c460040c19749e7",
         "weight": 65536
@@ -2309,7 +2453,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 1,
@@ -2325,7 +2470,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1455ac8f7916e8f9ca79e86ecef5ba8ad0a22b01879eb204ec05d740d86721ec",
         "overshoot": 0,
-        "remaining": 499,
+        "remaining": 498,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x15ec9dc9e25e3851b95922cbc22658588182a00e3f04f80ec80ad57da75efebe",
         "weight": 32768
@@ -2341,7 +2487,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 1,
@@ -2358,6 +2505,7 @@
         "nullifier": "0x05ccaf49506741df8e1e031d6c917cdcb704d4c7dac7f72021133bf000d467e9",
         "overshoot": 0,
         "remaining": 498,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x229d0f72b04b186c57902c2c6e1c3186f2f5722b1b2851f284d9523e644f2702",
         "weight": 21846
@@ -2373,7 +2521,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 1,
@@ -2389,7 +2538,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1ce292296502bc8a33246e11cb559101cb1d0b1b9d29b94bbb364f444e34146e",
         "overshoot": 0,
-        "remaining": 440,
+        "remaining": 437,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x18c0d312747c6e6c0c83f85d53dc2b858d822692ed96c955f76ca0411a0f44fe",
         "weight": 16384
@@ -2405,7 +2555,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 3,
@@ -2422,6 +2573,7 @@
         "nullifier": "0x24a3fdd33970ad028cbe062126a8a18c2c141a86a1f2277350d2b8d5ec35c520",
         "overshoot": 0,
         "remaining": 500,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x0490aeef675bf2f4bf4c1c73c33d819e24f480a5098b63a1b3589664a4fb232d",
         "weight": 13108
@@ -2437,7 +2589,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 3,
@@ -2453,7 +2606,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1a73c6b9d25041245cf71d4e52e1ff946eac166fa8cf754482ccfb6363af1c27",
         "overshoot": 0,
-        "remaining": 500,
+        "remaining": 498,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0696876b4d1b5fb3220506e6fd8e49e88e7375cc532e195190b4dba6ad0678ba",
         "weight": 10923
@@ -2469,7 +2623,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 3,
@@ -2485,7 +2640,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1e0d5d6afa46c67262e8ef25637a55fcc5e67235d5e44e33f4a16503969236ef",
         "overshoot": 0,
-        "remaining": 499,
+        "remaining": 498,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x126a734458777e3f9f9d011e882bfdb7926efc40cd180b1ceda4f0becb9eec29",
         "weight": 65536
@@ -2501,7 +2657,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 3,
@@ -2518,6 +2675,7 @@
         "nullifier": "0x1a90bccbe98e0d8e5d1b3e3e9fbe1b5292dbd83ba190a946a99d9dadbe0d0bbb",
         "overshoot": 0,
         "remaining": 498,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0a9530fd70c6ddb82d1e6e6f8cefdc6d3714544ec5374425690c8afbbc4d32ee",
         "weight": 65536
@@ -2533,7 +2691,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 3,
@@ -2549,7 +2708,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x11052a628a6e6d149e7f6541832bde685ab4844840d8358b6068d32c1733a01e",
         "overshoot": 0,
-        "remaining": 440,
+        "remaining": 437,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x121b1531102666334764056d2e0707a8fae7dc61182068a46ce95b30b6fd259a",
         "weight": 32768
@@ -2565,7 +2725,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 8,
@@ -2582,6 +2743,7 @@
         "nullifier": "0x2bf7d317f8cb9f34878f7544b4a8053b574550104c043bed3dfebfa523ce21eb",
         "overshoot": 0,
         "remaining": 500,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x17926b05a1ff5e94aaa122449362ab5ee6d22e5fd5a9d477d8c3a407330b694c",
         "weight": 21846
@@ -2597,7 +2759,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 8,
@@ -2613,7 +2776,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1b0f80b982fb6f4f63dba0a5f5206a50754645bda3c6a1793b80dd101a3f8bc8",
         "overshoot": 0,
-        "remaining": 500,
+        "remaining": 498,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0ab930952604cb1e6059ad3b4052e0b2aaf55ab88d2565a69f1dd442b39f78f2",
         "weight": 16384
@@ -2629,7 +2793,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 8,
@@ -2645,7 +2810,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1e8a585956b612996aaaf74faff045db474b21504df5cbca9624d385cf90a048",
         "overshoot": 0,
-        "remaining": 499,
+        "remaining": 498,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x11bd8bacb4f82a33286ab5a2fe49922b46f5ee08cb2f8aca25d698997630e46c",
         "weight": 13108
@@ -2661,7 +2827,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 8,
@@ -2678,6 +2845,7 @@
         "nullifier": "0x06f9316d2e00c15535925c057acb25ffa4448d6ca4a0322c25af6627106d44c0",
         "overshoot": 0,
         "remaining": 498,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x02c152823e862b364a3f5d5d1b113b0a463ec7b75e9612f0e1af25ea6267d09d",
         "weight": 10923
@@ -2693,7 +2861,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 8,
@@ -2709,7 +2878,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x249f5d4f398146838d28dc62c352ce3877428a1bdd68dd51b4d4148d87d6c432",
         "overshoot": 0,
-        "remaining": 440,
+        "remaining": 437,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x2651c74b417e5e9ab0cf1d886c3e46b7ad5896ab27135839003ebddb02517dd8",
         "weight": 65536
@@ -2725,7 +2895,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 24,
@@ -2742,6 +2913,7 @@
         "nullifier": "0x2384292f32c1e1fc2d800ed34914362a0264d0267b1b6b6764c2d90962882d5e",
         "overshoot": 0,
         "remaining": 600,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x07202f16a128e6ddb38264fe4a6c745e878f4e6c06671255e9823f4040943ac2",
         "weight": 65536
@@ -2757,7 +2929,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 24,
@@ -2773,7 +2946,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x2113666abe1363f183088e1818f386592d2078416a4c883066b7a5d58c758430",
         "overshoot": 0,
-        "remaining": 600,
+        "remaining": 598,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2c319089182be5fa49c66640b1120fac6eb02556807f4a839a4446f7add7c951",
         "weight": 32768
@@ -2789,7 +2963,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 24,
@@ -2805,7 +2980,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x276ed9c3f2337c4a44d7288ec60b7fe7ab05fdfc1bd3881094813067d0e4b6d8",
         "overshoot": 0,
-        "remaining": 599,
+        "remaining": 598,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0697901e0564a2b1b7dc7524f23e361dfb78c4f393c78bc3eb3ba4b32afd5ce6",
         "weight": 21846
@@ -2821,7 +2997,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 24,
@@ -2838,6 +3015,7 @@
         "nullifier": "0x2e417fe3e3a078e1b2879fa4010632bc1cc45efd80c03260a7ad90699e935dc7",
         "overshoot": 0,
         "remaining": 598,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x067e19b156a20c23638723e5de19d4e306836968b461f59b3664aff695a4749f",
         "weight": 16384
@@ -2853,7 +3031,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 24,
@@ -2869,7 +3048,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1c54c26fc72e5fbf0335c7852d333e7c8c0c80dd37edb768b99877858d8d3aea",
         "overshoot": 0,
-        "remaining": 540,
+        "remaining": 537,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x1b82253545f247922b1aa66bd8eabbe476ff30c219a0480c779a03a5aad048fd",
         "weight": 13108
@@ -2885,7 +3065,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 41,
@@ -2902,6 +3083,7 @@
         "nullifier": "0x1905e7488ea7578fbf8a0ce5eae448a45d46d37a8516022203d3503d49c76c19",
         "overshoot": 0,
         "remaining": 1000,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x2d024dfebf4262f890ebf5d7376dab7db72a5f5a0e80ab0b3bd5989298114649",
         "weight": 10923
@@ -2917,7 +3099,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 41,
@@ -2933,7 +3116,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x229dff791027f446fe7a3964c6f0fdf32a886da1fa799cb5416688aaa1789e60",
         "overshoot": 0,
-        "remaining": 1000,
+        "remaining": 998,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2eb25710bc29990f8a413279d8b902b35b7dd23761675065d98e8361f9efd2ff",
         "weight": 65536
@@ -2949,7 +3133,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 41,
@@ -2965,7 +3150,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0d2486bb0f1b121e54761706a633593ead600bc4908e7fb801762a73f39ddcc8",
         "overshoot": 0,
-        "remaining": 999,
+        "remaining": 998,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x0339a452eeda77cf1d3396b5b366f8aff73ff3b91a34ad9fee2c799095c7d8af",
         "weight": 65536
@@ -2981,7 +3167,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 41,
@@ -2998,6 +3185,7 @@
         "nullifier": "0x052800fd2a41d9cc47df0eda28795e85245eb25dbad47b56021989138b6d741b",
         "overshoot": 0,
         "remaining": 998,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x1a33c84f154a801a37cc71917936d2c874aed2d03838e0d1880651c27224e00a",
         "weight": 32768
@@ -3013,7 +3201,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 41,
@@ -3029,7 +3218,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x101b22b035942291d151ebc202f177ea8c635d99b2ce93c397d163a95c372b7d",
         "overshoot": 0,
-        "remaining": 940,
+        "remaining": 937,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x0c6d7eb4c71fc4fc2c729fb1214036f37d655657e9d1fdb18acf179b6fdab8e2",
         "weight": 21846
@@ -3045,7 +3235,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 80,
@@ -3062,6 +3253,7 @@
         "nullifier": "0x18059c097e24879092b21eb3bf2684f71423f4aef9957ae0cd40ff6396993d0f",
         "overshoot": 0,
         "remaining": 1000,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x085e38c4e68888c4595b78adeab022af0e3c8b6255efdd83ac22d8bbea25f830",
         "weight": 16384
@@ -3077,7 +3269,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 80,
@@ -3093,7 +3286,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0d1d0db3536b666297298886765a65b1629203255d96df89d9aabeed85f4e21d",
         "overshoot": 0,
-        "remaining": 1000,
+        "remaining": 998,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x2a64cc915bd7a94cf0225654f4be2124196b2db60758d99b203f417467797633",
         "weight": 13108
@@ -3109,7 +3303,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 80,
@@ -3125,7 +3320,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x26a2f0ecf4098c489af07fb43a8ea65fa9a94ee6b45e0d959761ba5dd7b3bb7a",
         "overshoot": 0,
-        "remaining": 999,
+        "remaining": 998,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x00efe3c5651986e4e4bf9f79ea1b78708bec6a3c838b7ab7ae9984efc2c32b7f",
         "weight": 10923
@@ -3141,7 +3337,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 80,
@@ -3158,6 +3355,7 @@
         "nullifier": "0x1006d9fed36703b3011108c5122a4bf98b0d76efdd463405809a43c15e8d6274",
         "overshoot": 0,
         "remaining": 998,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x14e3ae03f2c54869315e497b6b1130ccbd58f1815a1ca0c21e357ae63eda440f",
         "weight": 65536
@@ -3173,7 +3371,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 80,
@@ -3189,7 +3388,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1560aa5ad98930fa808570a0a384a97bcd2c64a769ef01189f0d91a008fe3199",
         "overshoot": 0,
-        "remaining": 940,
+        "remaining": 937,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x2f8ab7cb6c2c8b6fbd1c42f62ef479401351838b084f0e6c1bc2fba96c487e6a",
         "weight": 65536
@@ -3205,7 +3405,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 0
+        "proven": 0,
+        "reserved": 0
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 400,
@@ -3222,6 +3423,7 @@
         "nullifier": "0x1999e07ea250fc96f393953a0a2a8fec45825fb972299380d4104e0a6dda0994",
         "overshoot": 0,
         "remaining": 1000,
+        "reserved": 0,
         "rewarded": 1,
         "tag": "0x0acf347d5348be384016134738e8c107667d4cbc842de476a6dc3e1410b61d6d",
         "weight": 32768
@@ -3237,7 +3439,8 @@
         "away": 0,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 2
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 400,
@@ -3253,7 +3456,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x0844ade7177f64bd59eba392cc4ccd4871c2c1a8609a177a5d161522c58b4603",
         "overshoot": 0,
-        "remaining": 1000,
+        "remaining": 998,
+        "reserved": 1,
         "rewarded": 1,
         "tag": "0x0b45c51fc4875329c980d5730e45d2960692a6aaf9ba56a46c460040c19749e7",
         "weight": 21846
@@ -3269,7 +3473,8 @@
         "away": 2,
         "bonus": 1,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 1
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 400,
@@ -3285,7 +3490,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1455ac8f7916e8f9ca79e86ecef5ba8ad0a22b01879eb204ec05d740d86721ec",
         "overshoot": 0,
-        "remaining": 999,
+        "remaining": 998,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x15ec9dc9e25e3851b95922cbc22658588182a00e3f04f80ec80ad57da75efebe",
         "weight": 16384
@@ -3301,7 +3507,8 @@
         "away": 3,
         "bonus": 2,
         "lost": 1,
-        "proven": 5
+        "proven": 5,
+        "reserved": 0
       },
       "bond": "0xa5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
       "cap": 400,
@@ -3318,6 +3525,7 @@
         "nullifier": "0x05ccaf49506741df8e1e031d6c917cdcb704d4c7dac7f72021133bf000d467e9",
         "overshoot": 0,
         "remaining": 998,
+        "reserved": 0,
         "rewarded": 2,
         "tag": "0x229d0f72b04b186c57902c2c6e1c3186f2f5722b1b2851f284d9523e644f2702",
         "weight": 13108
@@ -3333,7 +3541,8 @@
         "away": 60,
         "bonus": 0,
         "lost": 0,
-        "proven": 5
+        "proven": 5,
+        "reserved": 3
       },
       "bond": "0x0707070707070707070707070707070707070707070707070707070707070707",
       "cap": 400,
@@ -3349,7 +3558,8 @@
         "member_tag": "0x0c0de4c1a7d1fc5f8a0323ab1d75e03427c9dc71365700bfcdfd58062cd06830",
         "nullifier": "0x1ce292296502bc8a33246e11cb559101cb1d0b1b9d29b94bbb364f444e34146e",
         "overshoot": 0,
-        "remaining": 940,
+        "remaining": 937,
+        "reserved": 2,
         "rewarded": 1,
         "tag": "0x18c0d312747c6e6c0c83f85d53dc2b858d822692ed96c955f76ca0411a0f44fe",
         "weight": 10923

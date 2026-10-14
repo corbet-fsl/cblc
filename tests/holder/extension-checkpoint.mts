@@ -11,7 +11,7 @@ import { checkEnrollmentShape, copyEnrollmentCheckpoint, enrollmentRoot, verifyE
 
 const TOP = ['version','kind','extension','standing','community','owner','policyDigest','enrollmentRoot','now','accountVersion','commitment','opening','maps','slots','bondBook'];
 const OPENING = ['reserved','createdAt','blind','accepted','declined','punished','inbox','authorization','standing','voucher'];
-const VOUCHER = ['proven','away','lost','bonus','returned','answers','sponsor','bond'];
+const VOUCHER = ['proven','away','reserved','lost','bonus','returned','answers','sponsor','bond'];
 const BOND_ENTRY = ['limit','done','overshoot','punished_seen','rewards_seen'];
 const STANDING = ['g','a','c','pr','pg','lc','day'];
 const STANDING_PARAMS = ['c0','hA','hG','nHalf','nC','eQ','rMax','rAge','cMaxQ','cVet','ageVet','boostQ','boostDays','slopeQ','midQ','kappaQ','loanUseQ'];
