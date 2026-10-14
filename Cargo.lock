@@ -886,7 +886,7 @@ dependencies = [
 [[package]]
 name = "cwlt"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#1f4e4192571c20ca1daf2291f8990ae077979708"
+source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#c6702e7ecc066d816246cf1abd00f2557eaec47e"
 dependencies = [
  "cvfy",
  "czkp",
