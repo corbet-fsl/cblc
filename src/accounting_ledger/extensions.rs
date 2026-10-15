@@ -8,7 +8,7 @@ use crate::extensions::{
 
 impl<V: AccountProofVerifier> AccountLedger<V> {
     /// Certify a genuinely issued extension acceptance for an anonymous deposit.
-    /// The independent P-256 issuer key must match the pinned verifier manifest.
+    /// The issuer must be the ring's current key and the acceptance must lie in its period.
     /// Only an acceptance returned after the atomic commit can pass this check.
     pub fn certify_extended(
         &self,
@@ -25,7 +25,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         {
             return Err(Error::PolicyMismatch);
         }
-        Ok(state_certificate(accepted, issuer))
+        let certificates = self.current_issuer(issuer)?;
+        if czkp::issuer_keys::key_at(&certificates.ring, accepted.accepted_at)?
+            != issuer.public_key()
+        {
+            return Err(Error::PolicyMismatch);
+        }
+        Ok(state_certificate(accepted, &certificates.identity, issuer))
     }
     /// Pin a separate complete extension relation. Legacy handles then fail closed.
     /// Only host configuration may call this; never accept a verifier from a request.
@@ -128,7 +134,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     }
 
     /// Issue ancestry only inside the original verified update transaction.
-    /// The configured issuer key must be the one in the original proof manifest.
+    /// The configured issuer must be the current key of the recorded ring.
     pub fn apply_extended_certified(
         &mut self,
         grant: &AdmissionGrant,
@@ -170,7 +176,21 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         let now = clock();
         check_time(now, 0)?;
         let mut seen = std::collections::BTreeSet::new();
+        let certificates = self.certificates.clone().ok_or(Error::PolicyMismatch)?;
         for (deposit, proof) in batch {
+            let named = deposit
+                .issuer_key
+                .as_slice()
+                .try_into()
+                .map_err(|_| Error::InvalidInput)?;
+            // The deposit must name exactly one recorded period (retired keys included).
+            let period =
+                czkp::issuer_keys::period(&certificates.ring, &named, deposit.issuer_valid_from)?;
+            if period.until() != deposit.issuer_valid_until
+                || deposit.identity != certificates.identity
+            {
+                return Err(Error::PolicyMismatch);
+            }
             if deposit.community != self.community
                 || [
                     deposit.recipient,
@@ -612,9 +632,10 @@ mod tests;
 /// have already verified the acceptance and its community and proof scope.
 pub(super) fn state_certificate(
     accepted: &AccountAcceptance,
+    identity: &[u8; 32],
     issuer: &cssr::certificate::CertificateIssuer,
 ) -> crate::extensions::StateCertificate {
-    let signature = issuer.sign(&crate::certificates::accepted_state(accepted).bytes());
+    let signature = issuer.sign(&crate::certificates::accepted_state(accepted, identity).bytes());
     crate::extensions::StateCertificate {
         accepted_at: accepted.accepted_at,
         signature: signature.to_vec(),

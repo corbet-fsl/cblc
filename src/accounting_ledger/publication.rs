@@ -18,9 +18,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             .as_ref()
             .ok_or(Error::UnsupportedCapability)?;
         let binding = &extensions.artifact_binding;
-        if binding.certificate_key.as_slice() != issuer.public_key() {
-            return Err(Error::PolicyMismatch);
-        }
+        let certificates = self.current_issuer(issuer)?.clone();
         let mut transaction = self.connection.transaction()?;
         check_config(&mut transaction, &self.config)?;
         check_extension_config(&mut transaction, Some(extensions))?;
@@ -50,7 +48,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             proof_scope: extensions.verifier.scope(),
             manifest_sha256: binding.manifest_sha256,
             account_response_key: self.operator.verifying_key().to_bytes(),
-            certificate_key: binding.certificate_key.to_vec(),
+            certificate_keys: certificates.ring,
+            community_identity: certificates.identity,
             settlement,
             record_epoch,
             wave_verifier: None,

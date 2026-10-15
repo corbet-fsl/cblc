@@ -62,11 +62,13 @@ pub struct StateCertificate {
 }
 impl StateCertificate {
     /// Verify this certificate for exactly the given operator acceptance: its time
-    /// must be the acceptance time and the signature must cover the accepted state.
+    /// must be the acceptance time, the signature must cover the accepted state bound to
+    /// `identity`, and it must be made by the ring key whose period holds that time.
     pub fn verify(
         &self,
         accepted: &crate::accounting::AccountAcceptance,
-        key: &[u8; 64],
+        identity: &[u8; 32],
+        ring: &[czkp::issuer_keys::CertificateKeyPeriod],
     ) -> Result<(), Error> {
         let signature: [u8; 64] = self
             .signature
@@ -76,7 +78,11 @@ impl StateCertificate {
         if self.accepted_at != accepted.accepted_at {
             return Err(Error::Replay);
         }
-        crate::certificates::accepted_state(accepted).verify(key, &signature)
+        czkp::issuer_keys::verify_accepted(
+            ring,
+            &crate::certificates::accepted_state(accepted, identity),
+            &signature,
+        )
     }
 }
 /// Issuer evidence for an accepted extended request, returned with a status lookup
@@ -203,6 +209,13 @@ pub struct Deposit {
     /// Coarse release horizon. The circuit proves acceptance preceded it by the configured delay.
     pub release_epoch: u64,
     pub community: [u8; 32],
+    /// The community identity the hidden certificate binds (never the address).
+    pub identity: [u8; 32],
+    /// The issuer key that signed the hidden certificate and the exact period of the
+    /// published ring it names; the relation proves the acceptance time lies inside it.
+    pub issuer_key: Vec<u8>,
+    pub issuer_valid_from: u64,
+    pub issuer_valid_until: u64,
     pub recipient: [u8; 32],
     pub nullifier: [u8; 32],
     pub authorization_nullifier: [u8; 32],

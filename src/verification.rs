@@ -51,7 +51,6 @@ impl Budget {
 /// Deposit and record circuits share the same anonymous admission pool.
 pub struct NativeExtensionVerifier {
     scope: AccountProofScope,
-    issuer: [u8; 64],
     pub(crate) artifact_binding: crate::artifacts::ArtifactBinding,
     updates: cvfy::NativeVerifier,
     deposits: cvfy::NativeVerifier,
@@ -107,7 +106,6 @@ impl NativeExtensionVerifier {
         let [updates, deposits, records] = artifacts.configs(updates, anonymous);
         Ok(Self {
             scope: artifacts.scope(),
-            issuer: artifacts.issuer,
             artifact_binding: artifacts.binding(),
             updates: cvfy::NativeVerifier::new(updates)?,
             deposits: cvfy::NativeVerifier::with_capacity(deposits, capacity.clone())?,
@@ -137,8 +135,7 @@ impl ExtensionVerifier for NativeExtensionVerifier {
             return Err(Error::InvalidInput);
         }
         let deadline = std::time::Instant::now() + self.update_timeout;
-        let prepared =
-            crate::prepared::extension_proofs(statement, proof, &self.issuer, &self.scope)?;
+        let prepared = crate::prepared::extension_proofs(statement, proof, &self.scope)?;
         let requests: Vec<_> = prepared
             .iter()
             .map(|p| (p.inputs.as_slice(), p.proof.as_slice()))
@@ -160,8 +157,7 @@ impl ExtensionVerifier for NativeExtensionVerifier {
             ExtensionStatement::Update { .. } => return Err(Error::InvalidInput),
         };
         let deadline = std::time::Instant::now() + self.anonymous_timeout;
-        let prepared =
-            crate::prepared::extension_proofs(statement, proof, &self.issuer, &self.scope)?;
+        let prepared = crate::prepared::extension_proofs(statement, proof, &self.scope)?;
         let requests: Vec<_> = prepared
             .iter()
             .map(|p| (p.inputs.as_slice(), p.proof.as_slice()))

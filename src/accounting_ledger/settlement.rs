@@ -65,10 +65,9 @@ pub(super) struct VerifiedDepositFact {
 
 fn binding(extensions: &Extensions) -> Result<[u8; 32], Error> {
     let bytes = serde_json::to_vec(&(
-        "cblc.settlement.native-binding.v1",
+        "cblc.settlement.native-binding.v2",
         &extensions.config,
         &extensions.artifact_binding.manifest_sha256,
-        extensions.artifact_binding.certificate_key.as_slice(),
     ))
     .map_err(|_| Error::Storage)?;
     Ok(Sha256::digest(bytes).into())

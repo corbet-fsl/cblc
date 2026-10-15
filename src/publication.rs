@@ -35,8 +35,11 @@ pub struct PublicVerifierMaterial {
     pub proof_scope: AccountProofScope,
     pub manifest_sha256: [u8; 32],
     pub account_response_key: [u8; 32],
-    /// Uncompressed affine coordinates, matching the existing manifest encoding.
-    pub certificate_key: Vec<u8>,
+    /// Every certificate issuer key with the period it signed in (retired keys stay), so
+    /// verifiers judge a certificate by its acceptance time; artifacts pin no issuer key.
+    pub certificate_keys: Vec<czkp::issuer_keys::CertificateKeyPeriod>,
+    /// The community identity (founding fingerprint) accepted-state certificates bind.
+    pub community_identity: [u8; 32],
     /// Original common outcome context and effective current issuance authority.
     /// Missing legacy data confers no G5 capability; configured hosts require it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -64,7 +67,8 @@ pub struct WaveVerifierDescriptor {
     pub community: [u8; 32],
     pub extension: ExtensionPolicy,
     pub proof_scope: AccountProofScope,
-    pub certificate_key: Vec<u8>,
+    pub certificate_keys: Vec<czkp::issuer_keys::CertificateKeyPeriod>,
+    pub community_identity: [u8; 32],
     pub manifest_sha256: [u8; 32],
     /// The account state policy digest (`AccountPolicy::state_digest`).
     pub state_policy: [u8; 32],
@@ -74,7 +78,7 @@ pub struct WaveVerifierDescriptor {
 
 impl PublicVerifierMaterial {
     /// Derive the Wave verifier policy from the published material alone: community,
-    /// extension policy, account proof scope, issuer key and manifest pin as published,
+    /// extension policy, account proof scope, issuer key ring, identity and manifest pin,
     /// the state policy from the account policy, and the account policy's validity window.
     pub fn wave_policy(&self) -> Result<WaveVerifierDescriptor, Error> {
         let community: [u8; 32] = Sha256::digest(self.community.as_bytes()).into();
@@ -82,7 +86,8 @@ impl PublicVerifierMaterial {
             community,
             extension: self.extension_policy.clone(),
             proof_scope: self.proof_scope.clone(),
-            certificate_key: self.certificate_key.clone(),
+            certificate_keys: self.certificate_keys.clone(),
+            community_identity: self.community_identity,
             manifest_sha256: self.manifest_sha256,
             state_policy: self.policy.account.state_digest(&community)?,
             valid_from: self.policy.account.policy_valid_from,
@@ -113,7 +118,16 @@ impl PublicVerifierMaterial {
             || self.proof_scope.verifying_key_digest == [0; 32]
             || self.manifest_sha256 == [0; 32]
             || self.account_response_key == [0; 32]
-            || self.certificate_key.len() != 64
+            || self.community_identity == [0; 32]
+        {
+            return Err(Error::InvalidInput);
+        }
+        czkp::issuer_keys::validate(&self.certificate_keys)?;
+        // The status publishes a current issuer: the last period is open.
+        if self
+            .certificate_keys
+            .last()
+            .is_some_and(|p| p.valid_until.is_some())
         {
             return Err(Error::InvalidInput);
         }

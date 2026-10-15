@@ -46,6 +46,8 @@ struct Manifest {
     vk_sha256: String,
     num_points: usize,
     setup: Vec<Setup>,
+    /// Former pin of the certificate issuer key. The issuer key ring lives in the signed
+    /// verifier status now, so a manifest that still pins a key is refused.
     issuer_key: Option<Vec<u8>>,
 }
 
@@ -204,6 +206,7 @@ fn material(bytes: &ArtifactBytes<'_>, extension: bool) -> Result<(Material, Man
         || manifest.num_points > maximum / 32
         || (!extension && manifest.num_points > 9 * 131072)
         || manifest.setup.len() != 2
+        || manifest.issuer_key.is_some()
     {
         return Err(Error::InvalidInput);
     }
@@ -281,11 +284,11 @@ struct Keys {
     voucher_epoch: Option<String>,
 }
 
-/// Immutable extension group, including the pinned certificate issuer key.
+/// Immutable extension group: circuits and verifying keys only. The certificate issuer
+/// keys are published as a ring in the signed verifier status, never pinned here.
 #[derive(Clone)]
 pub struct ExtensionArtifacts {
     material: Material,
-    pub(crate) issuer: [u8; 64],
     keys: [Vec<u8>; 3],
     record_epoch_key: Option<Vec<u8>>,
     voucher_epoch_key: Option<Vec<u8>>,
@@ -305,17 +308,11 @@ struct Widths {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ArtifactBinding {
     pub manifest_sha256: [u8; 32],
-    pub certificate_key: [u8; 64],
 }
 
 impl ExtensionArtifacts {
     pub fn authenticate(bytes: ArtifactBytes<'_>) -> Result<Self, Error> {
-        let (material, manifest) = material(&bytes, true)?;
-        let issuer = manifest
-            .issuer_key
-            .ok_or(Error::InvalidInput)?
-            .try_into()
-            .map_err(|_| Error::InvalidInput)?;
+        let (material, _) = material(&bytes, true)?;
         let keys: Keys = serde_json::from_slice(bytes.keys).map_err(|_| Error::InvalidInput)?;
         let mut decoded = [Vec::new(), Vec::new(), Vec::new()];
         for (target, text) in decoded
@@ -360,7 +357,6 @@ impl ExtensionArtifacts {
         };
         Ok(Self {
             material,
-            issuer,
             keys: decoded,
             record_epoch_key,
             voucher_epoch_key,
@@ -370,14 +366,13 @@ impl ExtensionArtifacts {
     pub fn scope(&self) -> AccountProofScope {
         self.material.scope.clone()
     }
-    /// Pin authenticated together with the group scope and issuer key.
+    /// Pin authenticated together with the group scope.
     pub fn manifest_sha256(&self) -> [u8; 32] {
         self.material.manifest_sha256
     }
     pub(crate) fn binding(&self) -> ArtifactBinding {
         ArtifactBinding {
             manifest_sha256: self.manifest_sha256(),
-            certificate_key: self.issuer,
         }
     }
     pub(crate) fn configs(
@@ -430,11 +425,10 @@ struct WaveKeys {
 }
 
 /// Immutable peer-release group: the `wave` and `outcome` relations on main's
-/// core, with the pinned certificate issuer key. It never joins the account group.
+/// core. It never joins the account group and pins no issuer key.
 #[derive(Clone)]
 pub struct WaveArtifacts {
     material: Material,
-    issuer: [u8; 64],
     wave_key: Vec<u8>,
     outcome_key: Vec<u8>,
     wave_width: usize,
@@ -443,12 +437,7 @@ pub struct WaveArtifacts {
 
 impl WaveArtifacts {
     pub fn authenticate(bytes: ArtifactBytes<'_>) -> Result<Self, Error> {
-        let (material, manifest) = material(&bytes, true)?;
-        let issuer = manifest
-            .issuer_key
-            .ok_or(Error::InvalidInput)?
-            .try_into()
-            .map_err(|_| Error::InvalidInput)?;
+        let (material, _) = material(&bytes, true)?;
         let keys: WaveKeys = serde_json::from_slice(bytes.keys).map_err(|_| Error::InvalidInput)?;
         let decode = |text: String| {
             if text.is_empty() {
@@ -461,7 +450,6 @@ impl WaveArtifacts {
         let widths = public_widths(bytes.circuit, &["wave", "outcome"])?;
         Ok(Self {
             material,
-            issuer,
             wave_key: decode(keys.wave)?,
             outcome_key: decode(keys.outcome)?,
             wave_width: widths["wave"],
@@ -473,9 +461,6 @@ impl WaveArtifacts {
     }
     pub fn manifest_sha256(&self) -> [u8; 32] {
         self.material.manifest_sha256
-    }
-    pub fn issuer_key(&self) -> [u8; 64] {
-        self.issuer
     }
     /// Verifier configuration for reservation evidence (public fields from the ABI).
     pub fn wave_config(&self, options: NativeVerifierOptions) -> cvfy::NativeVerifierConfig {

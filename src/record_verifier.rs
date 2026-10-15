@@ -254,7 +254,6 @@ impl View {
             || material.revision != balance.revision()
             || material.proof_scope != self.scope
             || material.manifest_sha256 != self.artifacts.manifest_sha256
-            || material.certificate_key.as_slice() != self.artifacts.certificate_key
         {
             return Err(Error::PolicyMismatch);
         }

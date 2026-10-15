@@ -225,11 +225,11 @@ fn update_proofs(
     Ok(prepared)
 }
 
-/// The issuer key and group digest are supplied only by authenticated artifacts.
+/// The group digest is supplied only by authenticated artifacts. A deposit names its
+/// issuer key period; the caller has matched it against the recorded ring first.
 pub(crate) fn extension_proofs(
     statement: &ExtensionStatement,
     proof: &[u8],
-    issuer: &[u8; 64],
     scope: &AccountProofScope,
 ) -> Result<Vec<PreparedProof>, Error> {
     let fields = match statement {
@@ -252,9 +252,24 @@ pub(crate) fn extension_proofs(
             ] {
                 czkp::field(value, true)?;
             }
-            bytes(&mut fields, issuer);
+            let issuer: [u8; 64] = deposit
+                .issuer_key
+                .as_slice()
+                .try_into()
+                .map_err(|_| Error::InvalidInput)?;
+            if deposit.issuer_valid_from == 0
+                || deposit.issuer_valid_until <= deposit.issuer_valid_from
+                || deposit.issuer_valid_until > czkp::MAX_INTEGER
+                || deposit.identity == [0; 32]
+            {
+                return Err(Error::InvalidInput);
+            }
+            bytes(&mut fields, &issuer);
+            fields.push(scalar(deposit.issuer_valid_from));
+            fields.push(scalar(deposit.issuer_valid_until));
             bytes(&mut fields, &scope.circuit_digest);
             bytes(&mut fields, &deposit.community);
+            bytes(&mut fields, &deposit.identity);
             bytes(&mut fields, &deposit.recipient);
             fields.push(scalar(deposit.release_epoch));
             for value in [

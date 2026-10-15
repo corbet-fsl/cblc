@@ -17,7 +17,6 @@ pub(super) struct ActivationAnchor {
     statement_sha256: [u8; 32],
     proof_sha256: [u8; 32],
     manifest_sha256: [u8; 32],
-    certificate_key: Vec<u8>,
 }
 
 impl ActivationAnchor {
@@ -27,12 +26,11 @@ impl ActivationAnchor {
         binding: &ArtifactBinding,
     ) -> Result<Self, Error> {
         Ok(Self {
-            format: "cblc.extension-activation.v1".into(),
+            format: "cblc.extension-activation.v2".into(),
             original_config: config.to_vec(),
             statement_sha256: Sha256::digest(statement_bytes(&activation.account)?).into(),
             proof_sha256: Sha256::digest(&activation.proof).into(),
             manifest_sha256: binding.manifest_sha256,
-            certificate_key: binding.certificate_key.to_vec(),
         })
     }
 

@@ -38,6 +38,7 @@ pub use admission_keys::{AdmissionKeyReconciliation, AdmissionKeyState, startup_
 mod enrollment;
 mod extension_activation;
 mod extensions;
+mod issuer;
 mod obligations;
 mod pin_change;
 pub mod record_epoch;
@@ -73,6 +74,9 @@ pub struct AccountLedger<V: AccountProofVerifier> {
     settlement: Option<settlement::Settlement>,
     observed_time: Arc<AtomicU64>,
     retention_days: u64,
+    /// The recorded certificate issuer key ring and the community identity certificates
+    /// bind; empty until the host configures its issuer.
+    certificates: Option<issuer::CertificateIssuance>,
 }
 
 impl AccountLedger<crate::accounting_service::NativeAccountVerifier> {
@@ -311,6 +315,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             extensions: None,
             settlement: None,
             observed_time: Arc::new(AtomicU64::new(0)),
+            certificates: None,
             retention_days: voucher::DEFAULT_RETENTION_DAYS,
         })
     }
@@ -375,12 +380,15 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         };
         let expected_scope =
             extension.map_or_else(|| self.proof_scope.clone(), |(e, _)| e.verifier.scope());
-        if let Some(issuer) = issuer
-            && extension
-                .is_none_or(|(e, _)| e.artifact_binding.certificate_key != issuer.public_key())
-        {
-            return Err(Error::PolicyMismatch);
-        }
+        let issuer_ring = match issuer {
+            Some(issuer) => {
+                if extension.is_none() {
+                    return Err(Error::PolicyMismatch);
+                }
+                Some(self.current_issuer(issuer)?.ring.clone())
+            }
+            None => None,
+        };
         if request.proof.len() > self.policy.max_proof_bytes {
             return Err(Error::InvalidInput);
         }
@@ -426,7 +434,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             if result.request_digest != request_digest {
                 return Err(Error::Replay);
             }
-            let ancestry = record_epoch::recover(&mut transaction, &result, issuer, &operator_key)?;
+            let ancestry = record_epoch::recover(
+                &mut transaction,
+                &result,
+                issuer.zip(issuer_ring.as_deref()),
+                &operator_key,
+            )?;
             transaction.commit_before(&CommitDeadline::new(
                 &clock,
                 now,
@@ -511,7 +524,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             if result.request_digest != request_digest {
                 return Err(Error::Replay);
             }
-            let ancestry = record_epoch::recover(&mut transaction, &result, issuer, &operator_key)?;
+            let ancestry = record_epoch::recover(
+                &mut transaction,
+                &result,
+                issuer.zip(issuer_ring.as_deref()),
+                &operator_key,
+            )?;
             transaction.commit_before(&CommitDeadline::new(
                 &clock,
                 completed,
@@ -648,6 +666,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         clock: impl Fn() -> u64,
     ) -> Result<AccountStatusResponse, Error> {
         let clock = observed_clock(self.observed_time.clone(), clock);
+        let issuance = issuer
+            .map(|issuer| self.current_issuer(issuer).cloned())
+            .transpose()?;
         let bytes = account_status_bytes(request)?;
         if request.community != self.community
             || decode::<32>(&grant.member_id)? != request.owner
@@ -693,19 +714,25 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             })
             .transpose()?
             .flatten();
-        let extended = match (&result, issuer, self.extensions.as_ref()) {
-            (Some(accepted), Some(issuer), Some(extensions))
+        let extended = match (&result, issuer, self.extensions.as_ref(), &issuance) {
+            (Some(accepted), Some(issuer), Some(extensions), Some(issuance))
                 if accepted.statement.community == self.community
-                    && accepted.proof_scope == extensions.verifier.scope() =>
+                    && accepted.proof_scope == extensions.verifier.scope()
+                    && czkp::issuer_keys::key_at(&issuance.ring, accepted.accepted_at)
+                        .is_ok_and(|key| key == issuer.public_key()) =>
             {
                 let ancestry = record_epoch::recover(
                     &mut transaction,
                     accepted,
-                    Some(issuer),
+                    Some((issuer, &issuance.ring)),
                     &self.operator.verifying_key().to_bytes(),
                 )?;
                 Some(crate::extensions::ExtendedEvidence {
-                    certificate: extensions::state_certificate(accepted, issuer),
+                    certificate: extensions::state_certificate(
+                        accepted,
+                        &issuance.identity,
+                        issuer,
+                    ),
                     ancestry: ancestry.map(Box::new),
                 })
             }

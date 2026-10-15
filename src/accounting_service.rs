@@ -89,10 +89,19 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
         })
     }
 
-    /// Operator-owned certificate key, authenticated by the extension manifest.
-    pub fn with_extension_issuer(mut self, issuer: cssr::certificate::CertificateIssuer) -> Self {
+    /// Operator-owned certificate key and the community identity its certificates bind.
+    /// The key becomes the open period of the recorded issuer key ring (the previous key is
+    /// retired, never removed), so rotating it is a configuration step without new artifacts.
+    pub fn with_extension_issuer(
+        mut self,
+        issuer: cssr::certificate::CertificateIssuer,
+        identity: [u8; 32],
+    ) -> Result<Self, Error> {
+        let now = (self.clock)();
+        self.ledger
+            .record_certificate_issuer(identity, issuer.public_key(), now)?;
         self.extension_issuer = Some(issuer);
-        self
+        Ok(self)
     }
 
     /// Immutable ledger scope for binding this service in the community host.

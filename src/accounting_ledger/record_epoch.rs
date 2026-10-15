@@ -151,10 +151,13 @@ pub(super) fn retain(
 pub(super) fn recover(
     tx: &mut Transaction<'_>,
     accepted: &AccountAcceptance,
-    issuer: Option<&cssr::certificate::CertificateIssuer>,
+    issuer: Option<(
+        &cssr::certificate::CertificateIssuer,
+        &[czkp::issuer_keys::CertificateKeyPeriod],
+    )>,
     record_key: &[u8; 32],
 ) -> Result<Option<crate::extensions::EpochAncestryCertificate>, Error> {
-    let Some(issuer) = issuer else {
+    let Some((issuer, ring)) = issuer else {
         return Ok(None);
     };
     let certificate: Option<crate::extensions::EpochAncestryCertificate> =
@@ -170,7 +173,10 @@ pub(super) fn recover(
             return Err(Error::Storage);
         }
         certificate
-            .verify(&issuer.public_key())
+            .verify(
+                &czkp::issuer_keys::key_at(ring, certificate.issued_at)
+                    .map_err(|_| Error::Storage)?,
+            )
             .map_err(|_| Error::Storage)?;
         if certificate.record.leaf.owner != certificate.owner
             || certificate.record.leaf.version > certificate.version
@@ -217,7 +223,6 @@ pub(super) fn certify(
         || lineage.epoch != descriptor.epoch
         || !lineage.consumed
         || descriptor.issuer_key != record_issuer.public_key()
-        || extensions.artifact_binding.certificate_key != issuer.public_key()
     {
         return Err(Error::PolicyMismatch);
     }
