@@ -237,6 +237,14 @@ fn recovery_binds_real_signatures_to_only_the_original_acceptance() {
     let leaf_commitment = leaf.commitment(&community, epoch).unwrap();
     let record_issuer = cssr::certificate::RecordIssuer::new(&[19; 32]);
     let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
+    let period = |key: &cssr::certificate::CertificateIssuer, from: u64, until: Option<u64>| {
+        czkp::issuer_keys::CertificateKeyPeriod {
+            public_key: key.public_key().to_vec(),
+            valid_from: from,
+            valid_until: until,
+        }
+    };
+    let ring = vec![period(&issuer, 1, None)];
     let policy = AccountPolicy {
         initial_credit: 3,
         maximum_available: 3,
@@ -307,13 +315,7 @@ fn recovery_binds_real_signatures_to_only_the_original_acceptance() {
             .is_none()
     );
     assert!(
-        recover(
-            &mut tx,
-            &accepted,
-            Some(&issuer),
-            &record_issuer.public_key()
-        )
-        .unwrap()
+        recover(&mut tx, &accepted, Some(&ring), &record_issuer.public_key()).unwrap()
             == Some(certificate.clone())
     );
     for variant in 0..6 {
@@ -327,12 +329,7 @@ fn recovery_binds_real_signatures_to_only_the_original_acceptance() {
             _ => changed.accepted_at += 1,
         }
         assert!(matches!(
-            recover(
-                &mut tx,
-                &changed,
-                Some(&issuer),
-                &record_issuer.public_key()
-            ),
+            recover(&mut tx, &changed, Some(&ring), &record_issuer.public_key()),
             Err(Error::Storage)
         ));
     }
@@ -340,16 +337,45 @@ fn recovery_binds_real_signatures_to_only_the_original_acceptance() {
         recover(
             &mut tx,
             &accepted,
-            Some(&cssr::certificate::CertificateIssuer::new(&[4; 32]).unwrap()),
+            Some(
+                &[period(
+                    &cssr::certificate::CertificateIssuer::new(&[4; 32]).unwrap(),
+                    1,
+                    None
+                )][..]
+            ),
             &record_issuer.public_key()
         ),
         Err(Error::Storage)
     ));
+    // The signing key verifies only inside its own period: retired before the
+    // issuance the stored certificate fails, retired after it the certificate stands.
+    let other = cssr::certificate::CertificateIssuer::new(&[4; 32]).unwrap();
+    let rotated = |at: u64| vec![period(&issuer, 1, Some(at)), period(&other, at, None)];
     assert!(matches!(
         recover(
             &mut tx,
             &accepted,
-            Some(&issuer),
+            Some(&rotated(accepted.accepted_at)),
+            &record_issuer.public_key()
+        ),
+        Err(Error::Storage)
+    ));
+    assert!(
+        recover(
+            &mut tx,
+            &accepted,
+            Some(&rotated(accepted.accepted_at + 1)),
+            &record_issuer.public_key()
+        )
+        .unwrap()
+            == Some(certificate.clone())
+    );
+    assert!(matches!(
+        recover(
+            &mut tx,
+            &accepted,
+            Some(&ring),
             &cssr::certificate::RecordIssuer::new(&[20; 32]).public_key()
         ),
         Err(Error::Storage)
@@ -358,35 +384,19 @@ fn recovery_binds_real_signatures_to_only_the_original_acceptance() {
     altered.record.signature[0] ^= 1;
     retain(&mut tx, &accepted.statement.owner, Some(&altered)).unwrap();
     assert!(matches!(
-        recover(
-            &mut tx,
-            &accepted,
-            Some(&issuer),
-            &record_issuer.public_key()
-        ),
+        recover(&mut tx, &accepted, Some(&ring), &record_issuer.public_key()),
         Err(Error::Storage)
     ));
     tx.rollback().unwrap();
     let mut tx = AccountStorage::transaction(&mut store).unwrap();
     assert!(
-        recover(
-            &mut tx,
-            &accepted,
-            Some(&issuer),
-            &record_issuer.public_key()
-        )
-        .unwrap()
+        recover(&mut tx, &accepted, Some(&ring), &record_issuer.public_key()).unwrap()
             == Some(certificate)
     );
     retain(&mut tx, &accepted.statement.owner, None).unwrap();
     assert!(
-        recover(
-            &mut tx,
-            &accepted,
-            Some(&issuer),
-            &record_issuer.public_key()
-        )
-        .unwrap()
-        .is_none()
+        recover(&mut tx, &accepted, Some(&ring), &record_issuer.public_key())
+            .unwrap()
+            .is_none()
     );
 }

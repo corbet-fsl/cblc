@@ -1,6 +1,9 @@
 //! Actual maintained proof/issuer and recipient service scenarios.
 use super::*;
 
+/// Test community identity (founding fingerprint) the certificates bind.
+const IDENTITY: [u8; 32] = [5; 32];
+
 #[test]
 fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recovers_exact_retry() {
     use cblc::{
@@ -105,19 +108,20 @@ fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recov
         Err(Error::UnsupportedCapability)
     ));
     assert_eq!(stored.snapshot(), before);
-    let mut wrong = AccountService::new(missing.into_ledger(), || now, 16 * 1024 * 1024)
-        .unwrap()
-        .with_extension_issuer(cssr::certificate::CertificateIssuer::new(&[4; 32]).unwrap());
-    assert!(matches!(
-        wrong.handle_for_member(&[7; 48], operation.clone()),
-        Err(Error::PolicyMismatch)
-    ));
-    assert_eq!(stored.snapshot(), before);
+    // The configured issuer becomes the open period of the recorded ring and binds the
+    // community identity; configuring it writes the ring, nothing else.
     let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
     let issuer_key = issuer.public_key();
-    let mut correct = AccountService::new(wrong.into_ledger(), || now, 16 * 1024 * 1024)
+    let mut correct = AccountService::new(missing.into_ledger(), || now, 16 * 1024 * 1024)
         .unwrap()
-        .with_extension_issuer(issuer);
+        .with_extension_issuer(issuer, IDENTITY)
+        .unwrap();
+    let ring = vec![czkp::issuer_keys::CertificateKeyPeriod {
+        public_key: issuer_key.to_vec(),
+        valid_from: now,
+        valid_until: None,
+    }];
+    let before = stored.snapshot();
     assert!(matches!(
         correct.handle_for_member(&[8; 48], operation.clone()),
         Err(Error::Admission)
@@ -141,7 +145,9 @@ fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recov
         &SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes(),
     )
     .unwrap();
-    certificate.verify(acceptance, &issuer_key).unwrap();
+    certificate.verify(acceptance, &IDENTITY, &ring).unwrap();
+    // Bound to the identity: the same certificate fails for another community.
+    assert!(certificate.verify(acceptance, &[6; 32], &ring).is_err());
     let committed = stored.snapshot();
     assert_ne!(committed, before);
     let retried = correct.handle_for_member(&[7; 48], operation).unwrap();
@@ -157,6 +163,16 @@ fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recov
         Err(Error::UnsupportedCapability)
     ));
     assert_eq!(stored.snapshot(), committed);
+    // The identity is fixed at the first configuration; another one is refused.
+    assert!(matches!(
+        AccountService::new(correct.into_ledger(), || now, 16 * 1024 * 1024)
+            .unwrap()
+            .with_extension_issuer(
+                cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                [6; 32]
+            ),
+        Err(Error::PolicyMismatch)
+    ));
 }
 
 #[test]

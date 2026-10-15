@@ -437,7 +437,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             let ancestry = record_epoch::recover(
                 &mut transaction,
                 &result,
-                issuer.zip(issuer_ring.as_deref()),
+                issuer_ring.as_deref(),
                 &operator_key,
             )?;
             transaction.commit_before(&CommitDeadline::new(
@@ -527,7 +527,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             let ancestry = record_epoch::recover(
                 &mut transaction,
                 &result,
-                issuer.zip(issuer_ring.as_deref()),
+                issuer_ring.as_deref(),
                 &operator_key,
             )?;
             transaction.commit_before(&CommitDeadline::new(
@@ -724,7 +724,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 let ancestry = record_epoch::recover(
                     &mut transaction,
                     accepted,
-                    Some((issuer, &issuance.ring)),
+                    Some(&issuance.ring),
                     &self.operator.verifying_key().to_bytes(),
                 )?;
                 Some(crate::extensions::ExtendedEvidence {

@@ -110,13 +110,11 @@ pub fn exercise(
         serde_json::to_value(<[u8; 32]>::from(Sha256::digest(&activation(init).proof))).unwrap()
     );
     #[cfg(feature = "publication")]
-    let before = ledger
-        .public_verifier_material(
-            1,
-            1,
-            &cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
-        )
-        .unwrap();
+    let before = {
+        let issuer = crate::common::record_fixture_issuer(&mut ledger, 100);
+        ledger.public_verifier_material(1, 1, &issuer)
+    }
+    .unwrap();
     let tuned = ledger
         .update_waiting_period(0, settings.account.abandon_after + 10, || 110)
         .unwrap();
@@ -132,13 +130,11 @@ pub fn exercise(
     assert_eq!(anchor(&path), original);
     #[cfg(feature = "publication")]
     {
-        let after = reopened
-            .public_verifier_material(
-                2,
-                1,
-                &cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
-            )
-            .unwrap();
+        let after = {
+            let issuer = crate::common::record_fixture_issuer(&mut reopened, 100);
+            reopened.public_verifier_material(2, 1, &issuer)
+        }
+        .unwrap();
         assert_eq!(before.admission_policy_digest, [3; 32]);
         assert_eq!(
             after.admission_policy_digest,

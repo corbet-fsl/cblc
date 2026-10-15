@@ -235,7 +235,11 @@ fn main() {
             Err(Error::UnsupportedCapability)
         );
         service = service
-            .with_extension_issuer(cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap());
+            .with_extension_issuer(
+                cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+                common::CERTIFICATE_IDENTITY,
+            )
+            .unwrap();
         assert_eq!(
             service.public_verifier_material(1, 1).unwrap().community,
             fixture.trust.community_id

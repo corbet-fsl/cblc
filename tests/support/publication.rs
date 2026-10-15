@@ -7,8 +7,20 @@ use cblc::{
 use csgn::{Kind, SecretKey, Signer};
 
 pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> PublicVerifierMaterial {
-    let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
+    let issuer = crate::common::record_fixture_issuer(ledger, 100);
     let material = ledger.public_verifier_material(1, 1, &issuer).unwrap();
+    // The status publishes the recorded ring and the identity certificates bind.
+    assert_eq!(
+        material.community_identity,
+        crate::common::CERTIFICATE_IDENTITY
+    );
+    assert_eq!(
+        material
+            .certificate_keys
+            .last()
+            .map(|p| p.public_key.clone()),
+        Some(issuer.public_key().to_vec())
+    );
     // The actual fixture configures encoded(3) as admission trust before the
     // ledger is constructed. Its economic proof policy is a separate digest.
     assert_eq!(material.admission_policy_digest, [3; 32]);
@@ -101,7 +113,7 @@ pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> Publi
         }),
         Err(cblc::Error::PolicyMismatch)
     ));
-    for variant in 0..18 {
+    for variant in 0..20 {
         let mut invalid = material.clone();
         match variant {
             0 => {
@@ -116,7 +128,13 @@ pub fn exercise<V: AccountProofVerifier>(ledger: &mut AccountLedger<V>) -> Publi
             7 => invalid.proof_scope.verifying_key_digest = [0; 32],
             8 => invalid.manifest_sha256 = [0; 32],
             9 => invalid.account_response_key = [0; 32],
-            10 => invalid.certificate_key.clear(),
+            10 => invalid.certificate_keys.clear(),
+            17 => invalid.community_identity = [0; 32],
+            18 => {
+                // A status whose ring has no open (current) key is refused.
+                let open = invalid.certificate_keys.last_mut().unwrap();
+                open.valid_until = Some(open.valid_from + 1);
+            }
             11 => invalid.policy.max_authorization_seconds = 0,
             12 => invalid.policy.max_proof_bytes = i32::MAX as usize + 1,
             13 => invalid.policy.checkpoint_period_seconds = 0,

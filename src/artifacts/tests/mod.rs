@@ -51,7 +51,7 @@ impl Fixture {
         let manifest = json!({"version":1,"compiler":"1.0.0-beta.26","backend":"5.2.1",
             "verifierTarget":"noir-recursive","accountingMode":if extension {"account-extension-v1"} else {"account-state-v2"},
             "hashScheme":"poseidon2-bn254-fixed-128-v1","numPoints":131072,
-            "circuitSha256":hash(&circuit),"vkSha256":hash(&keys),"issuerKey":vec![9;64],
+            "circuitSha256":hash(&circuit),"vkSha256":hash(&keys),
             "setup":[{"name":"g1.dat","bytes":g1.len(),"sha256":hash(&g1)},
                 {"name":"g2.dat","bytes":g2.len(),"sha256":hash(&g2)}]});
         Self {
@@ -133,19 +133,16 @@ fn authenticated_snapshots_bind_group_and_each_native_key_without_host_files() {
         scope.verifying_key_digest,
         <[u8; 32]>::from(Sha256::digest(&f.keys))
     );
-    assert_eq!(artifacts.issuer, [9; 64]);
     let pin = artifacts.manifest_sha256();
     #[cfg(feature = "publication")]
     assert_eq!(
         artifacts.binding(),
         ArtifactBinding {
             manifest_sha256: pin,
-            certificate_key: [9; 64]
         }
     );
     f.g1[0] ^= 1;
     f.keys[0] ^= 1;
-    f.manifest["issuerKey"] = json!(vec![4; 64]);
     let configs = artifacts.configs(options(), options());
     for (config, (key, inputs)) in configs.into_iter().zip([
         (vec![1, 2], UPDATE_WIDTH),
@@ -303,9 +300,9 @@ fn missing_or_malformed_pinned_keys_are_not_native_verifiers() {
     for variant in 0..5 {
         let mut f = Fixture::new(true);
         match variant {
-            0 => {
-                f.manifest.as_object_mut().unwrap().remove("issuerKey");
-            }
+            // The issuer key ring lives in the signed status: a manifest pinning a key,
+            // well-formed or not, is refused.
+            0 => f.manifest["issuerKey"] = json!(vec![9; 64]),
             1 => f.manifest["issuerKey"] = json!(vec![1; 63]),
             2 => f.keys = b"invalid JSON".to_vec(),
             3 => f.keys = br#"{"update":"","deposit":"03","record":"05"}"#.to_vec(),
@@ -436,7 +433,6 @@ fn wave_group_authenticates_its_two_keys_and_pins_the_public_widths() {
     fixture.keys = br#"{"wave":"0102","outcome":"0304"}"#.to_vec();
     fixture.manifest["vkSha256"] = json!(hash(&fixture.keys));
     let group = fixture.with(WaveArtifacts::authenticate).unwrap();
-    assert_eq!(group.issuer_key(), [9; 64]);
     let wave = group.wave_config(options());
     let outcome = group.outcome_config(options());
     assert_eq!(wave.max_public_inputs, 618);

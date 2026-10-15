@@ -63,7 +63,7 @@ fn anonymous() -> Vec<u8> {
     bundle_bytes(json!({"version":1,"proofs":[{"proof":"0102"}]}))
 }
 fn prepare(statement: &ExtensionStatement, proof: &[u8]) -> Result<Vec<PreparedProof>, Error> {
-    extension_proofs(statement, proof, &[9; 64], &scope())
+    extension_proofs(statement, proof, &scope())
 }
 fn scope() -> crate::accounting::AccountProofScope {
     crate::accounting::AccountProofScope {
@@ -314,6 +314,10 @@ fn anonymous_inputs_bind_manifest_issuer_scope_and_record_disclosure() {
         deposit: Deposit {
             release_epoch: 42,
             community: [1; 32],
+            identity: [6; 32],
+            issuer_key: vec![9; 64],
+            issuer_valid_from: 7,
+            issuer_valid_until: 8,
             recipient: [2; 32],
             nullifier: [3; 32],
             authorization_nullifier: [4; 32],
@@ -322,21 +326,29 @@ fn anonymous_inputs_bind_manifest_issuer_scope_and_record_disclosure() {
     };
     let prepared = prepare(&deposit, &anonymous()).unwrap();
     let fields = values(&prepared[0].inputs);
-    assert_eq!(fields.len(), 294);
+    assert_eq!(fields.len(), 328);
+    // The named issuer key and its period, then scope, community and identity.
     assert_eq!(&fields[37..101], &[9; 64]);
-    assert_eq!(&fields[101..133], &[10; 32]);
-    assert_eq!(&fields[133..165], &[1; 32]);
-    assert_eq!(&fields[165..197], &[2; 32]);
-    assert_eq!(fields[197], 42);
-    assert_eq!(&fields[198..230], &[3; 32]);
-    assert_eq!(&fields[230..262], &[4; 32]);
-    assert_eq!(&fields[262..294], &[5; 32]);
-    for variant in 0..3 {
+    assert_eq!(&fields[101..103], &[7, 8]);
+    assert_eq!(&fields[103..135], &[10; 32]);
+    assert_eq!(&fields[135..167], &[1; 32]);
+    assert_eq!(&fields[167..199], &[6; 32]);
+    assert_eq!(&fields[199..231], &[2; 32]);
+    assert_eq!(fields[231], 42);
+    assert_eq!(&fields[232..264], &[3; 32]);
+    assert_eq!(&fields[264..296], &[4; 32]);
+    assert_eq!(&fields[296..328], &[5; 32]);
+    for variant in 0..8 {
         let mut changed = deposit.clone();
         if let ExtensionStatement::Deposit { deposit, .. } = &mut changed {
             match variant {
                 0 => deposit.release_epoch = 0,
                 1 => deposit.release_epoch = czkp::MAX_INTEGER,
+                2 => deposit.issuer_key = vec![9; 63],
+                3 => deposit.issuer_valid_from = 0,
+                4 => deposit.issuer_valid_until = 7,
+                5 => deposit.issuer_valid_until = czkp::MAX_INTEGER + 1,
+                6 => deposit.identity = [0; 32],
                 _ => deposit.nullifier = [255; 32],
             }
         }

@@ -52,10 +52,15 @@ fn material() -> PublicVerifierMaterial {
         proof_scope: scope.clone(),
         manifest_sha256: [3; 32],
         account_response_key: [4; 32],
-        certificate_key: cssr::certificate::CertificateIssuer::new(&[3; 32])
-            .unwrap()
-            .public_key()
-            .to_vec(),
+        certificate_keys: vec![czkp::issuer_keys::CertificateKeyPeriod {
+            public_key: cssr::certificate::CertificateIssuer::new(&[3; 32])
+                .unwrap()
+                .public_key()
+                .to_vec(),
+            valid_from: 1,
+            valid_until: None,
+        }],
+        community_identity: [8; 32],
         settlement: None,
         wave_verifier: None,
         record_epoch: Some(Epoch {
@@ -108,7 +113,6 @@ fn view(material: &PublicVerifierMaterial) -> View {
         scope: material.proof_scope.clone(),
         artifacts: ArtifactBinding {
             manifest_sha256: material.manifest_sha256,
-            certificate_key: material.certificate_key.as_slice().try_into().unwrap(),
         },
         observed_time: 0,
         policy_epoch: 0,
@@ -131,14 +135,13 @@ fn real_signed_publication_requires_trusted_period_epoch_community_and_native_pi
         view(&original).observe(&balance, bounds(), 110),
         Ok(original.clone())
     );
-    for variant in 0..5 {
+    for variant in 0..4 {
         let mut verifier_view = view(&original);
         match variant {
             0 => verifier_view.period_seconds = 50,
             1 => verifier_view.community = "other.example".into(),
             2 => verifier_view.scope.circuit_digest[0] ^= 1,
-            3 => verifier_view.artifacts.manifest_sha256[0] ^= 1,
-            _ => verifier_view.artifacts.certificate_key[0] ^= 1,
+            _ => verifier_view.artifacts.manifest_sha256[0] ^= 1,
         }
         assert!(verifier_view.observe(&balance, bounds(), 110).is_err());
     }
@@ -390,7 +393,8 @@ fn wave_policy_is_derived_from_the_published_material_and_any_flip_is_refused() 
     assert_eq!(derived.community, community);
     assert_eq!(derived.extension, published.extension_policy);
     assert_eq!(derived.proof_scope, published.proof_scope);
-    assert_eq!(derived.certificate_key, published.certificate_key);
+    assert_eq!(derived.certificate_keys, published.certificate_keys);
+    assert_eq!(derived.community_identity, published.community_identity);
     assert_eq!(
         derived.state_policy,
         published.policy.account.state_digest(&community).unwrap()
@@ -412,7 +416,8 @@ fn wave_policy_is_derived_from_the_published_material_and_any_flip_is_refused() 
         |d: &mut crate::publication::WaveVerifierDescriptor| {
             d.proof_scope.verifying_key_digest[0] ^= 1
         },
-        |d: &mut crate::publication::WaveVerifierDescriptor| d.certificate_key[0] ^= 1,
+        |d: &mut crate::publication::WaveVerifierDescriptor| d.certificate_keys[0].valid_from += 1,
+        |d: &mut crate::publication::WaveVerifierDescriptor| d.community_identity[0] ^= 1,
         |d: &mut crate::publication::WaveVerifierDescriptor| d.valid_until += 1,
     ] {
         let mut forged = published.clone();

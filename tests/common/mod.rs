@@ -11,6 +11,24 @@ use sha2::{Digest, Sha256};
 /// scenario reach about a month).
 pub const LATEST: u64 = 4_000_000;
 
+/// The fixture community identity (founding fingerprint) accepted-state certificates bind.
+/// The TypeScript harness uses the same bytes (`CERTIFICATE_IDENTITY`).
+#[allow(dead_code)]
+pub const CERTIFICATE_IDENTITY: [u8; 32] = [0x1d; 32];
+
+/// The fixture certificate issuer (seed 3), recorded as the ring's open key at `now`.
+#[allow(dead_code)]
+pub fn record_fixture_issuer<V: cblc::accounting::AccountProofVerifier>(
+    ledger: &mut cblc::accounting_ledger::AccountLedger<V>,
+    now: u64,
+) -> cssr::certificate::CertificateIssuer {
+    let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
+    ledger
+        .record_certificate_issuer(CERTIFICATE_IDENTITY, issuer.public_key(), now)
+        .unwrap();
+    issuer
+}
+
 pub fn encoded(value: u8) -> String {
     BASE64URL_NOPAD.encode(&[value; 32])
 }

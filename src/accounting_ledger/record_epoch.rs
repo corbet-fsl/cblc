@@ -151,13 +151,10 @@ pub(super) fn retain(
 pub(super) fn recover(
     tx: &mut Transaction<'_>,
     accepted: &AccountAcceptance,
-    issuer: Option<(
-        &cssr::certificate::CertificateIssuer,
-        &[czkp::issuer_keys::CertificateKeyPeriod],
-    )>,
+    ring: Option<&[czkp::issuer_keys::CertificateKeyPeriod]>,
     record_key: &[u8; 32],
 ) -> Result<Option<crate::extensions::EpochAncestryCertificate>, Error> {
-    let Some((issuer, ring)) = issuer else {
+    let Some(ring) = ring else {
         return Ok(None);
     };
     let certificate: Option<crate::extensions::EpochAncestryCertificate> =

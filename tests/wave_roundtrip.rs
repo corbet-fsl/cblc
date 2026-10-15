@@ -103,7 +103,6 @@ fn load() -> Loaded {
         srs_g2: &g2,
     })
     .unwrap();
-    assert_eq!(group.issuer_key().to_vec(), fixture.issuer_key);
     let proof = |case: &Case| {
         data_encoding::HEXLOWER
             .decode(case.proof.as_bytes())
@@ -124,7 +123,14 @@ fn load() -> Loaded {
     assert_eq!(wave_policy.community, c.community);
     assert_eq!(wave_policy.extension, policy);
     assert_eq!(wave_policy.state_policy, reservation.state_policy);
-    assert_eq!(wave_policy.certificate_key, fixture.issuer_key);
+    // The published ring holds the key the fixture certificates were signed with, open at
+    // their acceptance time.
+    assert_eq!(
+        czkp::issuer_keys::key_at(&wave_policy.certificate_keys, reservation.accepted_at)
+            .unwrap()
+            .to_vec(),
+        fixture.issuer_key
+    );
     assert_eq!(
         wave_policy.proof_scope.circuit_digest,
         fixture.extension_scope.circuit_digest
@@ -223,4 +229,22 @@ fn a_policy_that_differs_from_the_published_material_refuses_the_proofs() {
     let mut flipped = l.policy.clone();
     flipped.proof_scope.verifying_key_digest[0] ^= 1;
     assert!(refused(flipped));
+    // Another community identity, or a ring whose signing key retired before the
+    // certificate's acceptance time, refuses the same proof.
+    let mut flipped = l.policy.clone();
+    flipped.community_identity[0] ^= 1;
+    assert!(refused(flipped));
+    let mut retired = l.policy.clone();
+    let open = retired.certificate_keys.last_mut().unwrap();
+    open.valid_from = 1;
+    open.valid_until = Some(statement.accepted_at);
+    let successor = cssr::certificate::CertificateIssuer::new(&[4; 32]).unwrap();
+    retired
+        .certificate_keys
+        .push(czkp::issuer_keys::CertificateKeyPeriod {
+            public_key: successor.public_key().to_vec(),
+            valid_from: statement.accepted_at,
+            valid_until: None,
+        });
+    assert!(refused(retired));
 }

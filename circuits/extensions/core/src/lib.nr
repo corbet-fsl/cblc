@@ -116,14 +116,16 @@ pub fn verify_p256(key: [u8;64], signature: [u8;64], message: [u8;32]) {
     assert(std::ecdsa_secp256r1::verify_signature(x,y,signature,message));
 }
 
-pub fn certificate_digest(community: [u8;32], owner: [u8;32], state: [u8;32], scope: [u8;32], version: u64, at: u64) -> [u8;32] {
-    let prefix: [u8;23]=[99,115,115,114,46,97,99,99,101,112,116,101,100,45,115,116,97,116,101,46,118,49,0];
-    let mut bytes=[0;167];
+/// czkp `AcceptedState::bytes` v2: the certificate binds the community identity
+/// (founding fingerprint) next to the routing hash.
+pub fn certificate_digest(community: [u8;32], identity: [u8;32], owner: [u8;32], state: [u8;32], scope: [u8;32], version: u64, at: u64) -> [u8;32] {
+    let prefix: [u8;23]=[99,115,115,114,46,97,99,99,101,112,116,101,100,45,115,116,97,116,101,46,118,50,0];
+    let mut bytes=[0;199];
     for i in 0..23 {bytes[i]=prefix[i];}
-    let values=[community,owner,state,scope];
-    for i in 0..4 {for j in 0..32 {bytes[23+i*32+j]=values[i][j];}}
+    let values=[community,identity,owner,state,scope];
+    for i in 0..5 {for j in 0..32 {bytes[23+i*32+j]=values[i][j];}}
     let v: [u8;8]=(version as Field).to_be_bytes();let t: [u8;8]=(at as Field).to_be_bytes();
-    for i in 0..8 {bytes[151+i]=v[i];bytes[159+i]=t[i];}
+    for i in 0..8 {bytes[183+i]=v[i];bytes[191+i]=t[i];}
     digest(bytes)
 }
 

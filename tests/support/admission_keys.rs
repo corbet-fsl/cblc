@@ -155,13 +155,11 @@ pub(super) fn exercise(
     assert_eq!(anchor(&path), original_anchor);
     #[cfg(feature = "publication")]
     {
-        let material = reopened
-            .public_verifier_material(
-                1,
-                1,
-                &cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
-            )
-            .unwrap();
+        let material = {
+            let issuer = crate::common::record_fixture_issuer(&mut reopened, 100);
+            reopened.public_verifier_material(1, 1, &issuer)
+        }
+        .unwrap();
         assert_eq!(material.admission_policy_digest, [3; 32]);
         assert_eq!(material.policy_digest, tuned.policy_digest);
     }

@@ -75,7 +75,6 @@ fn fixture() -> (Vec<u8>, ExtensionActivation, ArtifactBinding) {
         activation,
         ArtifactBinding {
             manifest_sha256: [5; 32],
-            certificate_key: [6; 64],
         },
     )
 }
@@ -116,15 +115,14 @@ fn unchanged_activation_anchor_allows_only_original_waiting_successor() {
 fn exact_activation_statement_proof_and_artifact_commitments_cannot_be_substituted() {
     let (config, activation, binding) = fixture();
     let anchor = ActivationAnchor::new(&config, &activation, &binding).unwrap();
-    for case in 0..6 {
+    for case in 0..5 {
         let mut changed = anchor.clone();
         match case {
             0 => changed.format.push('x'),
             1 => changed.original_config.push(0),
             2 => changed.statement_sha256[0] ^= 1,
             3 => changed.proof_sha256[0] ^= 1,
-            4 => changed.manifest_sha256[0] ^= 1,
-            _ => changed.certificate_key[0] ^= 1,
+            _ => changed.manifest_sha256[0] ^= 1,
         }
         assert!(changed.check(&config, &activation, &binding).is_err());
     }

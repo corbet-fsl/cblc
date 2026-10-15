@@ -147,7 +147,8 @@ fn main() {
                         AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?
                             .with_extension_issuer(
                                 cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
-                            );
+                                common::CERTIFICATE_IDENTITY,
+                            )?;
                     let operation = AccountServiceRequest::ApplyExtended {
                         grant: fixture.grant_until(member, &fixture.device, until(now, 1000)),
                         authorization: fixture.authorize_until(
@@ -549,6 +550,13 @@ fn main() {
                 // (including the derived Wave verifier policy).
                 "material" => {
                     let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
+                    // A no-op once an apply recorded the issuer; otherwise its ring starts
+                    // at the earliest second so every later acceptance lies inside it.
+                    ledger.as_mut().unwrap().record_certificate_issuer(
+                        common::CERTIFICATE_IDENTITY,
+                        issuer.public_key(),
+                        1,
+                    )?;
                     let material = ledger.as_mut().unwrap().public_verifier_material(
                         v["revision"].as_u64().unwrap_or(1),
                         v["policyEpoch"].as_u64().unwrap_or(1),
