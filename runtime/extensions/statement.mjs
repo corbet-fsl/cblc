@@ -43,9 +43,12 @@ export async function expectedProofs(statement,bundle,manifest) {
   if(statement.kind==='deposit') {
     if(!exact(statement,['kind','policy','deposit']))throw new Error('Deposit shape');
     const d=statement.deposit;
-    if(!exact(d,['community','recipient','releaseEpoch','nullifier','authorizationNullifier','obligation']))throw new Error('Deposit fields');
-    return [{kind:'deposit',proof,input:{extension,issuer_key:manifest.issuerKey,scope:Array.from(Buffer.from(manifest.circuitSha256,'hex')),
-      community:d.community,recipient:d.recipient,release_epoch:d.releaseEpoch,nullifier:d.nullifier,authorization_nullifier:d.authorizationNullifier,obligation:d.obligation}}];
+    if(!exact(d,['community','identity','issuerKey','issuerValidFrom','issuerValidUntil','recipient','releaseEpoch','nullifier','authorizationNullifier','obligation']))throw new Error('Deposit fields');
+    // The deposit names its issuer key period (matched against the signed ring by the ledger).
+    if(d.issuerKey.length!==64||!(d.issuerValidFrom>0&&d.issuerValidFrom<d.issuerValidUntil&&d.issuerValidUntil<=9007199254740991)||d.identity.every(b=>b===0))
+      throw new Error('Deposit issuer period');
+    return [{kind:'deposit',proof,input:{extension,issuer_key:d.issuerKey,issuer_valid_from:d.issuerValidFrom,issuer_valid_until:d.issuerValidUntil,
+      scope:Array.from(Buffer.from(manifest.circuitSha256,'hex')),community:d.community,identity:d.identity,recipient:d.recipient,release_epoch:d.releaseEpoch,nullifier:d.nullifier,authorization_nullifier:d.authorizationNullifier,obligation:d.obligation}}];
   }
   if(statement.kind!=='record'||!exact(statement,['kind','policy','record']))throw new Error('Statement domain');
   const r=statement.record,c=r.context;

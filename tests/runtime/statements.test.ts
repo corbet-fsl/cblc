@@ -12,7 +12,7 @@ const policy = { initialCredit: 3, maximumAvailable: 4, outgoingReservation: 1, 
 const extension = { revision: 1, publicRecordQuorum: 2, changeTokenCost: 1,
   depositDelaySeconds: 100, minimumDepositBatch: 2,
   standingPolicyDigest: Array(32).fill(9) };
-const manifest = { issuerKey: Array(64).fill(7), circuitSha256: 'ab'.repeat(32) };
+const manifest = { circuitSha256: 'ab'.repeat(32) };
 
 async function account(genesis = true) {
   return { protocolVersion: 2, community: bytes(1), owner: bytes(2),
@@ -147,13 +147,20 @@ test('extension bundle limits accept 64 ingestions and refuse extra or missing f
 test('anonymous extension statements bind deposit scope and both record disclosure modes', async () => {
   const bundle = { version: 1, proofs: [{ proof: '01' }] };
   const deposit = { kind: 'deposit', policy: extension, deposit: {
-    community: bytes(1), recipient: bytes(2), releaseEpoch: 5, nullifier: field(3),
+    community: bytes(1), identity: bytes(6), issuerKey: Array(64).fill(7), issuerValidFrom: 10,
+    issuerValidUntil: 20, recipient: bytes(2), releaseEpoch: 5, nullifier: field(3),
     authorizationNullifier: field(4), obligation: field(5) } };
   const [mapped] = await expectedProofs(deposit, bundle, manifest);
   assert.equal(mapped.kind, 'deposit');
   assert.deepEqual(mapped.input.extension, { revision: 1, quorum: 2, change_cost: 1, delay: 100, batch: 2,
     standing: extension.standingPolicyDigest });
-  assert.deepEqual(mapped.input.issuer_key, manifest.issuerKey);
+  // The deposit names its issuer key period and identity; the manifest pins no key.
+  assert.deepEqual(mapped.input.issuer_key, Array(64).fill(7));
+  assert.deepEqual([mapped.input.issuer_valid_from, mapped.input.issuer_valid_until], [10, 20]);
+  assert.deepEqual(mapped.input.identity, bytes(6));
+  for (const bad of [{ issuerKey: Array(63).fill(7) }, { issuerValidFrom: 0 }, { issuerValidUntil: 10 },
+    { issuerValidUntil: 9007199254740992 }, { identity: Array(32).fill(0) }])
+    await assert.rejects(expectedProofs({ ...deposit, deposit: { ...deposit.deposit, ...bad } }, bundle, manifest));
   assert.deepEqual(mapped.input.scope, bytes(171));
   assert.deepEqual(mapped.input.authorization_nullifier, deposit.deposit.authorizationNullifier);
   assert.equal(mapped.input.release_epoch, 5);

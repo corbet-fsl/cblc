@@ -112,6 +112,16 @@ fn main() {
                     )?;
                     opened
                         .admit_checkpoint(0, serde_json::from_value(v["root"].clone()).unwrap())?;
+                    // The fixture issuer's ring starts at the first second, so every harness
+                    // acceptance lies in its one open period (holders name it as
+                    // {publicKey, validFrom: 1}); later service configuration is a no-op.
+                    opened.record_certificate_issuer(
+                        common::CERTIFICATE_IDENTITY,
+                        cssr::certificate::CertificateIssuer::new(&[3; 32])
+                            .unwrap()
+                            .public_key(),
+                        1,
+                    )?;
                     ledger = Some(opened);
                     policy = Some(extension);
                     scope = Some(proof_scope);
@@ -550,13 +560,6 @@ fn main() {
                 // (including the derived Wave verifier policy).
                 "material" => {
                     let issuer = cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap();
-                    // A no-op once an apply recorded the issuer; otherwise its ring starts
-                    // at the earliest second so every later acceptance lies inside it.
-                    ledger.as_mut().unwrap().record_certificate_issuer(
-                        common::CERTIFICATE_IDENTITY,
-                        issuer.public_key(),
-                        1,
-                    )?;
                     let material = ledger.as_mut().unwrap().public_verifier_material(
                         v["revision"].as_u64().unwrap_or(1),
                         v["policyEpoch"].as_u64().unwrap_or(1),

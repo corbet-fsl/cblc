@@ -10,7 +10,7 @@ import {prepareRecordEpoch} from './record-epoch.mts';
 import {recordEpochPublicInputs,recordLeafCommitment,recordPresentationBytes,verifyRecordCertificate} from './record-epoch-codec.mts';
 
 export async function ingestedRecordEpoch({members,call,submit,anonymous,proof,artifacts,
-  issuerKey,now,programs,hashes,community,signing,extension}) {
+  issuerKey,issuance,now,programs,hashes,community,signing,extension}) {
   let nonce=60;
   const bytes=n=>new Uint8Array(32).fill(n),toArray=Array.from.bind(Array);
   const signContact=(index,owner,slot)=>canonicalSignature(sign('sha256',contactBytes(community,owner,slot),
@@ -41,7 +41,7 @@ export async function ingestedRecordEpoch({members,call,submit,anonymous,proof,a
   now=Math.ceil((now+extension.depositDelaySeconds)/10)*10;
   const deposits=[];
   for(const burn of burns)deposits.push(await anonymous(await burn.member.deposit(burn.delivery,
-    burn.member.certificate,artifacts.scope.circuitDigest,issuerKey,now/10),'epoch-deposit'));
+    burn.member.certificate,artifacts.scope.circuitDigest,issuance,now/10),'epoch-deposit'));
   const batch=deposits.map(value=>({deposit:value.statement.deposit,proof:value.proof}));
   await call({op:'deposit',batch,now});
   await call({op:'deposit',batch,now}); // Real replay cannot append another entry.
@@ -74,7 +74,7 @@ export async function ingestedRecordEpoch({members,call,submit,anonymous,proof,a
   // This later genuine deposit extends the frozen required root. Its companion
   // is the original valid replay, preserving the actual minimum-batch protocol.
   const lateProof=await anonymous(await members[2].deposit(later.delivery,members[2].certificate,
-    artifacts.scope.circuitDigest,issuerKey,now/10),'epoch-post-freeze-deposit');
+    artifacts.scope.circuitDigest,issuance,now/10),'epoch-post-freeze-deposit');
   await call({op:'deposit',batch:[{deposit:lateProof.statement.deposit,proof:lateProof.proof},batch[1]],now});
   const all=await call({op:'inbox',member:7,owner,now});
   assert.equal(all.entries.length,2);

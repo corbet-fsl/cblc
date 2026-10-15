@@ -91,7 +91,11 @@ try{await keyApi.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,
 const keyBytes=Buffer.from(JSON.stringify(keys));await writeFile(resolve(directory,'keys.json'),keyBytes);
 const issuer=createECDH('prime256v1');issuer.setPrivateKey(Buffer.alloc(32,3));
 const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-beta.26',backend:producer.receipt.packageVersion,verifierTarget:OPTIONS.verifierTarget,
-  circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files,issuerKey:toArray(issuer.getPublicKey().subarray(1))};
+  circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files};
+// The certificate issuer key is not pinned in the manifest: the ledger records it as its key ring
+// (the harness issuer opens the one period at second 1) and the signed status publishes it.
+const issuerKey=toArray(issuer.getPublicKey().subarray(1));
+const issuance={publicKey:issuerKey,validFrom:1,identity:Array(32).fill(0x1d)};
 const manifestBytes=Buffer.from(JSON.stringify(manifest));await writeFile(resolve(directory,'manifest.json'),manifestBytes);
 const configPath=resolve(directory,'config.json');await writeFile(configPath,JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
 const encodeBundle=proofs=>Buffer.from(JSON.stringify({version:1,proofs})).toString('hex');
@@ -139,7 +143,7 @@ async function proof(kind,input,label,measure=false,group=artifacts){
 async function retainWave(){
   if(waveCases.length) {
     // Retained for the counterpart verifiers: statements, proofs, the pinned scopes and the measured proving times.
-    const fixture=waveJson({extensionScope:artifacts.scope,waveScope:waveArtifacts.scope,issuerKey:manifest.issuerKey,      cases:waveCases,material:await call({op:'material'},true,false),timings:benchmarks.filter(b=>b.kind==='wave'||b.kind==='outcome')});
+    const fixture=waveJson({extensionScope:artifacts.scope,waveScope:waveArtifacts.scope,issuerKey:issuerKey,      cases:waveCases,material:await call({op:'material'},true,false),timings:benchmarks.filter(b=>b.kind==='wave'||b.kind==='outcome')});
     await writeFile(resolve(directory,'wave-roundtrip.json'),fixture,{mode:0o600});
     if(process.env.ARTIFACT_ROOT) {
       const digest=sha(Buffer.from(fixture)).toString('hex'),retained=resolve(process.env.ARTIFACT_ROOT,'wave-fixtures',digest);
@@ -264,13 +268,13 @@ try{
         manifestSha256:sha(manifestBytes).toString('hex'),sourceCommit:fixtureSource});
     };
     const {gatherFixture,...record}=await exactRecordEpoch({members,call,proof,artifacts,
-      issuerKey:manifest.issuerKey,now,deferExpiry:true,retainNativeFixture});
+      issuerKey,now,deferExpiry:true,retainNativeFixture});
     // Unlinkable voucher presentation over the same frozen epoch: the root sponsor shows it may
     // issue a link of five admissions without revealing who it is.
     {
       const voucherWitness=await call({op:'recordWitness',member:7},true,false);
       const binding=bytes(201);
-      const claim=async(holder,over)=>prepareVoucherEpoch(holder,voucherWitness,artifacts.scope,manifest.issuerKey,
+      const claim=async(holder,over)=>prepareVoucherEpoch(holder,voucherWitness,artifacts.scope,issuerKey,
         {purpose:0,uses:5,now,binding,frozenHolder:holder.clone(),...over});
       const issue=await claim(members[0]);
       const framed=Buffer.from(JSON.stringify({version:1,proofs:[{proof:await proof('voucher_epoch',issue.input,'voucher-epoch-issue')}]})).toString('hex');
@@ -304,7 +308,7 @@ try{
     // ingestion/race scenario fails. The complete proof report still requires
     // every original remaining scenario to finish successfully.
     const ingested=await ingestedRecordEpoch({members,call,submit,anonymous,proof,artifacts,
-      issuerKey:manifest.issuerKey,now,programs,hashes,community,signing,extension});
+      issuerKey,issuance,now,programs,hashes,community,signing,extension});
     await writeFile(resolve(directory,'public-record-epoch-proofs.json'),JSON.stringify([record,...ingested]));
   } else {
   const record=async(index,label,measure=false)=>anonymous(members[index].record({purpose:'forumListing',challenge:toArray(bytes(now%255)),expiresAt:now+90}),label,measure);
@@ -337,7 +341,7 @@ try{
   }
   now=Math.ceil((now+extension.depositDelaySeconds)/10)*10;
   const deposits=[];
-  for(const [i,b] of burns.entries())deposits.push(await anonymous(await b.member.deposit(b.delivery,b.member.certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'deposit',i===0));
+  for(const [i,b] of burns.entries())deposits.push(await anonymous(await b.member.deposit(b.delivery,b.member.certificate,artifacts.scope.circuitDigest,issuance,now/10),'deposit',i===0));
   const beforeQueueRecord=await record(0,'record-before-delivery');
   assert.equal(await call({op:'record',record:beforeQueueRecord.statement.record,proof:beforeQueueRecord.proof,now}),null);
   const batch=deposits.map(d=>({deposit:d.statement.deposit,proof:d.proof}));
@@ -369,7 +373,7 @@ try{
   // A genuine counterpart Answer supplies the second counted first contact.
   const acceptedContact=await contact(0,2);
   members[2]=(await submit(9,[await members[2].activate(acceptedContact.incoming,now++,acceptedContact.senderSignature)],'activate')).next;
-  const waveContext={history:bytes(231),challenge:bytes(232)},waveScope=Uint8Array.from(artifacts.scope.circuitDigest),waveIssuer=Uint8Array.from(manifest.issuerKey);
+  const waveContext={history:bytes(231),challenge:bytes(232)},waveScope=Uint8Array.from(artifacts.scope.circuitDigest),waveIssuer=Uint8Array.from(issuerKey);
   if(waveArtifacts)waveCases.push(await reservationCase(members[2],acceptedContact.incoming,waveContext,waveScope,waveIssuer,waveProve));
   const replySlot=members[2].slots.get(acceptedContact.incoming.toString());
   const resolution={kind:1,issuedAt:BigInt(now),historyDigest:zeros(),ed25519ReceiptDigest:zeros()};
@@ -385,7 +389,7 @@ try{
     process.exit(0);
   }
   now=Math.ceil((now+10)/10)*10;
-  const answerCandidate=await members[2].deposit({slot:replySlot,kind:1},members[2].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10);
+  const answerCandidate=await members[2].deposit({slot:replySlot,kind:1},members[2].certificate,artifacts.scope.circuitDigest,issuance,now/10);
   const forged=structuredClone(answerCandidate.input);forged.certificate=Array(64).fill(0);
   await assert.rejects(new Noir(programs.deposit).execute(witnessInputs(programs.deposit,forged)));
   const linked=structuredClone(answerCandidate.input);
@@ -403,7 +407,7 @@ try{
   const established=await members[0].punish(acceptedContact.outgoing,now++,acceptedContact.recipientSignature);
   members[0]=(await submit(7,[established],'established-punishment')).next;
   now=Math.ceil((now+10)/10)*10;
-  const establishedDeposit=await anonymous(await members[0].deposit(established.delivery,members[0].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'established-deposit');
+  const establishedDeposit=await anonymous(await members[0].deposit(established.delivery,members[0].certificate,artifacts.scope.circuitDigest,issuance,now/10),'established-deposit');
   await call({op:'deposit',batch:[{deposit:establishedDeposit.statement.deposit,proof:establishedDeposit.proof},batch[1]],now});
   await drain(2);assert.equal(members[2].opening.punished,1n);
   // A wave punished by its target holds its pool slot until the waiting period ends; retire it, then the pool has room again.
@@ -418,7 +422,7 @@ try{
   decline.signature=canonicalSignature(sign('sha256',receiptBytes(community,members[3].owner.member,members[0].owner.member,declinedSlot,members[3].owner.delegationDigest,decline),{key:signing[3],dsaEncoding:'ieee-p1363'}));
   members[3]=(await submit(10,[await members[3].settle(declinedContact.incoming,decline,undefined,now++)],'decline')).next;
   now=Math.ceil((now+10)/10)*10;
-  const declineProof=await anonymous(await members[3].deposit({slot:declinedSlot,kind:2},members[3].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'decline-deposit');
+  const declineProof=await anonymous(await members[3].deposit({slot:declinedSlot,kind:2},members[3].certificate,artifacts.scope.circuitDigest,issuance,now/10),'decline-deposit');
   await call({op:'deposit',batch:[{deposit:declineProof.statement.deposit,proof:declineProof.proof},batch[1]],now});
   await drain(0);assert.equal(members[0].opening.declined,1n);assert.equal(members[0].opening.reserved,1n);
   await assert.rejects(members[0].cancel(declinedContact.outgoing,now));
@@ -438,8 +442,8 @@ try{
   const early=await answered.punish(reordered.incoming,now++,reordered.senderSignature);
   members[1]=(await submit(8,[early],'reordered-punishment')).next;
   now=Math.ceil((now+10)/10)*10;
-  const earlyProof=await anonymous(await members[1].deposit(early.delivery,members[1].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'early-punishment-deposit');
-  const lateProof=await anonymous(await answered.deposit({slot:delayedSlot,kind:1},answered.certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'late-answer-deposit');
+  const earlyProof=await anonymous(await members[1].deposit(early.delivery,members[1].certificate,artifacts.scope.circuitDigest,issuance,now/10),'early-punishment-deposit');
+  const lateProof=await anonymous(await answered.deposit({slot:delayedSlot,kind:1},answered.certificate,artifacts.scope.circuitDigest,issuance,now/10),'late-answer-deposit');
   await call({op:'deposit',batch:[earlyProof,lateProof].map(d=>({deposit:d.statement.deposit,proof:d.proof})),now});
   await drain(2);
   assert.equal(members[2].opening.reserved,0n);
@@ -467,7 +471,7 @@ try{
     const ack={issuedAt:BigInt(now),signature:canonicalSignature(sign('sha256',ackBytes(community,members[sender].owner.member,members[recipient].owner.member,slot,digest,members[sender].owner.delegationDigest,now),{key:signing[sender],dsaEncoding:'ieee-p1363'}))};
     members[recipient]=(await submit(7+recipient,[await members[recipient].settle(c.incoming,answer,ack,now++)],'voucher-answer')).next;
     now=Math.ceil((now+10)/10)*10;
-    const delivery=await anonymous(await members[recipient].deposit({slot,kind:1},members[recipient].certificate,artifacts.scope.circuitDigest,manifest.issuerKey,now/10),'voucher-answer-deposit');
+    const delivery=await anonymous(await members[recipient].deposit({slot,kind:1},members[recipient].certificate,artifacts.scope.circuitDigest,issuance,now/10),'voucher-answer-deposit');
     await call({op:'deposit',batch:[{deposit:delivery.statement.deposit,proof:delivery.proof},batch[1]],now});
     const queued=await call({op:'inbox',member:7+sender,now,owner:toArray(members[sender].owner.member)});
     assert.equal(queued.entries.length,1);

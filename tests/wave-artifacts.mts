@@ -2,7 +2,7 @@
 // keys under the pinned maintained backend, and an authenticated artifact group.
 // Public data only; no witness, proof or member opening is produced here.
 import assert from 'node:assert/strict';
-import {createHash,createECDH} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {Barretenberg,BackendType,UltraHonkBackend} from '@aztec/bb.js';
@@ -50,9 +50,8 @@ try{await api.srsInitSrs({pointsBuf:setup['g1.dat'],numPoints:lock.numPoints,g2P
   }
 }finally{await api.destroy();}
 const keyBytes=Buffer.from(JSON.stringify(keys));await writeFile(resolve(directory,'keys.json'),keyBytes);
-const issuer=createECDH('prime256v1');issuer.setPrivateKey(Buffer.alloc(32,3));
 const manifest={version:1,accountingMode:'account-extension-v1',compiler:'1.0.0-beta.26',backend:producer.receipt.packageVersion,verifierTarget:OPTIONS.verifierTarget,
-  circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files,issuerKey:Array.from(issuer.getPublicKey().subarray(1))};
+  circuitSha256:sha(await readFile(resolve(directory,'circuits.json'))).toString('hex'),vkSha256:sha(keyBytes).toString('hex'),numPoints:lock.numPoints,setup:lock.files};
 const manifestBytes=Buffer.from(JSON.stringify(manifest));
 await writeFile(resolve(directory,'manifest.json'),manifestBytes);
 await writeFile(resolve(directory,'config.json'),JSON.stringify({directory,manifestSha256:sha(manifestBytes).toString('hex')}));
