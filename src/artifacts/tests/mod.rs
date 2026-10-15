@@ -31,7 +31,7 @@ fn circuits(widths: &[(&str, usize)]) -> Vec<u8> {
 }
 const WIDTHS: [(&str, usize); 7] = [
     ("update", 410),
-    ("deposit", 294),
+    ("deposit", 328),
     ("record", 204),
     ("record_epoch", 335),
     ("voucher_epoch", 381),
@@ -146,7 +146,7 @@ fn authenticated_snapshots_bind_group_and_each_native_key_without_host_files() {
     let configs = artifacts.configs(options(), options());
     for (config, (key, inputs)) in configs.into_iter().zip([
         (vec![1, 2], UPDATE_WIDTH),
-        (vec![3, 4], 294),
+        (vec![3, 4], 328),
         (vec![5, 6], 204),
     ]) {
         assert_eq!(config.verification_key, key);
