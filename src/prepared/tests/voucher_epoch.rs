@@ -137,3 +137,14 @@ fn voucher_presentation_refuses_bad_shape_scope_and_certificate() {
         assert!(prepare(&statement(changed), &anonymous()).is_err());
     }
 }
+
+#[test]
+fn issue_claim_wire_is_camel_case() {
+    // The holder (TypeScript and Rust) sends the claim fields in camelCase like the presentation.
+    let wire = serde_json::to_value(issue(5, 3, 5)).unwrap();
+    assert_eq!(wire["kind"], "issue");
+    assert_eq!(wire["signoffStanding"], 3);
+    assert!(wire.get("signoff_standing").is_none());
+    let back: VoucherPurpose = serde_json::from_value(wire).unwrap();
+    assert_eq!(back, issue(5, 3, 5));
+}

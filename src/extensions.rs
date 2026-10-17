@@ -273,6 +273,8 @@ pub enum VoucherPurpose {
     /// fixed output with zeros), and
     /// `signoff_standing` greater than zero proves the member's pool cap reaches that
     /// threshold. The relying party compares the threshold with its own rulebook value.
+    // `rename_all` on the enum renames only the variants; the fields follow the camelCase wire too.
+    #[serde(rename_all = "camelCase")]
     Issue {
         uses: u32,
         signoff_standing: u64,
