@@ -45,6 +45,8 @@ struct Loaded {
     group: WaveArtifacts,
     /// The Wave policy exactly as the published material derives it.
     policy: WavePolicy,
+    /// The published verifier material the policy was derived from.
+    material: serde_json::Value,
     until: u64,
     verifier: WaveVerifier<cvfy::NativeVerifier>,
     reservation: (WaveStatement, Vec<u8>),
@@ -145,6 +147,7 @@ fn load() -> Loaded {
     Loaded {
         group,
         policy: wave_policy,
+        material: fixture.material.clone(),
         until,
         verifier,
         reservation: (reservation, proof(wave)),
@@ -226,9 +229,31 @@ fn a_policy_that_differs_from_the_published_material_refuses_the_proofs() {
     let mut flipped = l.policy.clone();
     flipped.proof_scope.circuit_digest[0] ^= 1;
     assert!(refused(flipped));
-    let mut flipped = l.policy.clone();
-    flipped.proof_scope.verifying_key_digest[0] ^= 1;
-    assert!(refused(flipped));
+    // The account verifying-key digest is no Wave authority (the accepted-state certificate
+    // binds the account circuit digest; the Wave keys are pinned by the authenticated group).
+    // The published material owns it: a descriptor whose digest differs from the material's
+    // derivation is refused there, and Wave proofs checked under another relation's key fail.
+    let material: cblc::publication::PublicVerifierMaterial =
+        serde_json::from_value(l.material.clone()).unwrap();
+    material.validate(&material.community).unwrap();
+    let mut forged = material.clone();
+    forged
+        .wave_verifier
+        .as_mut()
+        .unwrap()
+        .proof_scope
+        .verifying_key_digest[0] ^= 1;
+    assert!(forged.validate(&forged.community).is_err());
+    let options = common::native::options(1024 * 1024);
+    let swapped = WaveVerifier::native(
+        l.policy.clone(),
+        l.now,
+        l.until,
+        l.group.outcome_config(options.clone()),
+        l.group.wave_config(options),
+    )
+    .unwrap();
+    assert!(block_on(swapped.verify(statement, proof, &expected, l.now)).is_err());
     // Another community identity, or a ring whose signing key retired before the
     // certificate's acceptance time, refuses the same proof.
     let mut flipped = l.policy.clone();
