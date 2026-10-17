@@ -174,7 +174,7 @@ pub fn exercise(
     }
     // An anchor that carries the retired v1 issuer pin is refused and changes nothing.
     let mut pinned = fields.clone();
-    pinned["certificateKey"] = json!([7u8; 32]);
+    pinned["certificateKey"] = json!(vec![7u8; 32]);
     replace_anchor(&path, Some(&serde_json::to_vec(&pinned).unwrap()));
     let retained = inspection::Connection::open(&path).unwrap().snapshot();
     assert!(install(&path, fixture, settings, extension, scope, directory, init).is_err());
