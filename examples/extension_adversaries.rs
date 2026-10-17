@@ -212,17 +212,23 @@ fn main() {
     ledger
         .admit_checkpoint(0, serde_json::from_value(init["root"].clone()).unwrap())
         .unwrap();
+    // The scenario's deposits name the fixture issuer period that opens at second 1 (the
+    // TypeScript harness records the same ring); later recordings of the same key keep it.
+    common::record_fixture_issuer(&mut ledger, 1);
     // Forward-time refusal scenarios use independent handles. Their RAM clocks
-    // must never be reset to resume the main fixture's earlier timeline.
+    // must never be reset to resume the main fixture's earlier timeline. Each handle
+    // configures the recorded issuer ring, as every host does before serving deposits.
     let open_probe = || {
-        base(&path, &fixture, settings.clone())
+        let mut probe = base(&path, &fixture, settings.clone())
             .with_extensions(
                 extension.clone(),
                 verifier(scope.clone(), &directory),
                 limits(),
                 activation(init),
             )
-            .unwrap()
+            .unwrap();
+        common::record_fixture_issuer(&mut probe, 1);
+        probe
     };
     #[cfg(feature = "publication")]
     let authenticated_material = {

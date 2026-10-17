@@ -75,7 +75,7 @@ impl Inputs {
     }
     fn open(&self, path: &Path, fixture: &Fixture) -> Ledger {
         let options = common::native::options(1024 * 1024);
-        common::host_storage::open(
+        let mut ledger = common::host_storage::open(
             path,
             fixture.trust.clone(),
             self.settings.clone(),
@@ -110,7 +110,11 @@ impl Inputs {
                     .unwrap(),
             },
         )
-        .unwrap()
+        .unwrap();
+        // Every host records its certificate issuer ring before it serves; the scenario's
+        // deposits name the fixture period that opens at second 1.
+        common::record_fixture_issuer(&mut ledger, 1);
+        ledger
     }
     fn admit(&self, ledger: &mut Ledger, fixture: &Fixture) {
         ledger
