@@ -124,7 +124,29 @@ fn zero_one_and_many_native_deposits_share_one_complete_daily_cut() {
                         .collect::<Vec<_>>(),
                     vec!["binding", "deposit", "eligible_epoch", "format"]
                 );
-                assert_eq!(fact["deposit"].as_object().unwrap().len(), 6);
+                // The public deposit only: its key period and community identity, never a witness.
+                let mut fields = fact["deposit"]
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                fields.sort_unstable();
+                assert_eq!(
+                    fields,
+                    vec![
+                        "authorizationNullifier",
+                        "community",
+                        "identity",
+                        "issuerKey",
+                        "issuerValidFrom",
+                        "issuerValidUntil",
+                        "nullifier",
+                        "obligation",
+                        "recipient",
+                        "releaseEpoch"
+                    ]
+                );
             }
         }
         // Compatibility batch application cannot bypass the daily owner.
