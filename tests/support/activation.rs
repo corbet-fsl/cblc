@@ -102,7 +102,9 @@ pub fn exercise(
     let mut ledger = install(&path, fixture, settings, extension, scope, directory, init).unwrap();
     let original = anchor(&path);
     let fields: Value = serde_json::from_slice(&original).unwrap();
-    assert_eq!(fields["format"], "cblc.extension-activation.v1");
+    assert_eq!(fields["format"], "cblc.extension-activation.v2");
+    // v2 pins no certificate issuer key: the ledger's key ring is the issuer authority.
+    assert!(fields.get("certificateKey").is_none());
     assert!(fields.get("proof").is_none());
     assert!(fields.get("account").is_none());
     assert_eq!(
@@ -144,7 +146,7 @@ pub fn exercise(
         assert_eq!(after.policy_digest, tuned.policy_digest);
     }
     drop(reopened);
-    for case in 0..5 {
+    for case in 0..4 {
         let mut changed = fields.clone();
         match case {
             0 => changed["format"] = Value::String("unsupported".into()),
@@ -153,13 +155,9 @@ pub fn exercise(
                 changed["statementSha256"][0] =
                     json!(changed["statementSha256"][0].as_u64().unwrap() ^ 1)
             }
-            3 => {
+            _ => {
                 changed["manifestSha256"][0] =
                     json!(changed["manifestSha256"][0].as_u64().unwrap() ^ 1)
-            }
-            _ => {
-                changed["certificateKey"][0] =
-                    json!(changed["certificateKey"][0].as_u64().unwrap() ^ 1)
             }
         }
         replace_anchor(&path, Some(&serde_json::to_vec(&changed).unwrap()));
@@ -174,6 +172,17 @@ pub fn exercise(
         );
         replace_anchor(&path, Some(&original));
     }
+    // An anchor that carries the retired v1 issuer pin is refused and changes nothing.
+    let mut pinned = fields.clone();
+    pinned["certificateKey"] = json!([7u8; 32]);
+    replace_anchor(&path, Some(&serde_json::to_vec(&pinned).unwrap()));
+    let retained = inspection::Connection::open(&path).unwrap().snapshot();
+    assert!(install(&path, fixture, settings, extension, scope, directory, init).is_err());
+    assert_eq!(
+        inspection::Connection::open(&path).unwrap().snapshot(),
+        retained
+    );
+    replace_anchor(&path, Some(&original));
     replace_anchor(&path, None);
     let retained = inspection::Connection::open(&path).unwrap().snapshot();
     assert!(matches!(

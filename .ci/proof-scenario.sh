@@ -24,6 +24,10 @@ CBLC_LAST_GATE="proof"
 git rev-parse HEAD > .extension-test/source.txt
 sha256sum package-lock.json >> .extension-test/source.txt
 CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mts
+# chain2 CI ONLY (removed before landing): keep the scenario outputs so the Rust adversary gate can be
+# re-run locally without another hour of proving.
+chain2_keep="$ARTIFACT_ROOT/chain2-scenario/$(git rev-parse HEAD)"
+mkdir -p "$chain2_keep" && cp -r .extension-test .proof-test "$chain2_keep/"
 CBLC_LAST_GATE="adversaries"
 cargo run --locked --all-features --example extension_adversaries
 cp .extension-test/publication.json "$ARTIFACT_ROOT/balance-publication.json"
