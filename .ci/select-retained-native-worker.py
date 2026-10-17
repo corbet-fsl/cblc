@@ -22,7 +22,7 @@ if not root.is_absolute():
     raise SystemExit("Original artifact destination unavailable")
 # The live producer directory is rewritten by every verify run; the pinned capture is kept
 # immutably under its own receipt digest (retain-record-fixture.py).
-PINNED = "44452b71ef1d79c60a3f61f128aebefaeb43babee55b0ce701f2f7219d8a22d6"
+PINNED = "e55d4cafadb748f4e24a7a581208407c2fcb32ea74a1ae37532167e9054c4925"
 retained = root / "gather-record-fixture-retained" / PINNED
 source = (retained if retained.is_dir() else root / "gather-record-fixture").resolve(strict=True)
 metadata = source / "worker.json"
@@ -30,12 +30,12 @@ if digest(metadata, 65536) != PINNED:
     raise SystemExit("Original verification worker receipt differs")
 receipt = json.loads(metadata.read_text())
 expected = {
-    "sourceCommit": "829489a47cb3b2798830921591416b73f09ccafa",
-    "sourceArchiveSha256": "a7ec3d644b0b7c2788a8e6f1d9ebf32846bd9daca16903eeb7bb80b5f8fc8681",
-    "cargoLockSha256": "d7f6214c356eda32cbd0c23fea65c22048902b8962494950cebe5c77cdd763ac",
+    "sourceCommit": "e5514337959c4aacb3e9d7f678e3f45898b61061",
+    "sourceArchiveSha256": "7996f496e02473b3c4b291c2cfcaba538fc8cd7c82970499b1f35c03da63c231",
+    "cargoLockSha256": "d39f33b094bd211e4320335f345237fd54f847f813e7905298c00a6169121a2a",
     "nativeSdkSha256": "d3d70f5c3a9e55d241ce8842b2a8fd254ca651bcd38a8434faa9f363f68e756f",
-    "workerSha256": "20136479f31369532345b1e56e0b95a2e4c82803e03b352b1d19b1cc18eab87a",
-    "workerBytes": 68155080,
+    "workerSha256": "7d90df5d29d222545bebba3e10cdbbdeac974856bfe8ae27a235d8b31b8e42e6",
+    "workerBytes": 68211552,
     "workerMode": 493,
 }
 print("CBLC-WORKER-RECEIPT " + json.dumps({key: receipt.get(key) for key in expected}, sort_keys=True), file=__import__("sys").stderr)
