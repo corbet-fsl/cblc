@@ -23,9 +23,6 @@ CBLC_LAST_GATE="proof"
   CBLC_EXTENSION_ISSUER="$cblc_issuer" node tests/extensions-proof.mts --record-epoch-proofs
 )
 # Keep this genuine capture once under its own digest; consumers pin that digest.
-# chain2 CI ONLY (removed before landing): keep the record-epoch outputs for local test runs.
-chain2_keep="$ARTIFACT_ROOT/chain2-record-epoch/$(git rev-parse HEAD)"
-mkdir -p "$chain2_keep" && cp -r .record-epoch-test "$chain2_keep/"
 python3 -B .ci/retain-record-fixture.py
 CBLC_LAST_GATE="retain"
 retain_fixture record-epoch .record-epoch-test

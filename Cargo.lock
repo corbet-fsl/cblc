@@ -894,7 +894,7 @@ dependencies = [
 [[package]]
 name = "cwlt"
 version = "0.0.0"
-source = "git+https://forge.corbet.ch/corbet-foss/cwlt?branch=chain2#0eb19751d7913d00076ce0e99fde9f19d5d2d914"
+source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#5c4c221b4e3d1ec3392b04b3a10fadb51d73dfaf"
 dependencies = [
  "cvfy",
  "cwlt-engine",
@@ -909,7 +909,7 @@ dependencies = [
 [[package]]
 name = "cwlt-engine"
 version = "0.0.0"
-source = "git+https://forge.corbet.ch/corbet-foss/cwlt?branch=chain2#0eb19751d7913d00076ce0e99fde9f19d5d2d914"
+source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#5c4c221b4e3d1ec3392b04b3a10fadb51d73dfaf"
 dependencies = [
  "chacha20poly1305",
  "czkp",
@@ -926,7 +926,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://forge.corbet.ch/corbet-foss/czkp?branch=chain2#bac9d7a05f576f0fc3cc696cde8fee264021e2bd"
+source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#f776a8b96304c87eed6c2c050ee31ac9be05a0f4"
 dependencies = [
  "ark-bn254",
  "ark-ff",

@@ -7,8 +7,8 @@
     "experiments/private-accounting"
   ],
   "dependencies": {
-    "@corbet-labs/czkp": "git+https://git.corbet.ch/corbet-foss/czkp.git#chain2",
-    "@corbet-labs/cwlt": "git+https://git.corbet.ch/corbet-foss/cwlt.git#chain2"
+    "@corbet-labs/czkp": "git+https://git.corbet.ch/corbet-foss/czkp.git#main",
+    "@corbet-labs/cwlt": "git+https://git.corbet.ch/corbet-foss/cwlt.git#main"
   },
   "scripts": {
     "test": "node --test tests/holder/test/*.test.mjs tests/runtime/*.test.ts",
