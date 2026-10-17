@@ -34,9 +34,10 @@ try {
   };
   const byKind=Object.fromEntries(fixture.cases.map(c=>[c.kind,c]));
   const reservation=byKind.wave.statement.wave,settled=byKind.outcome.statement.outcome;
-  const policy={community:reservation.context.community,extension:byKind.wave.statement.policy,
-    proofScope:fixture.extensionScope,certificateKey:fixture.issuerKey,manifestSha256:Array(32).fill(1),
-    statePolicy:reservation.statePolicy,validFrom:1,validUntil:reservation.context.expiresAt+1000};
+  // The policy comes from the published material the issuer generated (issuer key ring and
+  // community identity included), never from the statement being verified.
+  // The Rust counterpart (wave_roundtrip.rs) asserts the statement agrees with it.
+  const policy=fixture.material.waveVerifier;
   const now=Math.max(reservation.acceptedAt,settled.evidence.acceptedAt)+1;
   const verifier=new BrowserWaveVerifier(JSON.stringify(policy),BigInt(now),BigInt(reservation.context.expiresAt+1000),check(wave),check(outcome));
   const proof=c=>Uint8Array.from(Buffer.from(c.proof,'hex'));
