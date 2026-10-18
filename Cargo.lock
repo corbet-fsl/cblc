@@ -403,7 +403,7 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#2a2dbbadabde75225fecc73e8975eff1576bbe2d"
+source = "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#5462d90a5ea897155f2f5e9cca7d7695c89ad68e"
 dependencies = [
  "csgn",
  "serde",
@@ -565,7 +565,7 @@ dependencies = [
 [[package]]
 name = "cmbl"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=main#87995601f9e9373cd8d31777e6e40a6ef1f3024c"
+source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=main#076160ac16fbe09702a558fd27dd6c4ef16e3323"
 dependencies = [
  "blake3",
  "blind-rsa-signatures",
@@ -585,7 +585,7 @@ dependencies = [
 [[package]]
 name = "cmmr"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmmr.git?branch=main#4e7a53703ccdf75a760af9ad6f4a4b9f429c952e"
+source = "git+https://git.corbet.ch/corbet-foss/cmmr.git?branch=main#c993165731e9ba7b12602e1949bae756d4d76d48"
 dependencies = [
  "serde",
 ]
@@ -671,7 +671,7 @@ dependencies = [
 [[package]]
 name = "cpns"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cpns?branch=main#9470e80c458c7769a0ddc33fb1c25fc4fa6113b1"
+source = "git+https://git.corbet.ch/corbet-foss/cpns?branch=main#2069253be81f40b05579cd63ce906c0c1f4800a4"
 dependencies = [
  "getrandom 0.4.3",
  "sha2 0.11.0",
@@ -706,7 +706,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/crlt?branch=main#3db630da2dfd176bc665d1617b89a7c0c4ebb2c9"
+source = "git+https://git.corbet.ch/corbet-foss/crlt?branch=main#2f9de1596d50293a2d9d870e2274e8c0a6f3e135"
 dependencies = [
  "deadpool",
  "libsql",
@@ -789,7 +789,7 @@ dependencies = [
 [[package]]
 name = "csgn"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/csgn?branch=main#71357f023972eea8c90951da05303eabd9d7e0a2"
+source = "git+https://git.corbet.ch/corbet-foss/csgn?branch=main#d8e025fcc2cc448345e90c6cf075faac8560ac48"
 dependencies = [
  "ciborium-ll",
  "coset",
@@ -802,7 +802,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cssr?branch=main#2e635bc250f8e55ae6ca6f8c1f2b8120eb169f98"
+source = "git+https://git.corbet.ch/corbet-foss/cssr?branch=main#f896b90492c651728ab998f7870139a0f99a0820"
 dependencies = [
  "crlt",
  "czkp",
@@ -821,7 +821,7 @@ checksum = "8fd9f3db6f2cfef61c10613071955154ffdc9e515daebff26de4b54e35038fdd"
 [[package]]
 name = "cthl"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cthl?branch=main#9bf449ec8a1848de0d2c990b5a322b08fcd60b7b"
+source = "git+https://git.corbet.ch/corbet-foss/cthl?branch=main#7f6d8a6cf08ea9e75139840c544b9b8354608af0"
 dependencies = [
  "governor",
 ]
@@ -882,7 +882,7 @@ dependencies = [
 [[package]]
 name = "cvfy"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cvfy?branch=main#db515b9ff559818e77e513c6160197d39de3f5cf"
+source = "git+https://git.corbet.ch/corbet-foss/cvfy?branch=main#9df6ed09fd142d345c56cbfb68629eeac343c79f"
 dependencies = [
  "czkp",
  "data-encoding",
@@ -894,7 +894,7 @@ dependencies = [
 [[package]]
 name = "cwlt"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#5c4c221b4e3d1ec3392b04b3a10fadb51d73dfaf"
+source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#3aabd5961865b0a650e838afbb767fd8e36d9db3"
 dependencies = [
  "cvfy",
  "cwlt-engine",
@@ -909,7 +909,7 @@ dependencies = [
 [[package]]
 name = "cwlt-engine"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#5c4c221b4e3d1ec3392b04b3a10fadb51d73dfaf"
+source = "git+https://git.corbet.ch/corbet-foss/cwlt.git?branch=main#3aabd5961865b0a650e838afbb767fd8e36d9db3"
 dependencies = [
  "chacha20poly1305",
  "czkp",
@@ -926,7 +926,7 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#f776a8b96304c87eed6c2c050ee31ac9be05a0f4"
+source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#bac9d7a05f576f0fc3cc696cde8fee264021e2bd"
 dependencies = [
  "ark-bn254",
  "ark-ff",
