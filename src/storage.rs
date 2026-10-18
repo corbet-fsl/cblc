@@ -93,14 +93,20 @@ impl<'a> CommitDeadline<'a> {
     }
 
     fn authorize(&self) -> Result<u64, Error> {
+        let observed = self.check()?;
+        let Some(authority) = self.authority else {
+            self.authorized.set(true);
+            return Ok(observed);
+        };
+        authority.check(observed)?;
+        // The owner reads evaluate at `observed` and may outlast a second. The
+        // live clock must not regress or reach the deadline. Scheduled
+        // restrictions change without a database writer, so only a boundary
+        // of the authority's schedule in (observed, now] requires a fresh
+        // operation; a plain crossed second does not.
         let now = self.check()?;
-        if let Some(authority) = self.authority {
-            authority.check(now)?;
-            // Scheduled restrictions can change without a database writer.
-            // A second crossed during owner reads requires a fresh operation.
-            if self.check()? != now {
-                return Err(Error::Expired);
-            }
+        if now != observed && authority.boundary_crossed(observed, now)? {
+            return Err(Error::Expired);
         }
         self.authorized.set(true);
         Ok(now)

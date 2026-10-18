@@ -6,6 +6,8 @@ struct Current {
     checked: AtomicU64,
     clock: Arc<AtomicU64>,
     advance: bool,
+    // The one scheduled boundary of this owner (an epoch transition).
+    boundary: AtomicU64,
 }
 impl CommitAuthority for Current {
     fn check(&self, observed: u64) -> Result<(), Error> {
@@ -18,6 +20,10 @@ impl CommitAuthority for Current {
         }
         Ok(())
     }
+    fn boundary_crossed(&self, observed: u64, now: u64) -> Result<bool, Error> {
+        let boundary = self.boundary.load(Ordering::Acquire);
+        Ok(observed < boundary && boundary <= now)
+    }
 }
 fn current(allowed: bool, advance: bool) -> Arc<Current> {
     Arc::new(Current {
@@ -25,7 +31,16 @@ fn current(allowed: bool, advance: bool) -> Arc<Current> {
         checked: AtomicU64::new(0),
         clock: Arc::new(AtomicU64::new(10)),
         advance,
+        boundary: AtomicU64::new(u64::MAX),
     })
+}
+// An owner that declares no schedule: every crossed second is a boundary.
+struct Unscheduled(Arc<AtomicU64>);
+impl CommitAuthority for Unscheduled {
+    fn check(&self, _: u64) -> Result<(), Error> {
+        self.0.fetch_add(1, Ordering::AcqRel);
+        Ok(())
+    }
 }
 
 #[test]
@@ -68,20 +83,53 @@ fn authorized_state_and_actual_decision_clock_commit_together() {
 
 #[test]
 fn scheduled_boundary_crossed_inside_owner_reads_refuses_commit() {
+    // A second crossed during the owner reads, with no boundary in (10, 11]:
+    // the decision evaluated at 10 commits, recording the live clock.
     let mut durable = MemoryStore::default();
     let (mut store, scope) = AuthorityScope::wrap(durable.clone());
     let authority = current(true, true);
-    let _guard = scope.enter(authority.clone()).unwrap();
+    authority.boundary.store(12, Ordering::Release);
+    let guard = scope.enter(authority.clone()).unwrap();
     let mut tx = store.transaction().unwrap();
     tx.put(b"state", &7_u64).unwrap();
     let clock = || authority.clock.load(Ordering::Acquire);
+    tx.commit_before(&CommitDeadline::new(&clock, 10, 20))
+        .unwrap();
+    assert_eq!(authority.checked.load(Ordering::Acquire), 10);
+    let mut read = durable.transaction().unwrap();
+    assert_eq!(read.get::<u64>(b"state").unwrap(), Some(7));
+    assert_eq!(read.get::<u64>(b"clock").unwrap(), Some(11));
+    read.rollback().unwrap();
+    drop(guard);
+
+    // The next crossing, 11 -> 12, reaches the scheduled boundary at 12:
+    // nothing commits and the operation must restart fresh.
+    let guard = scope.enter(authority.clone()).unwrap();
+    let mut tx = store.transaction().unwrap();
+    tx.put(b"state", &8_u64).unwrap();
+    assert_eq!(
+        tx.commit_before(&CommitDeadline::new(&clock, 11, 20)),
+        Err(Error::Expired)
+    );
+    assert_eq!(
+        durable.transaction().unwrap().get::<u64>(b"state").unwrap(),
+        Some(7)
+    );
+    drop(guard);
+
+    // An owner without a declared schedule keeps refusing any crossed second.
+    let ticks = Arc::new(AtomicU64::new(10));
+    let _guard = scope.enter(Arc::new(Unscheduled(ticks.clone()))).unwrap();
+    let mut tx = store.transaction().unwrap();
+    tx.put(b"state", &9_u64).unwrap();
+    let clock = || ticks.load(Ordering::Acquire);
     assert_eq!(
         tx.commit_before(&CommitDeadline::new(&clock, 10, 20)),
         Err(Error::Expired)
     );
     assert_eq!(
         durable.transaction().unwrap().get::<u64>(b"state").unwrap(),
-        None
+        Some(7)
     );
 }
 

@@ -16,6 +16,11 @@ impl CommitAuthority for Current {
         }
         Ok(())
     }
+    fn boundary_crossed(&self, observed: u64, now: u64) -> Result<bool, Error> {
+        Ok(self.source.boundary_crossed(observed, now)?
+            || (!Arc::ptr_eq(&self.source, &self.target)
+                && self.target.boundary_crossed(observed, now)?))
+    }
 }
 
 impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {

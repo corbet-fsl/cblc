@@ -12,6 +12,14 @@ use std::sync::{Arc, Mutex};
 /// here so queued work and cancellation cannot outlive their authority.
 pub trait CommitAuthority: Send + Sync {
     fn check(&self, observed: u64) -> Result<(), Error>;
+    /// Called after `check(observed)` passed while the live clock moved on to
+    /// `now`, under the same writer barrier. Return true when a boundary of this
+    /// authority's schedule (an epoch or period transition, a deadline) lies in
+    /// `(observed, now]`; the operation then refuses and restarts fresh. The
+    /// default knows no schedule and treats every second as a boundary.
+    fn boundary_crossed(&self, observed: u64, now: u64) -> Result<bool, Error> {
+        Ok(now != observed)
+    }
 }
 
 enum State {
