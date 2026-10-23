@@ -943,3 +943,54 @@ fn admission_rejects_legacy_root_ids_and_mismatched_pseudonyms() {
         Err(Error::Admission)
     );
 }
+
+#[test]
+fn genesis_lifetime_is_bounded_by_the_code_window_not_the_rulebook() {
+    use cblc::accounting::GENESIS_PROOF_WINDOW_SECONDS;
+    let dir = tempfile::tempdir().unwrap();
+    let f = Fixture::new();
+    let g = f.grant(7, &f.device);
+    let a = f.authorize(7, &f.device);
+    let request = genesis(&f);
+    let lifetime = request.expires_at - request.issued_at;
+    // A rulebook window shorter than this genesis no longer refuses it.
+    let mut short = policy();
+    short.max_authorization_seconds = lifetime - 1;
+    let open_with = |name: &str, policy: AccountLedgerPolicy| {
+        let mut ledger = common::host_storage::open(
+            &dir.path().join(name),
+            f.trust.clone(),
+            policy,
+            RealVerifier::default(),
+            SigningKey::from_bytes(&[9; 32]),
+        )
+        .unwrap();
+        ledger
+            .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
+        ledger
+    };
+    let mut ledger = open_with("short-rulebook.sqlite", short);
+    ledger.apply(&g, &a, &request, || 120).unwrap();
+    // A genesis living longer than the code window is refused before any state.
+    let mut long = request.clone();
+    long.expires_at = long.issued_at + GENESIS_PROOF_WINDOW_SECONDS + 1;
+    sign(&mut long, &f.device);
+    let mut ledger = open_with("long-genesis.sqlite", policy());
+    assert_eq!(ledger.apply(&g, &a, &long, || 120), Err(Error::Expired));
+    // Exactly the window is accepted.
+    let mut exact = request.clone();
+    exact.expires_at = exact.issued_at + GENESIS_PROOF_WINDOW_SECONDS;
+    sign(&mut exact, &f.device);
+    let mut ledger = open_with("exact-genesis.sqlite", policy());
+    ledger.apply(&g, &a, &exact, || 120).unwrap();
+    // An expired genesis is refused and commits nothing.
+    let path = dir.path().join("expired.sqlite");
+    let mut ledger = open_with("expired.sqlite", policy());
+    let original = inspect(&path).snapshot();
+    assert_eq!(
+        ledger.apply(&g, &a, &request, || request.expires_at),
+        Err(Error::Expired)
+    );
+    assert_eq!(inspect(&path).snapshot(), original);
+}

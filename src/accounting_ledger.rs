@@ -169,7 +169,12 @@ fn check_pending(
         return Err(Error::Replay);
     }
     let statement = &request.statement;
-    if request.expires_at - request.issued_at > policy.max_authorization_seconds
+    let window = if statement.genesis {
+        crate::accounting::GENESIS_PROOF_WINDOW_SECONDS
+    } else {
+        policy.max_authorization_seconds
+    };
+    if request.expires_at - request.issued_at > window
         || now < request.issued_at
         || now >= request.expires_at
         || request.expires_at > grant.expires_at

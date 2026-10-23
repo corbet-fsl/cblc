@@ -94,6 +94,16 @@ pub trait AccountProofVerifier {
     fn verify(&self, statement: &AccountStatement, proof: &[u8]) -> Result<(), Error>;
 }
 
+/// Longest lifetime of a GENESIS account request: from its proof statement time
+/// (`issued_at == statement.now`) to its `expires_at`. A technical window that either
+/// fits or not, so a code constant read by the device and by acceptance alike; the
+/// rulebook's `maxAuthorizationSeconds` no longer decides genesis acceptance (it still
+/// bounds account updates, obligations, status requests and record presentations).
+/// The window must cover the slowest supported device's genesis proof plus checkpoint
+/// refreshes, signing and the network; the value comes from the device benchmark in
+/// `~/agents/scratch/bench/PROOF-WINDOW.md`. The checkpoint slot still caps it.
+pub const GENESIS_PROOF_WINDOW_SECONDS: u64 = 100;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
