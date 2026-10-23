@@ -16,6 +16,9 @@ node tests/real-proof.mjs
 )
 CBLC_LAST_GATE="wasm-pack-build"
 env -u RUSTFLAGS wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.extension-wasm"
+# Refusal tests for the merged checks of the update circuit (witness execution only, no proofs).
+CBLC_LAST_GATE="update-refusals"
+node tests/update-refusals.mts
 CBLC_LAST_GATE="issuer-build"
 cargo build --locked --example extension_issuer --features publication
 mkdir -p .extension-test

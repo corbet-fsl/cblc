@@ -13,4 +13,5 @@ node tests/wave-artifacts.mts
 # Standing v5 core: Noir transitions and policy digest against the czkp golden vectors.
 node tests/standing-probe.mts
 node tests/voucher-probe.mts
+# Update circuit diet: std Field::lt equals the removed comparison; the comptime empty root equals the runtime one.
 node tests/core-probe.mts
