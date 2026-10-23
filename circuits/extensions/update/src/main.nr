@@ -2,8 +2,8 @@ use core::voucher::{Voucher,VoucherAux,BondEntry,entry_hash,bond_commit,bond_key
     admit,remaining,punish_weight,rewarded};
 use core::{Enrollment,Opening,Obligation,MapWitness,Resolution,Acknowledgment,ExtensionPolicy,
     limbs,field,hash,secret_hash,marker,pair_key,enrollment_leaf,verify_enrollment,
-    verify_peer_authority,policy_bytes,state_policy_hash,state_hash,obligation_hash,
-    verify_acknowledgment,verify_resolution,extension_hash,advance,delivery,authorization,verify_contact};
+    policy_bytes,state_policy_hash,state_hash,obligation_hash,
+    verify_acknowledgment,extension_hash,advance,delivery,authorization,verify_contact,contact_authority,contact_digest,resolution_message,verify_p256};
 use core::indexed;
 use core::standing::{Standing,StandingPolicy,policy_digest as standing_digest,check_policy,check_state,advance as advance_standing,
     answer_received,answer_given,unanswered,punished,punish_given,cap,obligation_punished};
@@ -124,6 +124,17 @@ fn main(
         let mut reserved = old.reserved;
         let mut accepted = old.accepted; let mut declined = old.declined; let mut punished_count = old.punished;
         let mut authorized: Field = 0;
+        // Noir constrains every action branch. The exclusive actions therefore share ONE
+        // P-256 check (contact: 2, 7, 8; resolution: 3) and ONE peer enrollment path
+        // (1; 3 with a changed peer authority). The predicates come from the public
+        // action selector; each branch keeps its own authority and time asserts.
+        let contact_check = (action == 2) | (action == 7) | (action == 8);
+        let resolution_check = action == 3;
+        assert(!(contact_check & resolution_check));
+        assert(!((action == 1) & resolution_check));
+        let contact = contact_digest(community, owner, slot);
+        let mut resolution_signed = [0; 32];
+        let mut peer_authority_changed = false;
         assert((old.accepted <= SAFE) & (old.declined <= SAFE) & (old.punished <= SAFE));
         if action == 1 {
             // Both owners commit the original initiator's common opened-at.
@@ -137,7 +148,7 @@ fn main(
             // peer gate. Its proof alone does not establish cross-owner consent.
             // Pool check, both roles: pending first contacts (sent and received) stay within the cap.
             assert(old.reserved + amount as u128 <= pool as u128);
-            verify_enrollment(community, slot.peer, peer_enrollment, field(enrollment_root), now, valid_until);
+            // Peer enrollment path: the shared check after the branches.
             assert(slot.peer_authority == enrollment_leaf(community, slot.peer, peer_enrollment));
             assert(slot.owner_authority == enrollment_leaf(community, owner, owner_enrollment));
             // Same event cannot be inserted under another role or a new path.
@@ -237,7 +248,7 @@ fn main(
             let kind=if action==7 {3} else if action==8 {4} else {delivery_kind};
             let mut next_slot=slot;
             if self_punish {
-                verify_contact(community,owner,slot,peer_enrollment,contact_signature);
+                contact_authority(community,slot,peer_enrollment);
                 if action==7 {assert((slot.role==1) & ((slot.phase==1)|(slot.phase==2)) & (slot.outcome==0));}
                 else {assert(slot.answered & !slot.self_punished);}
                 assert((pair_map.leaf[1]==1)|(pair_map.leaf[1]==2)|(pair_map.leaf[1]==5)|(pair_map.leaf[1]==6));
@@ -312,7 +323,7 @@ fn main(
                 obligation_hash(event, slot, slot.phase), obligation_hash(event, changed_slot, next_phase),
                 own_map.leaf, own_map.index, own_map.path);
             if action == 2 {
-                verify_contact(community,owner,slot,peer_enrollment,contact_signature);
+                contact_authority(community,slot,peer_enrollment);
                 assert(now < slot.expires_at);
                 assert(valid_until <= slot.expires_at);
                 assert(settlement_marker == [0; 32]);
@@ -341,7 +352,7 @@ fn main(
                     // Recipient Close does not change the outgoing refund date.
                     // Only a confirmed Answer may settle this role early.
                     assert(resolution.kind == 1);
-                    verify_peer_authority(community, slot, peer_enrollment, field(enrollment_root), now, valid_until);
+                    peer_authority_changed = enrollment_leaf(community, slot.peer, peer_enrollment) != slot.peer_authority;
                 }
                 // Incoming owner closure has no current-eligibility dependency
                 // on the silent counterpart. Historical authority is in slot.
@@ -350,9 +361,9 @@ fn main(
                     assert((authority == slot.owner_authority) | (authority == enrollment_leaf(community, owner, owner_enrollment)));
                 }
                 let signer = if slot.role == 0 { peer_enrollment } else { receipt_owner_enrollment };
-                verify_resolution(community, owner, slot, signer, resolution, now);
+                resolution_signed = resolution_message(community, owner, slot, signer, resolution, now);
                 if (slot.role == 1) & (resolution.kind == 1) {
-                    verify_peer_authority(community, slot, peer_enrollment, field(enrollment_root), now, valid_until);
+                    peer_authority_changed = enrollment_leaf(community, slot.peer, peer_enrollment) != slot.peer_authority;
                     verify_acknowledgment(community, owner, slot, receipt_owner_enrollment,
                         peer_enrollment, resolution, acknowledgment, now);
                 }
@@ -370,6 +381,15 @@ fn main(
                 }
                 assert(event == field(settlement_marker));
             }
+        }
+        if contact_check | resolution_check {
+            let signer = if slot.role == 0 { peer_enrollment } else { receipt_owner_enrollment };
+            let key = if contact_check { peer_enrollment.key } else { signer.key };
+            let signature = if contact_check { contact_signature } else { resolution.signature };
+            verify_p256(key, signature, if contact_check { contact } else { resolution_signed });
+        }
+        if (action == 1) | (resolution_check & peer_authority_changed) {
+            verify_enrollment(community, slot.peer, peer_enrollment, field(enrollment_root), now, valid_until);
         }
         assert((accepted<=SAFE)&(declined<=SAFE)&(punished_count<=SAFE));
         check_state(standing, joined);

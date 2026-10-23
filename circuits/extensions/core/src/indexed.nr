@@ -20,20 +20,10 @@ pub fn leaf(value: [Field; 4]) -> Field {
     hash([DOMAIN, 12, value[0], value[1], value[2], value[3]])
 }
 
-fn halves(value: Field) -> [u128; 2] {
-    let bytes: [u8; 32] = value.to_be_bytes();
-    let mut high: u128 = 0; let mut low: u128 = 0;
-    for i in 0..16 {
-        high = high * 256 + bytes[i] as u128;
-        low = low * 256 + bytes[16+i] as u128;
-    }
-    [high, low]
-}
-
 pub fn less(left: Field, right: Field) -> bool {
-    // Compare canonical representatives, never a truncated field subtraction.
-    let a = halves(left); let b = halves(right);
-    (a[0] < b[0]) | ((a[0] == b[0]) & (a[1] < b[1]))
+    // Compares the canonical representatives in [0, p) (std Field::lt), never a
+    // truncated field subtraction.
+    left.lt(right)
 }
 
 pub fn root(value: Field, path: [Field; 32], index: u32) -> Field {
@@ -46,7 +36,12 @@ pub fn root(value: Field, path: [Field; 32], index: u32) -> Field {
     current
 }
 
+// The empty map's root is a constant: evaluated once at compile time.
 pub fn initial_root() -> Field {
+    comptime { empty_root() }
+}
+
+pub fn empty_root() -> Field {
     let mut sentinel = leaf([0; 4]);
     let mut empty: Field = 0;
     for _ in 0..32 {
