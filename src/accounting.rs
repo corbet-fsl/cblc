@@ -100,9 +100,12 @@ pub trait AccountProofVerifier {
 /// rulebook's `maxAuthorizationSeconds` no longer decides genesis acceptance (it still
 /// bounds account updates, obligations, status requests and record presentations).
 /// The window must cover the slowest supported device's genesis proof plus checkpoint
-/// refreshes, signing and the network; the value comes from the device benchmark in
-/// `~/agents/scratch/bench/PROOF-WINDOW.md`. The checkpoint slot still caps it.
-pub const GENESIS_PROOF_WINDOW_SECONDS: u64 = 100;
+/// refreshes, signing and the network: p99 of the slowest supported prover (a
+/// single-thread browser prover on a laptop core twice as slow as the reference host,
+/// 159 s for the 2^20 circuit) times 1.5, plus 25 s for four requests over Tor
+/// = 264 s, rounded up. The deadline runs from the request's own proof time, not from
+/// the end of the rate window that contains it. The checkpoint slot still caps it.
+pub const GENESIS_PROOF_WINDOW_SECONDS: u64 = 270;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
