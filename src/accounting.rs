@@ -102,10 +102,10 @@ pub trait AccountProofVerifier {
 /// The window must cover the slowest supported device's genesis proof plus checkpoint
 /// refreshes, signing and the network: p99 of the slowest supported prover (a
 /// single-thread browser prover on a laptop core twice as slow as the reference host,
-/// 159 s for the 2^20 circuit) times 1.5, plus 25 s for four requests over Tor
-/// = 264 s, rounded up. The deadline runs from the request's own proof time, not from
+/// 109 s for the 2^19 circuit) times 1.5, plus 25 s for four requests over Tor
+/// = 189 s, rounded up. The deadline runs from the request's own proof time, not from
 /// the end of the rate window that contains it. The checkpoint slot still caps it.
-pub const GENESIS_PROOF_WINDOW_SECONDS: u64 = 270;
+pub const GENESIS_PROOF_WINDOW_SECONDS: u64 = 190;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
