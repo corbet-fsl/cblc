@@ -482,7 +482,7 @@ fn concurrently_cached_request_bypasses_original_expiry_but_requires_live_author
 }
 
 #[test]
-fn checkpoint_slot_expiry_during_verification_cannot_commit() {
+fn a_genesis_whose_slot_ends_during_verification_still_commits_inside_its_window() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ledger.sqlite");
     let f = Fixture::new();
@@ -499,7 +499,7 @@ fn checkpoint_slot_expiry_during_verification_cannot_commit() {
     ledger
         .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
-    let times = [120, 120, 150];
+    let times = [120, 120, 150, 150];
     let index = Cell::new(0);
     let result = ledger.apply(
         &f.grant(7, &f.device),
@@ -509,23 +509,23 @@ fn checkpoint_slot_expiry_during_verification_cannot_commit() {
         || {
             let i = index.get();
             index.set(i + 1);
-            times[i]
+            times[i.min(times.len() - 1)]
         },
     );
-    assert_eq!(result, Err(Error::Expired));
+    assert!(result.is_ok(), "{result:?}");
     let db = inspect(&path);
     assert_eq!(
         db.query_row("SELECT count(*) FROM frontiers", [], |row| row
             .get::<_, i64>(0))
             .unwrap(),
-        0
+        1
     );
     assert_eq!(
         db.query_row("SELECT clock_floor FROM configuration", [], |row| {
             row.get::<_, i64>(0)
         })
         .unwrap(),
-        0
+        150
     );
 }
 
@@ -1097,4 +1097,61 @@ pub(crate) fn current(
     authorization: &cblc::admission::DeviceAuthorization,
 ) -> cblc::current_device::CurrentDevice {
     cblc::current_device::CurrentDevice::attest(&AllCurrent, authorization).unwrap()
+}
+
+/// A ledger whose checkpoint slots are shorter than the genesis fixture's window, so the
+/// fixture request (issued at its statement time in slot 0) can complete in a later slot.
+fn short_slot_ledger(path: &Path, f: &Fixture) -> AccountLedger<RealVerifier> {
+    let mut short = policy();
+    short.checkpoint_period_seconds = 120;
+    let mut ledger = common::host_storage::open(
+        path,
+        f.trust.clone(),
+        short,
+        RealVerifier::default(),
+        SigningKey::from_bytes(&[9; 32]),
+    )
+    .unwrap();
+    ledger
+        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
+    ledger
+}
+
+#[test]
+fn a_genesis_issued_in_a_slot_completes_after_that_slot_ended_within_its_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = Fixture::new();
+    let request = genesis(&f);
+    let slot_end = 120;
+    assert!(request.issued_at < slot_end && slot_end < request.expires_at);
+    let mut ledger = short_slot_ledger(&dir.path().join("ledger.sqlite"), &f);
+    // Completed 30 s after its slot ended, against slot 0's checkpoint (slot 1 was
+    // never admitted): the slot of the statement time governs the root and the rate
+    // counting, the window deadline governs the time.
+    let accepted = ledger
+        .apply(
+            &f.grant(7, &f.device),
+            &f.authorize(7, &f.device),
+            &request,
+            || 150,
+        )
+        .unwrap();
+    assert_eq!(accepted.accepted_at, 150);
+    assert_eq!(accepted.statement, request.statement);
+}
+
+#[test]
+fn a_genesis_past_its_deadline_is_refused_as_expired_never_reconcile() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = Fixture::new();
+    let request = genesis(&f);
+    let mut ledger = short_slot_ledger(&dir.path().join("ledger.sqlite"), &f);
+    let result = ledger.apply(
+        &f.grant(7, &f.device),
+        &f.authorize(7, &f.device),
+        &request,
+        || request.expires_at,
+    );
+    assert_eq!(result, Err(Error::Expired));
 }

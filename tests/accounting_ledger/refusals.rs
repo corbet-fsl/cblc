@@ -91,7 +91,10 @@ fn authenticated_apply_refuses_oversized_cross_scope_and_future_envelopes() {
             1 => request.statement.community[0] ^= 1,
             2 => request.proof_scope.circuit_digest[0] ^= 1,
             3 => request.chat_public_key = B64.encode(&f.issuer.verifying_key().to_bytes()),
-            4 => request.expires_at = request.issued_at + 101,
+            4 => {
+                request.expires_at =
+                    request.issued_at + cblc::accounting::GENESIS_PROOF_WINDOW_SECONDS + 1
+            }
             5 => {
                 request.statement.now = 130;
                 request.issued_at = 130;

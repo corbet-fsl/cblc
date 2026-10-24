@@ -184,7 +184,15 @@ fn check_pending(
         return Err(Error::Expired);
     }
     let slot = statement.now / policy.checkpoint_period_seconds;
-    if now / policy.checkpoint_period_seconds != slot {
+    // A genesis is bound to the checkpoint slot it was issued in but gets its FULL
+    // proof window from its start: it may complete after that slot ended, until its
+    // own deadline (checked above) or the statement horizon. Rate counting stays on
+    // the slot it started in. Every other request must complete inside its slot.
+    if statement.genesis {
+        if now >= statement.valid_until {
+            return Err(Error::Expired);
+        }
+    } else if now / policy.checkpoint_period_seconds != slot {
         return Err(Error::Expired);
     }
     let checkpoint: Option<Vec<u8>> = transaction.get(&key(3, &[&slot.to_be_bytes()]))?;
@@ -636,9 +644,14 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         // is below 2 * MAX_INTEGER and cannot overflow u64.
         let checkpoint_end = (statement.now / self.policy.checkpoint_period_seconds + 1)
             * self.policy.checkpoint_period_seconds;
+        let slot_cap = if statement.genesis {
+            u64::MAX
+        } else {
+            checkpoint_end
+        };
         let expires_at = request
             .expires_at
-            .min(checkpoint_end)
+            .min(slot_cap)
             .min(grant.expires_at)
             .min(authorization.expires_at);
         transaction.commit_before(&CommitDeadline::new(&clock, completed, expires_at))?;
