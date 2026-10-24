@@ -1133,6 +1133,7 @@ fn a_genesis_issued_in_a_slot_completes_after_that_slot_ended_within_its_window(
         .apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            current(&f.authorize(7, &f.device)),
             &request,
             || 150,
         )
@@ -1150,6 +1151,7 @@ fn a_genesis_past_its_deadline_is_refused_as_expired_never_reconcile() {
     let result = ledger.apply(
         &f.grant(7, &f.device),
         &f.authorize(7, &f.device),
+        current(&f.authorize(7, &f.device)),
         &request,
         || request.expires_at,
     );
