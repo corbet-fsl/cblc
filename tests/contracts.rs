@@ -30,11 +30,12 @@ fn original_recipient_transcript_and_real_device_signature_survive_the_move() {
     let key = SigningKey::from_bytes(&[2; 32]);
     let mut request = recipient();
     let original = serde_json::to_vec(&json!([
-        "cblc.record-recipient.v1",
+        "cblc.record-recipient.v2",
         vec![1; 32],
         vec![2; 32],
         vec![41; 32],
         "gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+        0,
         120,
         220
     ]))
@@ -48,6 +49,7 @@ fn original_recipient_transcript_and_real_device_signature_survive_the_move() {
         "owner",
         "recipientKey",
         "chatPublicKey",
+        "lineageEpoch",
         "issuedAt",
         "expiresAt",
     ] {
@@ -57,6 +59,7 @@ fn original_recipient_transcript_and_real_device_signature_survive_the_move() {
             "chatPublicKey" => {
                 changed[field] = json!(B64.encode(&key.verifying_key().to_bytes().map(|v| v ^ 1)))
             }
+            "lineageEpoch" => changed[field] = json!(1),
             "issuedAt" => changed[field] = json!(121),
             _ => changed[field] = json!(221),
         }
