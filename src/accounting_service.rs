@@ -183,6 +183,17 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
         self.handle(request)
     }
 
+    /// The registry witness for one update, asked of the authority that is entered for this
+    /// command. No entered authority, or one without a lineage, refuses before any state read.
+    fn current_device(
+        &self,
+        authorization: &crate::admission::DeviceAuthorization,
+    ) -> Result<crate::current_device::CurrentDevice, Error> {
+        let authority = self.ledger.authority.current()?.ok_or(Error::Admission)?;
+        let lineage = authority.lineage().ok_or(Error::Admission)?;
+        crate::current_device::CurrentDevice::attest(lineage, authorization)
+    }
+
     pub fn handle(
         &mut self,
         request: AccountServiceRequest,
@@ -196,9 +207,11 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                 authorization,
                 request,
             } => {
+                let current = self.current_device(&authorization)?;
                 self.ledger.register_record_recipient(
                     &grant,
                     &authorization,
+                    current,
                     &request,
                     &self.clock,
                 )?;
@@ -210,16 +223,20 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                 grant,
                 authorization,
                 request,
-            } => self
-                .ledger
-                .apply(&grant, &authorization, &request, &self.clock)
-                .map(AccountServiceResponse::Apply),
+            } => {
+                let current = self.current_device(&authorization)?;
+                self.ledger
+                    .apply(&grant, &authorization, current, &request, &self.clock)
+                    .map(AccountServiceResponse::Apply)
+            }
             AccountServiceRequest::ApplyExtended {
                 grant,
                 authorization,
                 request,
                 update,
             } => {
+                // The lineage witness comes first: a removed device learns nothing else.
+                let current = self.current_device(&authorization)?;
                 let issuer = self
                     .extension_issuer
                     .as_ref()
@@ -227,6 +244,7 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                 let result = self.ledger.apply_extended_certified(
                     &grant,
                     &authorization,
+                    current,
                     &request,
                     &update,
                     issuer,

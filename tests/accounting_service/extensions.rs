@@ -104,7 +104,7 @@ fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recov
     let before = stored.snapshot();
     let mut missing = AccountService::new(ledger, || now, 16 * 1024 * 1024).unwrap();
     assert!(matches!(
-        missing.handle_for_member(&[7; 48], operation.clone()),
+        missing.handle_for_member_authorized(&[7; 48], operation.clone(), crate::authority()),
         Err(Error::UnsupportedCapability)
     ));
     assert_eq!(stored.snapshot(), before);
@@ -122,13 +122,23 @@ fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recov
         valid_until: None,
     }];
     let before = stored.snapshot();
+    // A removed device (valid grant and authorization, absent from the lineage) is refused.
     assert!(matches!(
-        correct.handle_for_member(&[8; 48], operation.clone()),
+        correct.handle_for_member_authorized(
+            &[7; 48],
+            operation.clone(),
+            crate::removed_authority()
+        ),
+        Err(Error::Admission)
+    ));
+    assert_eq!(stored.snapshot(), before);
+    assert!(matches!(
+        correct.handle_for_member_authorized(&[8; 48], operation.clone(), crate::authority()),
         Err(Error::Admission)
     ));
     assert_eq!(stored.snapshot(), before);
     let accepted = correct
-        .handle_for_member(&[7; 48], operation.clone())
+        .handle_for_member_authorized(&[7; 48], operation.clone(), crate::authority())
         .unwrap();
     let AccountServiceResponse::ApplyExtended {
         acceptance,
@@ -150,7 +160,9 @@ fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recov
     assert!(certificate.verify(acceptance, &[6; 32], &ring).is_err());
     let committed = stored.snapshot();
     assert_ne!(committed, before);
-    let retried = correct.handle_for_member(&[7; 48], operation).unwrap();
+    let retried = correct
+        .handle_for_member_authorized(&[7; 48], operation, crate::authority())
+        .unwrap();
     assert_eq!(
         serde_json::to_value(retried).unwrap(),
         serde_json::to_value(accepted).unwrap()
@@ -209,6 +221,7 @@ fn service_registers_only_the_admitted_accounts_original_signed_recipient() {
         owner: accepted_request.statement.owner,
         recipient_key: public(41),
         chat_public_key: B64.encode(&f.device.verifying_key().to_bytes()),
+        lineage_epoch: 0,
         issued_at: 120,
         expires_at: 220,
         signature: String::new(),
@@ -225,35 +238,54 @@ fn service_registers_only_the_admitted_accounts_original_signed_recipient() {
     let stored = inspection::Connection::open(&database).unwrap();
     let before = stored.snapshot();
     assert!(matches!(
-        service.handle_for_member(&[7; 48], operation(request.clone())),
+        service.handle_for_member_authorized(
+            &[7; 48],
+            operation(request.clone()),
+            crate::authority()
+        ),
         Err(Error::Admission)
     ));
     assert_eq!(stored.snapshot(), before);
     service
-        .handle_for_member(
+        .handle_for_member_authorized(
             &[7; 48],
             AccountServiceRequest::Apply {
                 grant: f.grant(7, &f.device),
                 authorization: f.authorize(7, &f.device),
                 request: Box::new(accepted_request),
             },
+            crate::authority(),
         )
         .unwrap();
     let accepted = stored.snapshot();
     assert!(matches!(
-        service.handle_for_member(&[8; 48], operation(request.clone())),
+        service.handle_for_member_authorized(
+            &[8; 48],
+            operation(request.clone()),
+            crate::authority()
+        ),
+        Err(Error::Admission)
+    ));
+    assert_eq!(stored.snapshot(), accepted);
+    // A removed device cannot register the recipient either.
+    assert!(matches!(
+        service.handle_for_member_authorized(
+            &[7; 48],
+            operation(request.clone()),
+            crate::removed_authority()
+        ),
         Err(Error::Admission)
     ));
     assert_eq!(stored.snapshot(), accepted);
     let mut wrong = request.clone();
     resign(&mut wrong, &SigningKey::from_bytes(&[43; 32]));
     assert!(matches!(
-        service.handle_for_member(&[7; 48], operation(wrong)),
+        service.handle_for_member_authorized(&[7; 48], operation(wrong), crate::authority()),
         Err(Error::Signature)
     ));
     assert_eq!(stored.snapshot(), accepted);
     let registered = service
-        .handle_for_member(&[7; 48], operation(request.clone()))
+        .handle_for_member_authorized(&[7; 48], operation(request.clone()), crate::authority())
         .unwrap();
     let AccountServiceResponse::RecordRecipient { recipient_key } = registered else {
         panic!("actual durable recipient response");
@@ -270,7 +302,7 @@ fn service_registers_only_the_admitted_accounts_original_signed_recipient() {
     )
     .unwrap();
     let retry = service
-        .handle_for_member(&[7; 48], operation(request.clone()))
+        .handle_for_member_authorized(&[7; 48], operation(request.clone()), crate::authority())
         .unwrap();
     assert!(
         matches!(retry, AccountServiceResponse::RecordRecipient { recipient_key } if recipient_key == request.recipient_key)
@@ -280,13 +312,13 @@ fn service_registers_only_the_admitted_accounts_original_signed_recipient() {
     changed.recipient_key = public(42);
     resign(&mut changed, &f.device);
     assert!(matches!(
-        service.handle_for_member(&[7; 48], operation(changed)),
+        service.handle_for_member_authorized(&[7; 48], operation(changed), crate::authority()),
         Err(Error::Replay)
     ));
     assert_eq!(stored.snapshot(), committed);
     now.store(request.expires_at, Ordering::SeqCst);
     assert!(matches!(
-        service.handle_for_member(&[7; 48], operation(request)),
+        service.handle_for_member_authorized(&[7; 48], operation(request), crate::authority()),
         Err(Error::Expired)
     ));
     assert_eq!(stored.snapshot(), committed);

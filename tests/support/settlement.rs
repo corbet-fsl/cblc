@@ -161,6 +161,7 @@ impl Inputs {
                 .apply_extended(
                     &fixture.grant(member, &fixture.device),
                     &fixture.authorize(member, &fixture.device),
+                    current(&fixture.authorize(member, &fixture.device)),
                     &request,
                     &update,
                     || request.issued_at,
@@ -175,6 +176,7 @@ impl Inputs {
                 owner: owner(member),
                 recipient_key: public.to_bytes().as_slice().try_into().unwrap(),
                 chat_public_key: B64.encode(&fixture.device.verifying_key().to_bytes()),
+                lineage_epoch: 0,
                 issued_at: 114,
                 expires_at: 190,
                 signature: String::new(),
@@ -191,6 +193,7 @@ impl Inputs {
                 .register_record_recipient(
                     &fixture.grant(member, &fixture.device),
                     &fixture.authorize(member, &fixture.device),
+                    current(&fixture.authorize(member, &fixture.device)),
                     &request,
                     || 114,
                 )
@@ -488,4 +491,16 @@ fn new_member_at_capacity_refuses_without_poisoning_exact_owner_retry() {
             .unwrap(),
         signature
     );
+}
+
+struct AllCurrent;
+impl cblc::current_device::CurrentLineage for AllCurrent {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        true
+    }
+}
+fn current(
+    authorization: &cblc::admission::DeviceAuthorization,
+) -> cblc::current_device::CurrentDevice {
+    cblc::current_device::CurrentDevice::attest(&AllCurrent, authorization).unwrap()
 }

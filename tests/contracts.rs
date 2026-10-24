@@ -18,6 +18,7 @@ fn recipient() -> RecipientRequest {
         owner: [2; 32],
         recipient_key: [41; 32],
         chat_public_key: B64.encode(&SigningKey::from_bytes(&[2; 32]).verifying_key().to_bytes()),
+        lineage_epoch: 0,
         issued_at: 120,
         expires_at: 220,
         signature: String::new(),

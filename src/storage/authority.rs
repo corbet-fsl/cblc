@@ -20,6 +20,12 @@ pub trait CommitAuthority: Send + Sync {
     fn boundary_crossed(&self, observed: u64, now: u64) -> Result<bool, Error> {
         Ok(now != observed)
     }
+    /// The member's current device lineage (the door's device registry), when this authority
+    /// speaks for a member. Every account update asks it for a `CurrentDevice` witness; the
+    /// default knows no lineage, so an authority without one refuses all member updates.
+    fn lineage(&self) -> Option<&dyn crate::current_device::CurrentLineage> {
+        None
+    }
 }
 
 enum State {
@@ -57,7 +63,7 @@ impl AuthorityScope {
         Ok(AuthorityGuard(self.clone()))
     }
 
-    fn current(&self) -> Result<Option<Arc<dyn CommitAuthority>>, Error> {
+    pub(crate) fn current(&self) -> Result<Option<Arc<dyn CommitAuthority>>, Error> {
         match &*self.0.lock().map_err(|_| Error::Storage)? {
             State::Idle => Ok(None),
             State::Active(authority) => Ok(Some(authority.clone())),

@@ -154,6 +154,7 @@ fn signed_absent_account_status_does_not_register_or_mint_credit() {
         .apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &genesis(&f),
             || 120,
         )
@@ -190,6 +191,7 @@ fn valid_signed_policy_change_is_refused_before_the_real_verifier_runs() {
         ledger.apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &changed,
             || 120
         ),
@@ -200,6 +202,7 @@ fn valid_signed_policy_change_is_refused_before_the_real_verifier_runs() {
         .apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &original,
             || 120,
         )

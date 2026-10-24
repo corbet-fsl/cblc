@@ -111,6 +111,7 @@ fn real_signed_acceptance_moved_to_another_owner_is_refused() {
             .apply(
                 &f.grant(member, &f.device),
                 &f.authorize(member, &f.device),
+                crate::current(&f.authorize(member, &f.device)),
                 &request,
                 || 120,
             )
@@ -165,6 +166,7 @@ fn real_signed_acceptance_moved_to_another_owner_is_refused() {
         ledger.apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &first,
             || 120
         ),

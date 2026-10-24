@@ -278,6 +278,7 @@ fn main() {
             ledger.apply_extended(
                 &fixture.grant(7, &fixture.device),
                 &fixture.authorize(7, &fixture.device),
+                crate::current(&fixture.authorize(7, &fixture.device)),
                 &first,
                 &changed,
                 || first.issued_at
@@ -299,6 +300,7 @@ fn main() {
                 .apply_extended(
                     &fixture.grant(member, &fixture.device),
                     &fixture.authorize(member, &fixture.device),
+                    crate::current(&fixture.authorize(member, &fixture.device)),
                     &request,
                     &update,
                     || request.issued_at,
@@ -324,6 +326,7 @@ fn main() {
         ledger.apply_extended(
             &fixture.grant(member, &fixture.device),
             &fixture.authorize(member, &fixture.device),
+            crate::current(&fixture.authorize(member, &fixture.device)),
             &candidate,
             &altered,
             || candidate.issued_at
@@ -638,4 +641,17 @@ fn main() {
     println!(
         "Real extension activation, signed scope, frontier, expiry and capacity refusals passed"
     );
+}
+
+/// Test registry: every device is current. Tests that need a removed device implement their own.
+pub(crate) struct AllCurrent;
+impl cblc::current_device::CurrentLineage for AllCurrent {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        true
+    }
+}
+pub(crate) fn current(
+    authorization: &cblc::admission::DeviceAuthorization,
+) -> cblc::current_device::CurrentDevice {
+    cblc::current_device::CurrentDevice::attest(&AllCurrent, authorization).unwrap()
 }

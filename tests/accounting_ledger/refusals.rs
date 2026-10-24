@@ -112,7 +112,13 @@ fn authenticated_apply_refuses_oversized_cross_scope_and_future_envelopes() {
                 .to_bytes(),
         );
         assert_eq!(
-            ledger.apply(&grant, &authority, &request, || 120),
+            ledger.apply(
+                &grant,
+                &authority,
+                crate::current(&authority),
+                &request,
+                || 120
+            ),
             Err(expected)
         );
     }
@@ -135,6 +141,7 @@ fn dual_signed_root_rotation_checks_exact_frontier_and_rejects_weak_keys() {
         .apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &original,
             || 120,
         )
@@ -210,6 +217,7 @@ fn a_valid_next_version_with_the_wrong_predecessor_cannot_reach_verification() {
         .apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &first,
             || 120,
         )
@@ -221,6 +229,7 @@ fn a_valid_next_version_with_the_wrong_predecessor_cannot_reach_verification() {
         ledger.apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &changed,
             || 120
         ),

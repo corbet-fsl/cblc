@@ -146,12 +146,14 @@ fn rejected_proof_cannot_register_and_genesis_is_lifetime_unique_after_restart()
     corrupt.proof[0] ^= 1;
     sign(&mut corrupt, &f.device);
     assert_eq!(
-        ledger.apply(&g, &a, &corrupt, || 120),
+        ledger.apply(&g, &a, crate::current(&a), &corrupt, || 120),
         Err(Error::CryptoProvider)
     );
     drop(ledger);
     let mut ledger = open(&path, &f, RealVerifier::default());
-    let accepted = ledger.apply(&g, &a, &request, || 120).unwrap();
+    let accepted = ledger
+        .apply(&g, &a, crate::current(&a), &request, || 120)
+        .unwrap();
     verify_account_acceptance(
         &accepted,
         &SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes(),
@@ -162,8 +164,16 @@ fn rejected_proof_cannot_register_and_genesis_is_lifetime_unique_after_restart()
     let mut second = request.clone();
     second.request_id = [11; 32];
     sign(&mut second, &f.device);
-    assert_eq!(ledger.apply(&g, &a, &second, || 130), Err(Error::Replay));
-    assert_eq!(ledger.apply(&g, &a, &request, || 200).unwrap(), accepted);
+    assert_eq!(
+        ledger.apply(&g, &a, crate::current(&a), &second, || 130),
+        Err(Error::Replay)
+    );
+    assert_eq!(
+        ledger
+            .apply(&g, &a, crate::current(&a), &request, || 200)
+            .unwrap(),
+        accepted
+    );
 }
 
 #[test]
@@ -179,13 +189,23 @@ fn exact_retry_does_not_verify_or_debit_again_and_changed_bytes_are_rejected() {
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
-    let first = ledger.apply(&g, &a, &request, || 120).unwrap();
-    assert_eq!(ledger.apply(&g, &a, &request, || 200).unwrap(), first);
+    let first = ledger
+        .apply(&g, &a, crate::current(&a), &request, || 120)
+        .unwrap();
+    assert_eq!(
+        ledger
+            .apply(&g, &a, crate::current(&a), &request, || 200)
+            .unwrap(),
+        first
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     let mut changed = request.clone();
     changed.proof.push(4);
     sign(&mut changed, &f.device);
-    assert_eq!(ledger.apply(&g, &a, &changed, || 201), Err(Error::Replay));
+    assert_eq!(
+        ledger.apply(&g, &a, crate::current(&a), &changed, || 201),
+        Err(Error::Replay)
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
@@ -200,7 +220,7 @@ fn real_authority_and_common_checkpoint_are_required_before_verifying() {
     let a = f.authorize(7, &f.device);
     let request = genesis(&f);
     assert_eq!(
-        ledger.apply(&g, &a, &request, || 120),
+        ledger.apply(&g, &a, crate::current(&a), &request, || 120),
         Err(Error::Admission)
     );
     ledger
@@ -212,18 +232,29 @@ fn real_authority_and_common_checkpoint_are_required_before_verifying() {
     );
     let mut forged = request.clone();
     forged.signature = B64.encode(&[0; 64]);
-    assert_eq!(ledger.apply(&g, &a, &forged, || 120), Err(Error::Signature));
+    assert_eq!(
+        ledger.apply(&g, &a, crate::current(&a), &forged, || 120),
+        Err(Error::Signature)
+    );
     let wrong_root = f.authorize(8, &f.device);
     assert_eq!(
-        ledger.apply(&g, &wrong_root, &request, || 120),
+        ledger.apply(
+            &g,
+            &wrong_root,
+            crate::current(&wrong_root),
+            &request,
+            || 120
+        ),
         Err(Error::Admission)
     );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
-    ledger.apply(&g, &a, &request, || 120).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &request, || 120)
+        .unwrap();
     let mut unsigned_scope = request.clone();
     unsigned_scope.statement.enrollment_root = fr(9);
     assert_eq!(
-        ledger.apply(&g, &a, &unsigned_scope, || 120),
+        ledger.apply(&g, &a, crate::current(&a), &unsigned_scope, || 120),
         Err(Error::Signature)
     );
 }
@@ -258,11 +289,14 @@ fn expiry_and_clock_changes_during_verification_cannot_commit_state() {
             index.set(i + 1);
             times[i]
         };
-        assert_eq!(ledger.apply(&g, &a, &request, clock), Err(expected));
+        assert_eq!(
+            ledger.apply(&g, &a, crate::current(&a), &request, clock),
+            Err(expected)
+        );
         assert_eq!(database.snapshot(), original);
         if scenario == 0 {
             assert_eq!(
-                ledger.apply(&g, &a, &request, || 130),
+                ledger.apply(&g, &a, crate::current(&a), &request, || 130),
                 Err(Error::ClockRollback)
             );
             assert_eq!(database.snapshot(), original);
@@ -276,9 +310,11 @@ fn expiry_and_clock_changes_during_verification_cannot_commit_state() {
     ledger
         .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
-    ledger.apply(&g, &a, &request, || 130).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &request, || 130)
+        .unwrap();
     assert_eq!(
-        ledger.apply(&g, &a, &request, || 129),
+        ledger.apply(&g, &a, crate::current(&a), &request, || 129),
         Err(Error::ClockRollback)
     );
 }
@@ -300,14 +336,21 @@ fn blocked_proof_allows_another_owner_to_commit_and_rechecks_shared_clock_floor(
         let other_authorization = f.authorize(8, &f.device);
         let other = proofs::request(2, 21, &f);
         std::thread::scope(|scope| {
-            let worker = scope.spawn(move || slow.apply(&g, &a, &first, || 120));
+            let worker =
+                scope.spawn(move || slow.apply(&g, &a, crate::current(&a), &first, || 120));
             entered.recv_timeout(Duration::from_secs(180)).unwrap();
             // Open/configuration and checkpoint publication must also remain
             // possible while the first verifier is deliberately blocked.
             let mut fast = open(&path, &f, RealVerifier::default());
             fast.admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
                 .unwrap();
-            let accepted = fast.apply(&other_grant, &other_authorization, &other, || other_time);
+            let accepted = fast.apply(
+                &other_grant,
+                &other_authorization,
+                crate::current(&other_authorization),
+                &other,
+                || other_time,
+            );
             release.send(()).unwrap();
             let resumed = worker.join().unwrap();
             assert!(
@@ -342,15 +385,16 @@ fn successor_losing_during_verification_cannot_commit_its_state_or_response() {
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
-        fast.apply(&g, &a, &first, || 120).unwrap();
+        fast.apply(&g, &a, crate::current(&a), &first, || 120)
+            .unwrap();
         let losing = successor(&first, &f, 11);
         let winning = proofs::request(3, if same_request_id { 11 } else { 12 }, &f);
         let (verifier, entered, release) = blocked_verifier();
         let mut slow = open(&path, &f, verifier);
         std::thread::scope(|scope| {
-            let worker = scope.spawn(|| slow.apply(&g, &a, &losing, || 130));
+            let worker = scope.spawn(|| slow.apply(&g, &a, crate::current(&a), &losing, || 130));
             entered.recv_timeout(Duration::from_secs(180)).unwrap();
-            let accepted = fast.apply(&g, &a, &winning, || 130);
+            let accepted = fast.apply(&g, &a, crate::current(&a), &winning, || 130);
             release.send(()).unwrap();
             let resumed = worker.join().unwrap();
             assert!(accepted.is_ok());
@@ -393,19 +437,24 @@ fn concurrently_cached_request_bypasses_original_expiry_but_requires_live_author
         let g = f.grant(7, &f.device);
         let a = f.authorize(7, &f.device);
         let first = genesis(&f);
-        fast.apply(&g, &a, &first, || 120).unwrap();
+        fast.apply(&g, &a, crate::current(&a), &first, || 120)
+            .unwrap();
         let reservation = successor(&first, &f, 11);
-        fast.apply(&g, &a, &reservation, || 121).unwrap();
+        fast.apply(&g, &a, crate::current(&a), &reservation, || 121)
+            .unwrap();
         let request = proofs::request(5, 12, &f);
         assert_ne!(request.statement.settlement_marker, [0; 32]);
         let (verifier, entered, release) = blocked_verifier();
         let mut slow = open(&path, &f, verifier);
         let now = AtomicU64::new(130);
         std::thread::scope(|scope| {
-            let worker =
-                scope.spawn(|| slow.apply(&g, &a, &request, || now.load(Ordering::SeqCst)));
+            let worker = scope.spawn(|| {
+                slow.apply(&g, &a, crate::current(&a), &request, || {
+                    now.load(Ordering::SeqCst)
+                })
+            });
             entered.recv_timeout(Duration::from_secs(180)).unwrap();
-            let accepted = fast.apply(&g, &a, &request, || 130);
+            let accepted = fast.apply(&g, &a, crate::current(&a), &request, || 130);
             now.store(completed, Ordering::SeqCst);
             release.send(()).unwrap();
             let resumed = worker.join().unwrap();
@@ -455,6 +504,7 @@ fn checkpoint_slot_expiry_during_verification_cannot_commit() {
     let result = ledger.apply(
         &f.grant(7, &f.device),
         &f.authorize(7, &f.device),
+        crate::current(&f.authorize(7, &f.device)),
         &genesis(&f),
         || {
             let i = index.get();
@@ -493,9 +543,13 @@ fn root_authorized_devices_share_one_compare_and_swap_frontier() {
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
-    ledger.apply(&g, &a, &first, || 120).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &first, || 120)
+        .unwrap();
     let second = successor(&first, &f, 11);
-    ledger.apply(&g, &a, &second, || 121).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &second, || 121)
+        .unwrap();
     let device = SigningKey::from_bytes(&[55; 32]);
     let mut competing = successor(&first, &f, 12);
     competing.chat_public_key = B64.encode(&device.verifying_key().to_bytes());
@@ -504,13 +558,16 @@ fn root_authorized_devices_share_one_compare_and_swap_frontier() {
         ledger.apply(
             &f.grant(7, &device),
             &f.authorize(7, &device),
+            crate::current(&f.authorize(7, &device)),
             &competing,
             || 122
         ),
         Err(Error::Replay)
     );
     let cancellation = proofs::request(5, 13, &f);
-    ledger.apply(&g, &a, &cancellation, || 133).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &cancellation, || 133)
+        .unwrap();
     assert_ne!(cancellation.statement.settlement_marker, [0; 32]);
     let mut duplicate_event = cancellation.clone();
     duplicate_event.request_id = [14; 32];
@@ -520,7 +577,7 @@ fn root_authorized_devices_share_one_compare_and_swap_frontier() {
     sign(&mut duplicate_event, &f.device);
     let verified = calls.load(Ordering::SeqCst);
     assert_eq!(
-        ledger.apply(&g, &a, &duplicate_event, || 134),
+        ledger.apply(&g, &a, crate::current(&a), &duplicate_event, || 134),
         Err(Error::Replay)
     );
     assert_eq!(calls.load(Ordering::SeqCst), verified);
@@ -544,9 +601,13 @@ fn failure_after_marker_insertion_rolls_back_marker_state_response_and_clock() {
     let g = f.grant(7, &f.device);
     let a = f.authorize(7, &f.device);
     let first = genesis(&f);
-    ledger.apply(&g, &a, &first, || 120).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &first, || 120)
+        .unwrap();
     let reservation = successor(&first, &f, 11);
-    ledger.apply(&g, &a, &reservation, || 121).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &reservation, || 121)
+        .unwrap();
     let db = inspect(&path);
     db.execute_batch(
         "CREATE TRIGGER injected_failure BEFORE UPDATE ON cssr_records WHEN substr(NEW.key,1,1)=x'01'
@@ -555,7 +616,10 @@ fn failure_after_marker_insertion_rolls_back_marker_state_response_and_clock() {
     .unwrap();
     let second = proofs::request(5, 12, &f);
     assert_ne!(second.statement.settlement_marker, [0; 32]);
-    assert_eq!(ledger.apply(&g, &a, &second, || 130), Err(Error::Storage));
+    assert_eq!(
+        ledger.apply(&g, &a, crate::current(&a), &second, || 130),
+        Err(Error::Storage)
+    );
     assert_eq!(
         db.query_row("SELECT count(*) FROM markers", [], |r| r.get::<_, i64>(0))
             .unwrap(),
@@ -579,7 +643,9 @@ fn failure_after_marker_insertion_rolls_back_marker_state_response_and_clock() {
         121
     );
     db.execute_batch("DROP TRIGGER injected_failure").unwrap();
-    ledger.apply(&g, &a, &second, || 130).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &second, || 130)
+        .unwrap();
 }
 
 #[test]
@@ -599,6 +665,7 @@ fn recovered_device_status_is_challenge_bound_and_returns_no_new_genesis() {
         .apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &first,
             || 120,
         )
@@ -701,6 +768,7 @@ fn ledger_process_worker() {
     let result = ledger.apply(
         &f.grant(7, &f.device),
         &f.authorize(7, &f.device),
+        crate::current(&f.authorize(7, &f.device)),
         &request,
         || 130,
     );
@@ -721,6 +789,7 @@ fn independent_processes_race_and_reopen_returns_the_committed_winner() {
         .apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
+            crate::current(&f.authorize(7, &f.device)),
             &genesis(&f),
             || 120,
         )
@@ -768,6 +837,7 @@ fn independent_processes_race_and_reopen_returns_the_committed_winner() {
             .apply(
                 &f.grant(7, &f.device),
                 &f.authorize(7, &f.device),
+                crate::current(&f.authorize(7, &f.device)),
                 &request,
                 || 200
             )
@@ -797,7 +867,9 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
     let g = f.grant(7, &f.device);
     let old = f.authorize(7, &f.device);
     let first = genesis(&f);
-    let accepted = ledger.apply(&g, &old, &first, || 120).unwrap();
+    let accepted = ledger
+        .apply(&g, &old, crate::current(&old), &first, || 120)
+        .unwrap();
     let root = SigningKey::from_bytes(&[7; 32]);
     let new = SigningKey::from_bytes(&[99; 32]);
     let mut auth = old.clone();
@@ -807,7 +879,7 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
             .to_bytes(),
     );
     assert_eq!(
-        ledger.apply(&g, &auth, &first, || 120),
+        ledger.apply(&g, &auth, crate::current(&auth), &first, || 120),
         Err(Error::Admission)
     );
     let mut rotation = RootRotation {
@@ -832,10 +904,15 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
     drop(ledger);
     let mut ledger = open(&path, &f, RealVerifier::default());
     assert_eq!(
-        ledger.apply(&g, &old, &first, || 120),
+        ledger.apply(&g, &old, crate::current(&old), &first, || 120),
         Err(Error::Admission)
     );
-    assert_eq!(ledger.apply(&g, &auth, &first, || 120).unwrap(), accepted);
+    assert_eq!(
+        ledger
+            .apply(&g, &auth, crate::current(&auth), &first, || 120)
+            .unwrap(),
+        accepted
+    );
     let mut read = AccountStatusRequest {
         community: first.statement.community,
         owner: first.statement.owner,
@@ -862,9 +939,16 @@ fn pseudonym_survives_root_rotation_and_cannot_reopen_or_replay_authority() {
     let mut reopen = first.clone();
     reopen.request_id = [99; 32];
     sign(&mut reopen, &f.device);
-    assert_eq!(ledger.apply(&g, &auth, &reopen, || 120), Err(Error::Replay));
+    assert_eq!(
+        ledger.apply(&g, &auth, crate::current(&auth), &reopen, || 120),
+        Err(Error::Replay)
+    );
     let next = successor(&first, &f, 13);
-    assert!(ledger.apply(&g, &auth, &next, || 130).is_ok());
+    assert!(
+        ledger
+            .apply(&g, &auth, crate::current(&auth), &next, || 130)
+            .is_ok()
+    );
 }
 
 #[test]
@@ -971,26 +1055,46 @@ fn genesis_lifetime_is_bounded_by_the_code_window_not_the_rulebook() {
         ledger
     };
     let mut ledger = open_with("short-rulebook.sqlite", short);
-    ledger.apply(&g, &a, &request, || 120).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &request, || 120)
+        .unwrap();
     // A genesis living longer than the code window is refused before any state.
     let mut long = request.clone();
     long.expires_at = long.issued_at + GENESIS_PROOF_WINDOW_SECONDS + 1;
     sign(&mut long, &f.device);
     let mut ledger = open_with("long-genesis.sqlite", policy());
-    assert_eq!(ledger.apply(&g, &a, &long, || 120), Err(Error::Expired));
+    assert_eq!(
+        ledger.apply(&g, &a, crate::current(&a), &long, || 120),
+        Err(Error::Expired)
+    );
     // Exactly the window is accepted.
     let mut exact = request.clone();
     exact.expires_at = exact.issued_at + GENESIS_PROOF_WINDOW_SECONDS;
     sign(&mut exact, &f.device);
     let mut ledger = open_with("exact-genesis.sqlite", policy());
-    ledger.apply(&g, &a, &exact, || 120).unwrap();
+    ledger
+        .apply(&g, &a, crate::current(&a), &exact, || 120)
+        .unwrap();
     // An expired genesis is refused and commits nothing.
     let path = dir.path().join("expired.sqlite");
     let mut ledger = open_with("expired.sqlite", policy());
     let original = inspect(&path).snapshot();
     assert_eq!(
-        ledger.apply(&g, &a, &request, || request.expires_at),
+        ledger.apply(&g, &a, crate::current(&a), &request, || request.expires_at),
         Err(Error::Expired)
     );
     assert_eq!(inspect(&path).snapshot(), original);
+}
+
+/// Test registry: every device is current. Tests that need a removed device implement their own.
+pub(crate) struct AllCurrent;
+impl cblc::current_device::CurrentLineage for AllCurrent {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        true
+    }
+}
+pub(crate) fn current(
+    authorization: &cblc::admission::DeviceAuthorization,
+) -> cblc::current_device::CurrentDevice {
+    cblc::current_device::CurrentDevice::attest(&AllCurrent, authorization).unwrap()
 }

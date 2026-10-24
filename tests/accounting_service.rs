@@ -106,13 +106,14 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
             .to_bytes(),
     );
     let observed = service
-        .handle_for_member(
+        .handle_for_member_authorized(
             &[7; 48],
             AccountServiceRequest::Status {
                 grant: f.grant(7, &f.device),
                 authorization: f.authorize(7, &f.device),
                 request: request.clone(),
             },
+            crate::authority(),
         )
         .unwrap();
     let AccountServiceResponse::Status(observed) = observed else {
@@ -148,12 +149,12 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
         request: Box::new(genesis(&f)),
     };
     assert!(matches!(
-        service.handle(request.clone()),
+        service.handle_authorized(request.clone(), crate::authority()),
         Err(Error::Expired)
     ));
     clock.store(110, Ordering::SeqCst);
     assert!(matches!(
-        service.handle(request.clone()),
+        service.handle_authorized(request.clone(), crate::authority()),
         Err(Error::ClockRollback)
     ));
     // This independent scenario starts with a valid clock. Reloading the first
@@ -172,7 +173,9 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
     service
         .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
-    let accepted = service.handle(request.clone()).unwrap();
+    let accepted = service
+        .handle_authorized(request.clone(), crate::authority())
+        .unwrap();
     assert!(matches!(accepted, AccountServiceResponse::Apply(_)));
     let tune = service.tune_waiting_period(0, 1100).unwrap();
     assert_eq!(tune.seconds, 1100);
@@ -181,7 +184,9 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
         Err(Error::PolicyMismatch)
     ));
     clock.store(181, Ordering::SeqCst);
-    let retry = service.handle(request).unwrap();
+    let retry = service
+        .handle_authorized(request, crate::authority())
+        .unwrap();
     assert_eq!(
         serde_json::to_value(accepted).unwrap(),
         serde_json::to_value(retry).unwrap()
@@ -206,13 +211,19 @@ fn invalid_authority_cannot_register_an_account() {
         authorization: f.authorize(8, &f.device),
         request: Box::new(genesis(&f)),
     };
-    assert!(matches!(service.handle(bad), Err(Error::Admission)));
+    assert!(matches!(
+        service.handle_authorized(bad, crate::authority()),
+        Err(Error::Admission)
+    ));
     service
-        .handle(AccountServiceRequest::Apply {
-            grant: f.grant(7, &f.device),
-            authorization: f.authorize(7, &f.device),
-            request: Box::new(genesis(&f)),
-        })
+        .handle_authorized(
+            AccountServiceRequest::Apply {
+                grant: f.grant(7, &f.device),
+                authorization: f.authorize(7, &f.device),
+                request: Box::new(genesis(&f)),
+            },
+            crate::authority(),
+        )
         .unwrap();
 }
 
@@ -324,3 +335,86 @@ fn service_capacity_rejects_invalid_bounds_and_preserves_host_policy() {
 
 #[path = "accounting_service/extensions.rs"]
 mod extensions;
+
+/// Test authority: always current, and every device is in the lineage.
+pub(crate) struct TestAuthority;
+impl cblc::storage::CommitAuthority for TestAuthority {
+    fn check(&self, _: u64) -> Result<(), cblc::Error> {
+        Ok(())
+    }
+    fn boundary_crossed(&self, _: u64, _: u64) -> Result<bool, cblc::Error> {
+        Ok(false)
+    }
+    fn lineage(&self) -> Option<&dyn cblc::current_device::CurrentLineage> {
+        Some(&TestLineage)
+    }
+}
+pub(crate) struct TestLineage;
+impl cblc::current_device::CurrentLineage for TestLineage {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        true
+    }
+}
+pub(crate) fn authority() -> std::sync::Arc<dyn cblc::storage::CommitAuthority> {
+    std::sync::Arc::new(TestAuthority)
+}
+
+/// Authority whose lineage no longer lists the device: the member's device was removed but its
+/// grant and root-signed authorization are still unexpired.
+pub(crate) struct RemovedLineage;
+impl cblc::current_device::CurrentLineage for RemovedLineage {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        false
+    }
+}
+pub(crate) struct RemovedAuthority;
+impl cblc::storage::CommitAuthority for RemovedAuthority {
+    fn check(&self, _: u64) -> Result<(), cblc::Error> {
+        Ok(())
+    }
+    fn boundary_crossed(&self, _: u64, _: u64) -> Result<bool, cblc::Error> {
+        Ok(false)
+    }
+    fn lineage(&self) -> Option<&dyn cblc::current_device::CurrentLineage> {
+        Some(&RemovedLineage)
+    }
+}
+pub(crate) fn removed_authority() -> std::sync::Arc<dyn cblc::storage::CommitAuthority> {
+    std::sync::Arc::new(RemovedAuthority)
+}
+
+#[test]
+fn removed_device_with_valid_grant_and_authorization_cannot_apply() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = Fixture::new();
+    let mut service = AccountService::new(
+        open(&dir.path().join("accounts"), &f, RealVerifier::default()),
+        || 120,
+        100_000,
+    )
+    .unwrap();
+    service
+        .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
+        .unwrap();
+    let request = AccountServiceRequest::Apply {
+        grant: f.grant(7, &f.device),
+        authorization: f.authorize(7, &f.device),
+        request: Box::new(genesis(&f)),
+    };
+    assert!(matches!(
+        service.handle_authorized(request.clone(), crate::removed_authority()),
+        Err(Error::Admission)
+    ));
+    // Not even an authority without any lineage can update.
+    assert!(matches!(
+        service.handle(request.clone()),
+        Err(Error::Admission)
+    ));
+    // The same request from a device the registry lists passes.
+    assert!(matches!(
+        service
+            .handle_authorized(request, crate::authority())
+            .unwrap(),
+        AccountServiceResponse::Apply(_)
+    ));
+}

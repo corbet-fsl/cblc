@@ -143,6 +143,9 @@ pub struct RecipientRequest {
     pub owner: [u8; 32],
     pub recipient_key: [u8; 32],
     pub chat_public_key: String,
+    /// Lineage epoch of this recipient key. A replacement of the stored key must carry a strictly
+    /// greater epoch than the stored one (an unreplaced legacy entry counts as epoch 0).
+    pub lineage_epoch: u64,
     pub issued_at: u64,
     pub expires_at: u64,
     pub signature: String,
@@ -159,11 +162,12 @@ pub fn recipient_bytes(request: &RecipientRequest) -> Result<Vec<u8>, Error> {
     }
     decode::<32>(&request.chat_public_key)?;
     serde_json::to_vec(&serde_json::json!([
-        "cblc.record-recipient.v1",
+        "cblc.record-recipient.v2",
         request.community,
         request.owner,
         request.recipient_key,
         request.chat_public_key,
+        request.lineage_epoch,
         request.issued_at,
         request.expires_at
     ]))

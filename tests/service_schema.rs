@@ -108,7 +108,9 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
         .admit_checkpoint(0, request.statement.enrollment_root)
         .unwrap();
     let mut service = AccountService::new(ledger, || 120, 1024 * 1024).unwrap();
-    let response = service.handle_for_member(&[7; 48], operation).unwrap();
+    let response = service
+        .handle_for_member_authorized(&[7; 48], operation, crate::authority())
+        .unwrap();
     let accepted = valid(&response);
     let mut unexpected = accepted.clone();
     unexpected["override"] = true.into();
@@ -130,6 +132,7 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
         owner: request.statement.owner,
         recipient_key,
         chat_public_key: request.chat_public_key.clone(),
+        lineage_epoch: 0,
         issued_at: 120,
         expires_at: 220,
         signature: String::new(),
@@ -161,7 +164,9 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
         assert!(!schema.is_valid(&bad));
         assert!(serde_json::from_value::<AccountServiceRequest>(bad).is_err());
     }
-    let registered = service.handle_for_member(&[7; 48], registration).unwrap();
+    let registered = service
+        .handle_for_member_authorized(&[7; 48], registration, crate::authority())
+        .unwrap();
     assert!(
         matches!(&registered, AccountServiceResponse::RecordRecipient { recipient_key: key } if *key == recipient_key)
     );
@@ -193,4 +198,27 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
         authorization,
         request: status,
     });
+}
+
+/// Test authority: always current, and every device is in the lineage.
+pub(crate) struct TestAuthority;
+impl cblc::storage::CommitAuthority for TestAuthority {
+    fn check(&self, _: u64) -> Result<(), cblc::Error> {
+        Ok(())
+    }
+    fn boundary_crossed(&self, _: u64, _: u64) -> Result<bool, cblc::Error> {
+        Ok(false)
+    }
+    fn lineage(&self) -> Option<&dyn cblc::current_device::CurrentLineage> {
+        Some(&TestLineage)
+    }
+}
+pub(crate) struct TestLineage;
+impl cblc::current_device::CurrentLineage for TestLineage {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        true
+    }
+}
+pub(crate) fn authority() -> std::sync::Arc<dyn cblc::storage::CommitAuthority> {
+    std::sync::Arc::new(TestAuthority)
 }

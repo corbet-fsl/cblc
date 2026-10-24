@@ -125,10 +125,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         &mut self,
         grant: &AdmissionGrant,
         authorization: &DeviceAuthorization,
+        current: CurrentDevice,
         request: &AccountRequest,
         update: &ExtendedUpdate,
         clock: impl Fn() -> u64,
     ) -> Result<AccountAcceptance, Error> {
+        current.require(authorization)?;
         self.apply_inner(grant, authorization, request, Some(update), None, clock)
             .map(|result| result.acceptance)
     }
@@ -139,11 +141,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         &mut self,
         grant: &AdmissionGrant,
         authorization: &DeviceAuthorization,
+        current: CurrentDevice,
         request: &AccountRequest,
         update: &ExtendedUpdate,
         issuer: &cssr::certificate::CertificateIssuer,
         clock: impl Fn() -> u64,
     ) -> Result<crate::extensions::ExtendedAcceptance, Error> {
+        current.require(authorization)?;
         self.apply_inner(
             grant,
             authorization,

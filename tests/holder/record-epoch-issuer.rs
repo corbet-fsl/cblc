@@ -201,6 +201,7 @@ impl Records {
                     owner: sha2::Sha256::digest([member; 48]).into(),
                     recipient_key: recipient_key(member),
                     chat_public_key: B64.encode(&fixture.device.verifying_key().to_bytes()),
+                    lineage_epoch: 0,
                     issued_at: now,
                     expires_at: now + 100,
                     signature: String::new(),
@@ -213,13 +214,14 @@ impl Records {
                 );
                 let mut service =
                     AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?;
-                let response = service.handle_for_member(
+                let response = service.handle_for_member_authorized(
                     &[member; 48],
                     AccountServiceRequest::RegisterRecordRecipient {
                         grant: fixture.grant(member, &fixture.device),
                         authorization: fixture.authorize(member, &fixture.device),
                         request,
                     },
+                    crate::authority(),
                 );
                 *ledger = Some(service.into_ledger());
                 let AccountServiceResponse::RecordRecipient {
@@ -305,4 +307,27 @@ impl Records {
         json!({"epoch":publication.descriptor(), "leaf":leaf, "index":index,
             "path":path, "certificate":certificate, "ancestry":self.latest.get(&member).unwrap()})
     }
+}
+
+/// Test authority: always current, and every device is in the lineage.
+pub(crate) struct TestAuthority;
+impl cblc::storage::CommitAuthority for TestAuthority {
+    fn check(&self, _: u64) -> Result<(), cblc::Error> {
+        Ok(())
+    }
+    fn boundary_crossed(&self, _: u64, _: u64) -> Result<bool, cblc::Error> {
+        Ok(false)
+    }
+    fn lineage(&self) -> Option<&dyn cblc::current_device::CurrentLineage> {
+        Some(&TestLineage)
+    }
+}
+pub(crate) struct TestLineage;
+impl cblc::current_device::CurrentLineage for TestLineage {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        true
+    }
+}
+pub(crate) fn authority() -> std::sync::Arc<dyn cblc::storage::CommitAuthority> {
+    std::sync::Arc::new(TestAuthority)
 }

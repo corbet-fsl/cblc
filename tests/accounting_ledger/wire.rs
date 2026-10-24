@@ -12,7 +12,15 @@ fn issued_acceptance_and_status_refuse_cross_scope_and_malformed_envelopes() {
         .unwrap();
     let grant = f.grant(7, &f.device);
     let authority = f.authorize(7, &f.device);
-    let accepted = ledger.apply(&grant, &authority, &original, || 120).unwrap();
+    let accepted = ledger
+        .apply(
+            &grant,
+            &authority,
+            crate::current(&authority),
+            &original,
+            || 120,
+        )
+        .unwrap();
     let operator = SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes();
     verify_account_acceptance(&accepted, &operator).unwrap();
     for variant in 0..5 {

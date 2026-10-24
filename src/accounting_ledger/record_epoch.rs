@@ -300,6 +300,10 @@ pub(super) fn certify(
 
 pub use crate::contracts::{RecipientRequest, recipient_bytes};
 
+fn recipient_epoch_key(owner: &[u8; 32]) -> Vec<u8> {
+    [b"record-recipient-epoch:v1:".as_slice(), owner.as_slice()].concat()
+}
+
 fn recipient_key(owner: &[u8; 32]) -> Vec<u8> {
     [RECIPIENT_PREFIX, owner.as_slice()].concat()
 }
@@ -538,15 +542,19 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         Ok(published)
     }
     /// Register once, or idempotently repeat the SAME member-wide recipient.
-    /// A different key needs an explicit future custody migration; device loss
-    /// must not silently rotate it. All equal passkeys derive the same key.
+    /// A different key replaces the stored one only when a CURRENT device of the
+    /// lineage (witnessed by `current`) carries a strictly greater lineage epoch
+    /// than the stored one; the same or an older epoch is refused as a replay.
+    /// Device loss alone never rotates it. All equal passkeys derive the same key.
     pub fn register_record_recipient(
         &mut self,
         grant: &AdmissionGrant,
         authorization: &DeviceAuthorization,
+        current: CurrentDevice,
         request: &RecipientRequest,
         clock: impl Fn() -> u64,
     ) -> Result<(), Error> {
+        current.require(authorization)?;
         let clock = observed_clock(self.observed_time.clone(), clock);
         let bytes = recipient_bytes(request)?;
         if request.community != self.community
@@ -582,12 +590,19 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         tx.get::<Frontier>(&key(1, &[&request.owner]))?
             .ok_or(Error::Admission)?;
         let key = recipient_key(&request.owner);
+        let epoch_key = recipient_epoch_key(&request.owner);
         if let Some(old) = tx.get::<[u8; 32]>(&key)? {
             if old != request.recipient_key {
-                return Err(Error::Replay);
+                let stored = tx.get::<u64>(&epoch_key)?.unwrap_or(0);
+                if request.lineage_epoch <= stored {
+                    return Err(Error::Replay);
+                }
+                tx.put(&key, &request.recipient_key)?;
+                tx.put(&epoch_key, &request.lineage_epoch)?;
             }
         } else {
             tx.put(&key, &request.recipient_key)?;
+            tx.put(&epoch_key, &request.lineage_epoch)?;
         }
         tx.commit_before(&CommitDeadline::new(
             &clock,

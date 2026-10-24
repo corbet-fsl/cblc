@@ -75,6 +75,7 @@ fn dated(
     ledger.apply(
         &grant,
         &f.authorize_until(7, &f.device, 2000),
+        crate::current(&f.authorize_until(7, &f.device, 2000)),
         &request,
         || server,
     )

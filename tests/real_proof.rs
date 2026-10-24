@@ -67,6 +67,7 @@ fn real_account_proofs_round_trip_through_libsql() {
             .apply(
                 &f.grant(7, &f.device),
                 &f.authorize(7, &f.device),
+                crate::current(&f.authorize(7, &f.device)),
                 &request,
                 || request.issued_at,
             )
@@ -86,10 +87,24 @@ fn real_account_proofs_round_trip_through_libsql() {
             .apply(
                 &f.grant(7, &f.device),
                 &f.authorize(7, &f.device),
+                crate::current(&f.authorize(7, &f.device)),
                 request,
                 || 200
             )
             .unwrap(),
         *accepted
     );
+}
+
+/// Test registry: every device is current. Tests that need a removed device implement their own.
+pub(crate) struct AllCurrent;
+impl cblc::current_device::CurrentLineage for AllCurrent {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        true
+    }
+}
+pub(crate) fn current(
+    authorization: &cblc::admission::DeviceAuthorization,
+) -> cblc::current_device::CurrentDevice {
+    cblc::current_device::CurrentDevice::attest(&AllCurrent, authorization).unwrap()
 }

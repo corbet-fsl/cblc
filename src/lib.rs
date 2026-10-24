@@ -14,6 +14,7 @@ pub mod admission;
 pub mod artifacts;
 pub mod certificates;
 pub mod contracts;
+pub mod current_device;
 pub mod enrollment;
 #[cfg(feature = "host")]
 pub mod prepared;

@@ -171,10 +171,18 @@ fn main() {
                     };
                     assert!(
                         service
-                            .handle_for_member(&[member ^ 1; 48], operation.clone())
+                            .handle_for_member_authorized(
+                                &[member ^ 1; 48],
+                                operation.clone(),
+                                crate::authority()
+                            )
                             .is_err()
                     );
-                    let response = service.handle_for_member(&[member; 48], operation);
+                    let response = service.handle_for_member_authorized(
+                        &[member; 48],
+                        operation,
+                        crate::authority(),
+                    );
                     ledger = Some(service.into_ledger());
                     let AccountServiceResponse::ApplyExtended {
                         acceptance: accepted,
@@ -315,10 +323,18 @@ fn main() {
                     };
                     assert!(
                         service
-                            .handle_for_member(&[member ^ 1; 48], operation.clone())
+                            .handle_for_member_authorized(
+                                &[member ^ 1; 48],
+                                operation.clone(),
+                                crate::authority()
+                            )
                             .is_err()
                     );
-                    let response = service.handle_for_member(&[member; 48], operation);
+                    let response = service.handle_for_member_authorized(
+                        &[member; 48],
+                        operation,
+                        crate::authority(),
+                    );
                     ledger = Some(service.into_ledger());
                     let AccountServiceResponse::Obligations(response) = response? else {
                         return Err(Error::InvalidInput);
@@ -602,4 +618,27 @@ fn main() {
         );
         io::stdout().flush().unwrap();
     }
+}
+
+/// Test authority: always current, and every device is in the lineage.
+pub(crate) struct TestAuthority;
+impl cblc::storage::CommitAuthority for TestAuthority {
+    fn check(&self, _: u64) -> Result<(), cblc::Error> {
+        Ok(())
+    }
+    fn boundary_crossed(&self, _: u64, _: u64) -> Result<bool, cblc::Error> {
+        Ok(false)
+    }
+    fn lineage(&self) -> Option<&dyn cblc::current_device::CurrentLineage> {
+        Some(&TestLineage)
+    }
+}
+pub(crate) struct TestLineage;
+impl cblc::current_device::CurrentLineage for TestLineage {
+    fn is_current(&self, _: &[u8; 32]) -> bool {
+        true
+    }
+}
+pub(crate) fn authority() -> std::sync::Arc<dyn cblc::storage::CommitAuthority> {
+    std::sync::Arc::new(TestAuthority)
 }

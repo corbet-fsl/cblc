@@ -18,6 +18,7 @@ use crate::{
         AdmissionGrant, AdmissionTrust, DeviceAuthorization, MAX_INTEGER, decode, signature,
         verify_admission, verify_device_authorization,
     },
+    current_device::CurrentDevice,
     storage::{AccountStorage, CommitDeadline, Transaction, key},
 };
 use data_encoding::BASE64URL_NOPAD;
@@ -357,9 +358,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         &mut self,
         grant: &AdmissionGrant,
         authorization: &DeviceAuthorization,
+        current: CurrentDevice,
         request: &AccountRequest,
         clock: impl Fn() -> u64,
     ) -> Result<AccountAcceptance, Error> {
+        current.require(authorization)?;
         self.apply_inner(grant, authorization, request, None, None, clock)
             .map(|result| result.acceptance)
     }
