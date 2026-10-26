@@ -623,6 +623,19 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                 issuer,
                 &cssr::certificate::RecordIssuer::new(&self.operator.to_bytes()),
             )?
+        } else if let (Some(issuer), Some((extensions, _)), None) =
+            (issuer, extension, lineage.as_ref())
+        {
+            // No lineage: a first account (the prior Frontier check is inside) joining
+            // after the freeze gets a join-time record leaf; anyone else gets none.
+            record_epoch::certify_join(
+                &mut transaction,
+                &acceptance,
+                &self.config,
+                extensions,
+                issuer,
+                &cssr::certificate::RecordIssuer::new(&self.operator.to_bytes()),
+            )?
         } else {
             None
         };

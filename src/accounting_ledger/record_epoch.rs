@@ -298,6 +298,91 @@ pub(super) fn certify(
     Ok(Some(certificate))
 }
 
+/// Join-time record leaf. A genesis accepted while a published epoch is current has no
+/// frozen leaf (the epoch root is fixed at the freeze), so the same record issuer signs a
+/// leaf of the exact accepted genesis frontier for this epoch instead. The relying party
+/// checks only the issuer's certificate over the blinded leaf, so it needs no tree path.
+/// Issued ONLY for a genesis statement with no prior Frontier inside
+/// `frozen_at <= accepted_at < expires_at`; any other case (including a policy or scope
+/// mismatch) returns `None`, never an error, so a genesis is accepted exactly as before and
+/// the member waits for the next epoch's common download. Carried in the existing
+/// `EpochAncestryCertificate` with `frozen_leaf` set to the join leaf commitment.
+pub(super) fn certify_join(
+    tx: &mut Transaction<'_>,
+    accepted: &AccountAcceptance,
+    configuration: &[u8],
+    extensions: &Extensions,
+    issuer: &cssr::certificate::CertificateIssuer,
+    record_issuer: &cssr::certificate::RecordIssuer,
+) -> Result<Option<crate::extensions::EpochAncestryCertificate>, Error> {
+    let owner = accepted.statement.owner;
+    if !accepted.statement.genesis || tx.get::<Frontier>(&key(1, &[&owner]))?.is_some() {
+        return Ok(None);
+    }
+    let Some(published) = tx.get::<PublishedAnchor>(ANCHOR)? else {
+        return Ok(None);
+    };
+    let descriptor = &published.descriptor;
+    if published.frozen_at > accepted.accepted_at || accepted.accepted_at >= descriptor.expires_at {
+        return Ok(None);
+    }
+    match tuning::check_epoch_config_in(tx, &published.configuration, configuration) {
+        Ok(()) => {}
+        Err(Error::PolicyMismatch) => return Ok(None),
+        Err(error) => return Err(error),
+    }
+    if descriptor.community != accepted.statement.community
+        || published.extension_configuration != extensions.config
+        || descriptor.proof_scope != accepted.proof_scope
+        || descriptor.issuer_key != record_issuer.public_key()
+        || descriptor
+            .validate(&accepted.statement.community, published.period_seconds)
+            .is_err()
+    {
+        return Ok(None);
+    }
+    let mut blinding = [0; 32];
+    getrandom::fill(&mut blinding).map_err(|_| Error::CryptoProvider)?;
+    let leaf = czkp::record::Leaf {
+        owner,
+        version: accepted.statement.next_version,
+        state: accepted.statement.next_state,
+        required_inbox: crate::extensions::inbox(tx, &owner)?.root,
+        role: super::voucher::role_of(tx, &owner)?,
+        blinding,
+    };
+    let commitment = leaf.commitment(&descriptor.community, descriptor.epoch)?;
+    let record = czkp::record::SignedLeaf {
+        leaf,
+        signature: record_issuer
+            .issue(&descriptor.community, descriptor.epoch, &commitment)
+            .map_err(|_| Error::CryptoProvider)?
+            .to_vec(),
+    };
+    let mut certificate = crate::extensions::EpochAncestryCertificate {
+        community: descriptor.community,
+        owner,
+        epoch: descriptor.epoch,
+        root: descriptor.root,
+        frozen_leaf: commitment,
+        state: accepted.statement.next_state,
+        version: accepted.statement.next_version,
+        proof_scope: accepted.proof_scope.clone(),
+        issued_at: accepted.accepted_at,
+        signature: Vec::new(),
+        record,
+    };
+    certificate.signature = issuer
+        .sign(
+            &certificate
+                .body()
+                .bytes()
+                .map_err(|_| Error::CryptoProvider)?,
+        )
+        .to_vec();
+    Ok(Some(certificate))
+}
+
 pub use crate::contracts::{RecipientRequest, recipient_bytes};
 
 fn recipient_epoch_key(owner: &[u8; 32]) -> Vec<u8> {
