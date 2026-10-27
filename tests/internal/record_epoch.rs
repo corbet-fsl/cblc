@@ -400,3 +400,387 @@ fn recovery_binds_real_signatures_to_only_the_original_acceptance() {
             .is_none()
     );
 }
+
+// Join-time record leaf (certify_join) tests. A genesis accepted while a
+// published epoch is current has no frozen lineage, so the record issuer
+// signs a leaf of the exact accepted genesis frontier for this epoch instead
+// of a frozen descendant. These tests drive certify_join through a real
+// transaction; no proof fixtures are needed.
+use crate::{
+    accounting::AccountPolicy,
+    accounting_ledger::AccountLedgerPolicy,
+    admission::AdmissionTrust,
+    artifacts::ArtifactBinding,
+    extensions::{ExtensionPolicy, ExtensionStatement, Extensions},
+    storage::{AccountStorage, MemoryStore},
+    verification::{Budget, ExtensionLimits},
+};
+
+struct JoinStubVerifier {
+    scope: AccountProofScope,
+}
+impl crate::extensions::sealed::Sealed for JoinStubVerifier {}
+impl crate::extensions::ExtensionVerifier for JoinStubVerifier {
+    fn scope(&self) -> AccountProofScope {
+        self.scope.clone()
+    }
+    fn cancellation(&self) -> crate::verification::NativeExtensionCancellation {
+        unimplemented!("join-leaf tests never schedule native verification work")
+    }
+    fn require_record_epoch(&self) -> Result<(), Error> {
+        Ok(())
+    }
+    fn verify(&self, _statement: &ExtensionStatement, _proof: &[u8]) -> Result<(), Error> {
+        Err(Error::UnsupportedCapability)
+    }
+    fn verify_anonymous(
+        &self,
+        _statement: &ExtensionStatement,
+        _proof: &[u8],
+    ) -> Result<(), Error> {
+        Err(Error::UnsupportedCapability)
+    }
+}
+
+struct JoinWorld {
+    store: MemoryStore,
+    community: [u8; 32],
+    owner: [u8; 32],
+    state: [u8; 32],
+    scope: AccountProofScope,
+    policy: AccountLedgerPolicy,
+    descriptor: czkp::record::Epoch,
+    configuration: Vec<u8>,
+    extensions: Extensions,
+    issuer: cssr::certificate::CertificateIssuer,
+    record_issuer: cssr::certificate::RecordIssuer,
+}
+
+fn join_world() -> JoinWorld {
+    let scope = AccountProofScope {
+        circuit_digest: [4; 32],
+        verifying_key_digest: [5; 32],
+    };
+    let policy = AccountLedgerPolicy {
+        account: AccountPolicy {
+            initial_credit: 3,
+            maximum_available: 4,
+            outgoing_reservation: 1,
+            incoming_reservation: 1,
+            policy_revision: 1,
+            policy_valid_from: 1,
+            policy_valid_until: 2000,
+            newcomer_period: 100,
+            rate_window: 1000,
+            newcomer_admissions: 2,
+            maximum_admissions: 4,
+            refill_period: 100,
+            refill_units: 1,
+            abandon_after: 1000,
+        },
+        max_authorization_seconds: 100,
+        max_proof_bytes: 1024 * 1024,
+        checkpoint_period_seconds: 1000,
+    };
+    let signer = csgn::Signer::new(
+        "community-example",
+        csgn::SecretKey::from_seed(&mut [1; 32]),
+        1,
+        2000,
+    )
+    .unwrap();
+    let trust = AdmissionTrust {
+        community_id: "community-example".into(),
+        policy_digest: "opaque-policy-digest".into(),
+        policy_keys: signer.key_ring().clone(),
+    };
+    let configuration = super::tuning::config_bytes(&trust, &policy, &scope, [9; 32], 0).unwrap();
+    let record_issuer = cssr::certificate::RecordIssuer::new(&[19; 32]);
+    // Epoch 2 on a 100-second period: starts_at 200, expires_at 300.
+    let descriptor = czkp::record::Epoch {
+        purpose: czkp::record::Purpose::RecordEpochV3,
+        community: [1; 32],
+        policy_epoch: 1,
+        epoch: 2,
+        starts_at: 200,
+        expires_at: 300,
+        root: [3; 32],
+        issuer_key: record_issuer.public_key(),
+        proof_scope: scope.clone(),
+        leaf_count: 4,
+        download_digest: [6; 32],
+        download_bytes: 1024,
+    };
+    let extension_configuration = b"join-test-extension-config".to_vec();
+    let extensions = Extensions {
+        artifact_binding: ArtifactBinding {
+            manifest_sha256: [7; 32],
+        },
+        activation_anchor: Vec::new(),
+        policy: ExtensionPolicy {
+            revision: 1,
+            public_record_quorum: 5,
+            change_token_cost: 1,
+            deposit_delay_seconds: 10,
+            minimum_deposit_batch: 2,
+            standing_policy_digest: [9; 32],
+        },
+        verifier: Box::new(JoinStubVerifier {
+            scope: scope.clone(),
+        }),
+        config: extension_configuration.clone(),
+        budget: Budget::new(
+            "community-example",
+            ExtensionLimits {
+                global_burst: 1000,
+                subject_burst: 500,
+                replenish: std::time::Duration::from_secs(1),
+                maximum_keys: std::num::NonZeroUsize::new(32).unwrap(),
+            },
+        )
+        .unwrap(),
+    };
+    let mut store = MemoryStore::default();
+    let mut tx = AccountStorage::transaction(&mut store).unwrap();
+    tx.put(
+        ANCHOR,
+        &PublishedAnchor {
+            descriptor: descriptor.clone(),
+            period_seconds: 100,
+            frozen_at: 200,
+            configuration: configuration.clone(),
+            extension_configuration,
+        },
+    )
+    .unwrap();
+    tx.commit().unwrap();
+    JoinWorld {
+        store,
+        community: [1; 32],
+        owner: [7; 32],
+        state: [2; 32],
+        scope,
+        policy,
+        descriptor,
+        configuration,
+        extensions,
+        issuer: cssr::certificate::CertificateIssuer::new(&[3; 32]).unwrap(),
+        record_issuer,
+    }
+}
+
+impl JoinWorld {
+    fn acceptance(&self, accepted_at: u64) -> AccountAcceptance {
+        AccountAcceptance {
+            statement: AccountStatement {
+                protocol_version: 2,
+                community: self.community,
+                owner: self.owner,
+                policy_digest: [8; 32],
+                enrollment_root: [1; 32],
+                now: 200,
+                valid_until: 400,
+                genesis: true,
+                previous_version: 0,
+                next_version: 0,
+                previous_state: [0; 32],
+                next_state: self.state,
+                settlement_marker: [0; 32],
+                policy: self.policy.account.clone(),
+            },
+            request_id: [7; 32],
+            request_digest: [8; 32],
+            proof_scope: self.scope.clone(),
+            accepted_at,
+            signature: String::new(),
+        }
+    }
+
+    fn certify(
+        &mut self,
+        accepted: &AccountAcceptance,
+    ) -> Result<Option<crate::extensions::EpochAncestryCertificate>, Error> {
+        let mut tx = AccountStorage::transaction(&mut self.store).unwrap();
+        certify_join(
+            &mut tx,
+            accepted,
+            &self.configuration,
+            &self.extensions,
+            &self.issuer,
+            &self.record_issuer,
+        )
+    }
+}
+
+#[test]
+fn join_leaf_issues_exactly_one_signed_leaf_for_a_genesis_inside_the_window() {
+    let mut world = join_world();
+    let accepted = world.acceptance(250);
+    let Some(certificate) = world.certify(&accepted).unwrap() else {
+        panic!("genesis inside frozen_at <= accepted_at < expires_at gets a join leaf");
+    };
+    assert_eq!(certificate.community, world.community);
+    assert_eq!(certificate.owner, world.owner);
+    assert_eq!(certificate.epoch, world.descriptor.epoch);
+    assert_eq!(certificate.root, world.descriptor.root);
+    assert_eq!(certificate.state, accepted.statement.next_state);
+    assert_eq!(certificate.version, accepted.statement.next_version);
+    assert_eq!(certificate.proof_scope, accepted.proof_scope);
+    assert_eq!(certificate.issued_at, accepted.accepted_at);
+    // The single SignedLeaf commits to the exact accepted genesis state.
+    assert_eq!(certificate.record.leaf.owner, world.owner);
+    assert_eq!(certificate.record.leaf.version, 0);
+    assert_eq!(certificate.record.leaf.state, world.state);
+    assert_eq!(
+        certificate.record.leaf.required_inbox,
+        crate::extensions::Inbox::default().root
+    );
+    let commitment = certificate
+        .record
+        .leaf
+        .commitment(&world.community, world.descriptor.epoch)
+        .unwrap();
+    assert_eq!(certificate.frozen_leaf, commitment);
+    // The join certificate carries no tree path: only the record issuer's
+    // signature over the blinded leaf authenticates it for this epoch.
+    czkp::record::verify_certificate(
+        &world.descriptor.issuer_key,
+        &world.community,
+        world.descriptor.epoch,
+        &certificate.frozen_leaf,
+        &certificate.record.signature,
+    )
+    .unwrap();
+    certificate.verify(&world.issuer.public_key()).unwrap();
+}
+
+#[test]
+fn join_leaf_refuses_a_member_with_a_prior_frontier() {
+    let mut world = join_world();
+    let accepted = world.acceptance(250);
+    let mut tx = AccountStorage::transaction(&mut world.store).unwrap();
+    tx.put(
+        &key(1, &[&world.owner]),
+        &Frontier {
+            root_key: [9; 32],
+            root_revision: 0,
+            version: 0,
+            state: world.state,
+            latest_request: [7; 32],
+            record_ancestry: None,
+        },
+    )
+    .unwrap();
+    tx.commit().unwrap();
+    assert!(world.certify(&accepted).unwrap().is_none());
+}
+
+#[test]
+fn join_leaf_refuses_a_state_mismatch() {
+    let mut world = join_world();
+    let accepted = world.acceptance(250);
+    // A proof scope outside the published epoch carries no join leaf.
+    let mut wrong_scope = accepted.clone();
+    wrong_scope.proof_scope.circuit_digest = [9; 32];
+    assert!(world.certify(&wrong_scope).unwrap().is_none());
+    // A statement for another community carries no join leaf either.
+    let mut wrong_community = accepted.clone();
+    wrong_community.statement.community = [9; 32];
+    assert!(world.certify(&wrong_community).unwrap().is_none());
+}
+
+#[test]
+fn join_leaf_refuses_acceptances_outside_the_frozen_window() {
+    let mut world = join_world();
+    // frozen_at is 200 and the epoch expires at 300.
+    assert!(world.certify(&world.acceptance(199)).unwrap().is_none());
+    assert!(world.certify(&world.acceptance(300)).unwrap().is_none());
+}
+
+#[test]
+fn join_leaf_recover_reserves_the_identical_leaf() {
+    let mut world = join_world();
+    let accepted = world.acceptance(250);
+    let Some(certificate) = world.certify(&accepted).unwrap() else {
+        panic!("genesis inside the window gets a join leaf");
+    };
+    let mut tx = AccountStorage::transaction(&mut world.store).unwrap();
+    retain(&mut tx, &world.owner, Some(&certificate)).unwrap();
+    tx.commit().unwrap();
+    let ring = vec![czkp::issuer_keys::CertificateKeyPeriod {
+        public_key: world.issuer.public_key().to_vec(),
+        valid_from: 1,
+        valid_until: None,
+    }];
+    let mut tx = AccountStorage::transaction(&mut world.store).unwrap();
+    let Some(reissued) = recover(
+        &mut tx,
+        &accepted,
+        Some(&ring),
+        &world.record_issuer.public_key(),
+    )
+    .unwrap() else {
+        panic!("retained join leaf is re-served");
+    };
+    assert_eq!(
+        serde_json::to_vec(&reissued).unwrap(),
+        serde_json::to_vec(&certificate).unwrap()
+    );
+}
+
+#[test]
+fn join_leaf_certificate_verifies_under_the_epoch_issuer_key_and_rejects_tampering() {
+    let mut world = join_world();
+    assert_eq!(
+        world.descriptor.issuer_key,
+        world.record_issuer.public_key()
+    );
+    let accepted = world.acceptance(250);
+    let Some(certificate) = world.certify(&accepted).unwrap() else {
+        panic!("genesis inside the window gets a join leaf");
+    };
+    certificate.verify(&world.issuer.public_key()).unwrap();
+    czkp::record::verify_certificate(
+        &world.descriptor.issuer_key,
+        &world.community,
+        world.descriptor.epoch,
+        &certificate.frozen_leaf,
+        &certificate.record.signature,
+    )
+    .unwrap();
+    // Another issuer's key verifies neither the ancestry body nor the leaf.
+    let other = cssr::certificate::CertificateIssuer::new(&[4; 32]).unwrap();
+    assert!(certificate.verify(&other.public_key()).is_err());
+    // A tampered leaf no longer matches the record issuer's certificate.
+    let mut tampered_leaf = certificate.clone();
+    tampered_leaf.record.leaf.state = [3; 32];
+    let tampered_commitment = tampered_leaf
+        .record
+        .leaf
+        .commitment(&world.community, world.descriptor.epoch)
+        .unwrap();
+    assert_ne!(tampered_commitment, certificate.frozen_leaf);
+    assert!(
+        czkp::record::verify_certificate(
+            &world.descriptor.issuer_key,
+            &world.community,
+            world.descriptor.epoch,
+            &tampered_commitment,
+            &tampered_leaf.record.signature,
+        )
+        .is_err()
+    );
+    // A tampered record signature fails outright.
+    let mut tampered_signature = certificate.clone();
+    tampered_signature.record.signature[0] ^= 1;
+    assert!(
+        czkp::record::verify_certificate(
+            &world.descriptor.issuer_key,
+            &world.community,
+            world.descriptor.epoch,
+            &certificate.frozen_leaf,
+            &tampered_signature.record.signature,
+        )
+        .is_err()
+    );
+}
