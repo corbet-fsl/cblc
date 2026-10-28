@@ -768,6 +768,9 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
                         issuer,
                     ),
                     ancestry: ancestry.map(Box::new),
+                    // The ledger has no community signing key; the accepting
+                    // service attaches it when its descriptor names this ancestry.
+                    join_publication: None,
                 })
             }
             _ => None,

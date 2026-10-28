@@ -96,6 +96,13 @@ pub struct ExtendedEvidence {
     pub certificate: StateCertificate,
     /// Original ancestry, present only when issued in that acceptance's CAS.
     pub ancestry: Option<Box<EpochAncestryCertificate>>,
+    /// Community-signed Balance publication the accepting operator attached when
+    /// this ancestry's record epoch is the one it publishes. The ledger holds no
+    /// community signing key, so the accepting service fills it exactly as it does
+    /// on the answer itself. Opaque and unsigned here: the holder authenticates it
+    /// with the community ring and never trusts it for being present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_publication: Option<crate::contracts::JoinPublication>,
 }
 impl std::fmt::Debug for ExtendedEvidence {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
