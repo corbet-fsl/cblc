@@ -76,6 +76,22 @@ pub struct WaveVerifierDescriptor {
     pub valid_until: u64,
 }
 
+/// Authenticate one complete community publication envelope with the configured
+/// publication ring and return the material inside it. This is the same pair the
+/// operator's own paths use ([`csgn::KeyRing::verify`] with the settings-snapshot
+/// kind at `now`); a device that holds the ring needs no second verifier and no
+/// second schema to read the community's current descriptor.
+pub fn verify_publication(
+    ring: &csgn::KeyRing,
+    bytes: &[u8],
+    now: u64,
+) -> Result<PublicVerifierMaterial, Error> {
+    let signed = ring
+        .verify(bytes, csgn::Kind::SettingsSnapshot, now)
+        .map_err(|_| Error::Signature)?;
+    serde_json::from_slice(signed.payload()).map_err(|_| Error::InvalidInput)
+}
+
 impl PublicVerifierMaterial {
     /// Derive the Wave verifier policy from the published material alone: community,
     /// extension policy, account proof scope, issuer key ring, identity and manifest pin,

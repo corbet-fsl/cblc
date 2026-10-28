@@ -256,6 +256,10 @@ impl<V: AccountProofVerifier, C: Fn() -> u64> AccountService<V, C> {
                     acceptance,
                     certificate,
                     ancestry: result.ancestry.map(Box::new),
+                    // The ledger has no community signing key: the accepted state's
+                    // operator attaches the current publication when it names this
+                    // ancestry's epoch (see the community service account path).
+                    join_publication: None,
                 })
             }
             AccountServiceRequest::Obligations {

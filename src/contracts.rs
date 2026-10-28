@@ -97,6 +97,21 @@ pub(crate) mod hex_bytes {
     }
 }
 
+/// The exact community-signed Balance publication (the csgn `SettingsSnapshot`
+/// envelope) whose `record_epoch` descriptor an accepted join-time ancestry sits
+/// under. It is opaque envelope bytes: a holder authenticates it with the
+/// community's publication ring and then reads the material inside. Hex on the
+/// wire, like every other byte field of this family.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(transparent))]
+pub struct JoinPublication(
+    #[serde(with = "hex_bytes")]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub Vec<u8>,
+);
+
 #[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(
@@ -117,6 +132,13 @@ pub enum AccountServiceResponse {
         certificate: crate::extensions::StateCertificate,
         /// Original ancestry issued only in this acceptance's verified CAS.
         ancestry: Option<Box<crate::extensions::EpochAncestryCertificate>>,
+        /// Community-signed publication that names exactly the epoch and root the
+        /// ancestry sits under, so a newcomer whose own material carries no frozen
+        /// frontier can check its join-time record leaf. Not covered by the
+        /// acceptance signature: it carries its own community signature, like
+        /// `AccountStatusResponse.extended`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        join_publication: Option<JoinPublication>,
     },
     Obligations(crate::obligations::ObligationsResponse),
     /// The blinded settlement pass, ready for the member to unblind.

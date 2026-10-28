@@ -188,6 +188,7 @@ fn main() {
                         acceptance: accepted,
                         certificate,
                         ancestry,
+                        ..
                     } = response?
                     else {
                         return Err(Error::InvalidInput);

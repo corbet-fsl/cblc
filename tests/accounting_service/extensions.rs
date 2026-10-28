@@ -144,11 +144,15 @@ fn extended_service_checks_the_configured_issuer_before_any_acceptance_and_recov
         acceptance,
         certificate,
         ancestry,
+        join_publication,
     } = &accepted
     else {
         panic!("actual extended service response");
     };
     assert!(ancestry.is_none());
+    // The ledger has no community signing key: the operator's account path attaches
+    // the publication, never the ledger answer.
+    assert!(join_publication.is_none());
     assert_eq!(acceptance.statement, request.statement);
     verify_account_acceptance(
         acceptance,
