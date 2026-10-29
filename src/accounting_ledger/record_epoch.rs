@@ -393,6 +393,46 @@ fn recipient_key(owner: &[u8; 32]) -> Vec<u8> {
     [RECIPIENT_PREFIX, owner.as_slice()].concat()
 }
 
+/// Replacements of a member's record-witness recipient, each with the server time it
+/// was accepted, oldest first. Refused past this cap (never evicted): a lineage
+/// rotation is a rare, member-driven event.
+pub const MAX_RECIPIENT_REPLACEMENTS: usize = 16;
+
+fn recipient_replacements_key(owner: &[u8; 32]) -> Vec<u8> {
+    [b"record-recipient-next:v1:".as_slice(), owner.as_slice()].concat()
+}
+
+/// The recipient serving the record epoch that starts at `epoch_start`: the last
+/// replacement accepted strictly BEFORE that start, else the first registration. A
+/// replacement therefore takes effect at the next epoch boundary, never mid-epoch, and
+/// the epoch in flight keeps the previous recipient, whose witness still opens.
+pub(crate) fn effective_recipient(
+    base: [u8; 32],
+    replacements: &[(u64, [u8; 32])],
+    epoch_start: u64,
+) -> [u8; 32] {
+    replacements
+        .iter()
+        .rev()
+        .find(|(accepted_at, _)| *accepted_at < epoch_start)
+        .map_or(base, |(_, key)| *key)
+}
+
+/// The stored recipient for the epoch starting at `epoch_start`; `None` if unregistered.
+fn recipient_for_epoch(
+    tx: &mut Transaction<'_>,
+    owner: &[u8; 32],
+    epoch_start: u64,
+) -> Result<Option<[u8; 32]>, Error> {
+    let Some(base) = tx.get::<[u8; 32]>(&recipient_key(owner))? else {
+        return Ok(None);
+    };
+    let replacements: Vec<(u64, [u8; 32])> = tx
+        .get(&recipient_replacements_key(owner))?
+        .unwrap_or_default();
+    Ok(Some(effective_recipient(base, &replacements, epoch_start)))
+}
+
 // Never exported to a client or a relying service. All stored fields come from
 // the same actual issuer transaction, not from a proposed member record.
 #[derive(Serialize, Deserialize)]
@@ -626,10 +666,12 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         ))?;
         Ok(published)
     }
-    /// Register once, or idempotently repeat the SAME member-wide recipient.
-    /// A different key replaces the stored one only when a CURRENT device of the
-    /// lineage (witnessed by `current`) carries a strictly greater lineage epoch
-    /// than the stored one; the same or an older epoch is refused as a replay.
+    /// Register once, or idempotently repeat the SAME (latest) member-wide recipient.
+    /// A different key replaces it only when a CURRENT device of the lineage
+    /// (witnessed by `current`; a removed device is refused) carries a strictly
+    /// greater lineage epoch than the stored one; the same or an older epoch is
+    /// refused as a replay. The replacement serves from the NEXT record epoch on;
+    /// the epoch in flight keeps the previous recipient.
     /// Device loss alone never rotates it. All equal passkeys derive the same key.
     pub fn register_record_recipient(
         &mut self,
@@ -676,13 +718,24 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             .ok_or(Error::Admission)?;
         let key = recipient_key(&request.owner);
         let epoch_key = recipient_epoch_key(&request.owner);
-        if let Some(old) = tx.get::<[u8; 32]>(&key)? {
-            if old != request.recipient_key {
+        if let Some(base) = tx.get::<[u8; 32]>(&key)? {
+            // K1 S4: a replacement from a CURRENT device (`current` above) with a newer
+            // lineage epoch is recorded for the NEXT record-epoch boundary; the base and
+            // earlier replacements stay stored so the epoch in flight still resolves to
+            // the previous recipient.
+            let next_key = recipient_replacements_key(&request.owner);
+            let mut replacements: Vec<(u64, [u8; 32])> = tx.get(&next_key)?.unwrap_or_default();
+            let latest = replacements.last().map_or(base, |(_, key)| *key);
+            if latest != request.recipient_key {
                 let stored = tx.get::<u64>(&epoch_key)?.unwrap_or(0);
                 if request.lineage_epoch <= stored {
                     return Err(Error::Replay);
                 }
-                tx.put(&key, &request.recipient_key)?;
+                if replacements.len() >= MAX_RECIPIENT_REPLACEMENTS {
+                    return Err(Error::Capacity);
+                }
+                replacements.push((now, request.recipient_key));
+                tx.put(&next_key, &replacements)?;
                 tx.put(&epoch_key, &request.lineage_epoch)?;
             }
         } else {

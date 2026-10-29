@@ -28,9 +28,11 @@ pub(in crate::accounting_ledger) fn prepare_in(
             return Err(Error::Storage);
         }
         let owner: [u8; 32] = stored_key[9..].try_into().map_err(|_| Error::Storage)?;
-        let recipient = tx
-            .get::<[u8; 32]>(&recipient_key(&owner))?
-            .ok_or(Error::Admission)?;
+        let epoch_start = inputs
+            .epoch
+            .checked_mul(inputs.period_seconds)
+            .ok_or(Error::InvalidInput)?;
+        let recipient = recipient_for_epoch(tx, &owner, epoch_start)?.ok_or(Error::Admission)?;
         if recipient == [0; 32] {
             return Err(Error::Storage);
         }

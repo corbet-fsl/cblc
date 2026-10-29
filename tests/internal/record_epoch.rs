@@ -784,3 +784,29 @@ fn join_leaf_certificate_verifies_under_the_epoch_issuer_key_and_rejects_tamperi
         .is_err()
     );
 }
+
+// K1 S4 (decided 2026-10-29): a recipient replacement takes effect only at the NEXT
+// record-epoch boundary, never mid-epoch, and the previous recipient keeps serving the
+// epoch in flight, so its witness still opens under the old key.
+#[test]
+fn recipient_replacement_takes_effect_only_at_the_next_epoch_boundary() {
+    let period = 100;
+    let base = [41; 32];
+    // Registered at 250: inside epoch 2 (200..300).
+    let replacements = vec![(250, [42; 32])];
+    let at = |epoch: u64| super::effective_recipient(base, &replacements, epoch * period);
+    // The epoch in flight (2) and every earlier one keep the old recipient.
+    assert_eq!(at(1), base);
+    assert_eq!(at(2), base);
+    // From the next boundary on, the replacement.
+    assert_eq!(at(3), [42; 32]);
+    assert_eq!(at(9), [42; 32]);
+    // Registered exactly at a boundary (300 = start of epoch 3) is inside epoch 3: next is 4.
+    let boundary = vec![(300, [43; 32])];
+    assert_eq!(super::effective_recipient(base, &boundary, 300), base);
+    assert_eq!(super::effective_recipient(base, &boundary, 400), [43; 32]);
+    // Two replacements: each epoch resolves to the last one registered before its start.
+    let two = vec![(250, [42; 32]), (450, [44; 32])];
+    assert_eq!(super::effective_recipient(base, &two, 400), [42; 32]);
+    assert_eq!(super::effective_recipient(base, &two, 500), [44; 32]);
+}

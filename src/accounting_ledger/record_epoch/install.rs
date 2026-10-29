@@ -75,7 +75,15 @@ pub(in crate::accounting_ledger) fn install_in(
             || current.state != leaf.state
             || current.version != leaf.version
             || crate::extensions::inbox(tx, &leaf.owner)?.root != leaf.required_inbox
-            || tx.get::<[u8; 32]>(&recipient_key(&leaf.owner))? != Some(snapshot.recipient_key)
+            || recipient_for_epoch(
+                tx,
+                &leaf.owner,
+                frozen
+                    .0
+                    .epoch
+                    .checked_mul(frozen.0.period_seconds)
+                    .ok_or(Error::Storage)?,
+            )? != Some(snapshot.recipient_key)
         {
             return Err(Error::Replay);
         }
