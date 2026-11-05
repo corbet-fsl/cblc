@@ -1,6 +1,7 @@
 //! Original common checkpoint publisher, using the caller's actual atomic port.
 use super::*;
 use crate::Error;
+use crate::current_device::{CurrentDevices, listed};
 use crate::storage::{CommitAuthority, CommitDeadline, Transaction};
 use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};
@@ -89,10 +90,14 @@ impl<C: Fn() -> u64> EnrollmentService<C> {
     /// Exact retained same-slot bytes keep their original end, never a renewed one.
     /// The captured owner must bind these SAME current Policy/epoch/cohort
     /// expectations at the actual commit; sampled input alone is not authority.
+    /// Every candidate delegation's device must still be current in the host registry
+    /// (`devices`, asked at build time): a revoked or removed device's delegation is left out
+    /// of the new slot even while it is unexpired.
     pub fn prepare_checkpoint(
         &mut self,
         expected: ExpectedAdmission<'_>,
         authority: Arc<dyn CommitAuthority>,
+        devices: &dyn CurrentDevices,
     ) -> Result<PendingCheckpoint, Error> {
         if expected.trust.community_id != self.store.config.community_id
             || expected.trust.policy_digest != self.store.config.policy_digest
@@ -145,7 +150,14 @@ impl<C: Fn() -> u64> EnrollmentService<C> {
                     },
                     now,
                 )?;
-                if value.valid_until() >= end {
+                let delegation = row.delegation();
+                if value.valid_until() >= end
+                    && listed(
+                        devices,
+                        &delegation.admission.pseudonym,
+                        &delegation.authorization,
+                    )?
+                {
                     verified.push(value);
                 }
             }

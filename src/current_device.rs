@@ -29,6 +29,30 @@ pub trait CurrentLineage {
     fn is_current(&self, device: &[u8; 32]) -> bool;
 }
 
+/// The door's view of EVERY member's current device lineage, asked by the roster slot builder.
+///
+/// An account delegation lives as long as its admission grant, so an unexpired delegation can
+/// outlive its device: revocation must still take effect at the next slot. The builder asks this
+/// port, at build time, about each candidate delegation and leaves out every delegation whose
+/// device is not current. The question carries ONLY what the roster entry itself names to the
+/// operator (the grant's pseudonym and the delegation's device key), so answering it links no
+/// account to a member that the publication does not already link. A failed lookup is an error,
+/// never an admission.
+pub trait CurrentDevices: Send + Sync {
+    /// True only while `device` is a current (live, unrevoked) device of the member `pseudonym`.
+    fn is_current(&self, pseudonym: &str, device: &[u8; 32]) -> Result<bool, Error>;
+}
+
+/// True when the device that `authorization` names is current for `pseudonym`.
+#[cfg(feature = "host")]
+pub(crate) fn listed(
+    devices: &dyn CurrentDevices,
+    pseudonym: &str,
+    authorization: &DeviceAuthorization,
+) -> Result<bool, Error> {
+    devices.is_current(pseudonym, &decode::<32>(&authorization.device_public_key)?)
+}
+
 /// Proof that the registry listed the requesting device as current. Not `Clone`, not `Copy`.
 #[derive(Debug)]
 pub struct CurrentDevice {

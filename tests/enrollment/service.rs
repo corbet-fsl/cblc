@@ -119,11 +119,41 @@ fn populate(path: &Path, f: &Fixture, d: &AccountingDelegation, limits: Enrollme
     let mut store = common::host_storage::open_enrollment(path, limits).unwrap();
     registry::enroll(&mut store, f, d, 130).unwrap();
 }
+/// The host registry as the slot builder sees it: (pseudonym, device) pairs that are NOT
+/// current (revoked or removed). Every other device is current.
+#[derive(Default)]
+struct Registry {
+    revoked: Mutex<Vec<(String, [u8; 32])>>,
+    asked: Mutex<Vec<(String, [u8; 32])>>,
+}
+impl cblc::current_device::CurrentDevices for Registry {
+    fn is_current(&self, pseudonym: &str, device: &[u8; 32]) -> Result<bool, Error> {
+        self.asked
+            .lock()
+            .unwrap()
+            .push((pseudonym.to_owned(), *device));
+        Ok(!self
+            .revoked
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(p, d)| p == pseudonym && d == device))
+    }
+}
 fn prepare<C: Fn() -> u64>(
     source: &mut EnrollmentService<C>,
     f: &Fixture,
     epoch: u64,
     owner: Arc<Current>,
+) -> Result<PendingCheckpoint, Error> {
+    prepare_with(source, f, epoch, owner, &Registry::default())
+}
+fn prepare_with<C: Fn() -> u64>(
+    source: &mut EnrollmentService<C>,
+    f: &Fixture,
+    epoch: u64,
+    owner: Arc<Current>,
+    devices: &Registry,
 ) -> Result<PendingCheckpoint, Error> {
     source.prepare_checkpoint(
         ExpectedAdmission {
@@ -132,7 +162,18 @@ fn prepare<C: Fn() -> u64>(
             passport_policy_digest: &common::encoded(10),
         },
         owner,
+        devices,
     )
+}
+/// A delegation as long as its admission grant (decision (b)): grant, root authorization and
+/// delegation all end at `until`, independent of the device session's lease.
+fn grant_long(f: &Fixture, member: u8, device: &SigningKey, until: u64) -> AccountingDelegation {
+    let mut d = delegation(f);
+    d.admission = f.grant_until(member, device, until);
+    d.authorization = f.authorize_until(member, device, until);
+    d.expires_at = until;
+    resign(&mut d, device);
+    d
 }
 fn pending_key(slot: u64) -> Vec<u8> {
     let mut key = b"enrollment/pending/".to_vec();
@@ -230,6 +271,77 @@ fn only_whole_slot_delegations_enter_tree_and_empty_eligible_roster_refuses() {
     let mut source = producer(&empty, &f, limits, Arc::new(AtomicU64::new(130)));
     assert!(matches!(
         prepare(&mut source, &f, 1, current(&f, &d)),
+        Err(Error::Admission)
+    ));
+    assert!(read(&empty, &f.trust.community_id, &pending_key(1)).is_none());
+}
+
+#[test]
+fn a_slot_long_after_enrollment_keeps_the_member_with_a_grant_long_delegation() {
+    // Fixture scale: slots of 100 s, a lease-bound delegation would have ended ~15 min after
+    // enrollment. Enrolled at 130; the slot built 20 min later still holds the member, because
+    // the delegation lives as long as the admission grant.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("common.db");
+    let f = Fixture::new();
+    let d = grant_long(&f, 7, &f.device, 2400);
+    let limits = registry::config(&f);
+    populate(&path, &f, &d, limits.clone());
+    let now = Arc::new(AtomicU64::new(130 + 20 * 60));
+    let mut source = producer(&path, &f, limits, now);
+    let registry = Registry::default();
+    let pending = prepare_with(&mut source, &f, 1, current(&f, &d), &registry).unwrap();
+    assert_eq!(pending.publication().slot, 13);
+    assert_eq!(pending.publication().delegations.len(), 1);
+    assert_eq!(
+        pending.publication().delegations[0].entry.member_id,
+        d.admission.member_id
+    );
+    // The registry was asked only what the roster entry already names: pseudonym and device.
+    assert_eq!(
+        *registry.asked.lock().unwrap(),
+        vec![(d.admission.pseudonym.clone(), f.device.verifying_key().to_bytes())]
+    );
+}
+
+#[test]
+fn a_revoked_devices_unexpired_delegation_is_excluded_from_the_next_slot() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("common.db");
+    let f = Fixture::new();
+    let kept = grant_long(&f, 7, &f.device, 2400);
+    let lost = SigningKey::from_bytes(&[5; 32]);
+    let revoked = grant_long(&f, 8, &lost, 2400);
+    let limits = registry::config(&f);
+    populate(&path, &f, &kept, limits.clone());
+    populate(&path, &f, &revoked, limits.clone());
+    let now = Arc::new(AtomicU64::new(130));
+    let mut source = producer(&path, &f, limits.clone(), now.clone());
+    let registry = Registry::default();
+    let first = prepare_with(&mut source, &f, 1, current(&f, &kept), &registry).unwrap();
+    assert_eq!(first.publication().delegations.len(), 2);
+    drop(first);
+    // The device is revoked in the registry. Its delegation is still unexpired, yet the next
+    // slot leaves it out; the frozen slot 1 keeps its original bytes.
+    registry
+        .revoked
+        .lock()
+        .unwrap()
+        .push((revoked.admission.pseudonym.clone(), lost.verifying_key().to_bytes()));
+    now.store(230, Ordering::Release);
+    let next = prepare_with(&mut source, &f, 1, current(&f, &kept), &registry).unwrap();
+    assert_eq!(next.publication().slot, 2);
+    assert_eq!(next.publication().delegations.len(), 1);
+    assert_eq!(
+        next.publication().delegations[0].entry.member_id,
+        kept.admission.member_id
+    );
+    // A roster whose only delegation is revoked is empty and refuses, as before.
+    let empty = dir.path().join("revoked.db");
+    populate(&empty, &f, &revoked, limits.clone());
+    let mut source = producer(&empty, &f, limits, Arc::new(AtomicU64::new(130)));
+    assert!(matches!(
+        prepare_with(&mut source, &f, 1, current(&f, &kept), &registry),
         Err(Error::Admission)
     ));
     assert!(read(&empty, &f.trust.community_id, &pending_key(1)).is_none());
