@@ -2,7 +2,7 @@
   "schema": 1,
   "generator": "ccid render v1",
   "tool_revision": "e38f347d6941aa105ac4b55a0d4b8fec2ef22433",
-  "manifest_sha256": "9643cf4c6da5e96a2ca9813f787548b8af928a799108196b428cd060bcb86265",
+  "manifest_sha256": "a3d9fd33c171a266c0694d13563d9d01e594b4393f25d820c0ef480f08a952fe",
   "jobs": {
     "artifact-conformance": {
       "job": "artifact-conformance",
@@ -24,6 +24,21 @@
       "scheduler": "crow",
       "checks": [
         "coverage"
+      ],
+      "workflow": "repository-jobs",
+      "command": [
+        "bash",
+        ".ci/run-cached.sh"
+      ],
+      "environment": {
+        "CI_TIMEOUT": "7200"
+      }
+    },
+    "genesis-split": {
+      "job": "genesis-split",
+      "scheduler": "crow",
+      "checks": [
+        "genesis-split"
       ],
       "workflow": "repository-jobs",
       "command": [

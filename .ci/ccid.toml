@@ -165,3 +165,19 @@ scheduler = "crow"
 checks = ["resolve-dependencies"]
 workflow = "dependency-resolution"
 command = ["bash", ".ci/run-cached.sh"]
+
+# Soundness of the genesis/update key split (tests/genesis_split.rs): needs the prebuilt, hash-pinned nargo 1.0.0-beta.26 and bb 5.2.1 (CBLC_NARGO, CBLC_BB_CLI), provided by
+# .ci/genesis-split.sh; nothing is compiled for them.
+[checks.genesis-split]
+kind = "commands"
+commands = [["bash", ".ci/genesis-split.sh"]]
+cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["node", "--version"], ["clang", "--version"], ["pkg-config", "--version"]]
+cache_env = ["BB_LIB_DIR", "BB_NATIVE_RUSTFLAGS", "LIBCLANG_PATH", "PKG_CONFIG_PATH", "NIX_CFLAGS_COMPILE", "NIX_LDFLAGS", "LD_LIBRARY_PATH"]
+cache_pure = false
+
+[jobs.genesis-split]
+environment = { CI_TIMEOUT = "7200" }
+scheduler = "crow"
+checks = ["genesis-split"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
