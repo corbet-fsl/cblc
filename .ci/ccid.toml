@@ -11,10 +11,12 @@ cache_outputs = ["artifact-conformance-worker.json"]
 
 [jobs.artifact-conformance]
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["artifact-conformance"]
-workflow = "repository-jobs"
+workflow = "artifact-conformance"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 # All Linux verification gates from .github/workflows/ci.yml (jobs check,
 # audit, dependency-policy, coverage) are ported into .ci/verify.sh in CI
@@ -35,10 +37,12 @@ cache_pure = false
 
 [jobs.wave-artifacts]
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["wave-artifacts"]
-workflow = "repository-jobs"
+workflow = "wave-artifacts"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 # Real peer-release proofs (a wave reservation and an Answer outcome) in their own job,
 # retained write-once under the fixture digest; verify never regenerates them.
@@ -51,10 +55,12 @@ cache_pure = false
 
 [jobs.proof-fixtures]
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["proof-fixtures"]
-workflow = "repository-jobs"
+workflow = "proof-fixtures"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 # Counterpart verification of the retained wave proofs by digest: native worker and wasm.
 [checks.wave-verify]
@@ -66,10 +72,12 @@ cache_pure = false
 
 [jobs.wave-verify]
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["wave-verify"]
-workflow = "repository-jobs"
+workflow = "wave-verify"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 [checks.verify]
 kind = "commands"
@@ -88,10 +96,12 @@ cache_pure = false
 
 [jobs.proof-scenario]
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["proof-scenario"]
-workflow = "repository-jobs"
+workflow = "proof-scenario"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 # Record-epoch proofs and the native record capture; retains .record-epoch-test write-once per commit.
 [checks.record-epoch]
@@ -103,10 +113,12 @@ cache_pure = false
 
 [jobs.record-epoch]
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["record-epoch"]
-workflow = "repository-jobs"
+workflow = "record-epoch"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 # Nightly source and runtime coverage over the retained fixtures of this commit.
 [checks.coverage]
@@ -119,27 +131,31 @@ cache_outputs = ["coverage.json", "coverage.lcov", "coverage.txt", "dependency-m
 
 [jobs.coverage]
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["coverage"]
-workflow = "repository-jobs"
+workflow = "coverage"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 [checks.advisories]
 kind = "commands"
 commands = [["cargo", "deny", "--locked", "check", "advisories", "licenses"]]
 
 [render]
-tool_revision = "e38f347d6941aa105ac4b55a0d4b8fec2ef22433"
-
+tool_revision = "4cd68908acb198a0b01886a3d8d1dfe8155b1453"
+tool_sha256 = "299a7a5494b4690cbbf86f6f328ad02f04e97854e1a58ae71f217196e2171620"
 [jobs.verify]
 # Proof generation and the instrumented coverage run are separate jobs
 # (proof-scenario, record-epoch, coverage); verify keeps the static gates, the
 # native integration tests and the replays over the retained fixtures.
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["verify", "advisories"]
-workflow = "repository-jobs"
+workflow = "ci"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 # Maintenance job: resolves and retains an npm lock without claiming validation.
 [checks.resolve-npm]
@@ -149,10 +165,12 @@ cache = false
 cache_outputs = ["package-lock.json"]
 
 [jobs.resolve-npm]
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["resolve-npm"]
-workflow = "npm-resolution"
+workflow = "resolve-npm"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 [checks.resolve-dependencies]
 kind = "commands"
@@ -161,10 +179,12 @@ cache = false
 cache_outputs = ["Cargo.lock", "package-lock.json"]
 
 [jobs.resolve-dependencies]
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["resolve-dependencies"]
-workflow = "dependency-resolution"
+workflow = "resolve-dependencies"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]
 
 # Soundness of the genesis/update key split (tests/genesis_split.rs): needs the prebuilt, hash-pinned nargo 1.0.0-beta.26 and bb 5.2.1 (CBLC_NARGO, CBLC_BB_CLI), provided by
 # .ci/genesis-split.sh; nothing is compiled for them.
@@ -177,7 +197,9 @@ cache_pure = false
 
 [jobs.genesis-split]
 environment = { CI_TIMEOUT = "7200" }
-scheduler = "crow"
+scheduler = "forgejo"
+runs_on = "heavy"
 checks = ["genesis-split"]
-workflow = "repository-jobs"
+workflow = "genesis-split"
 command = ["bash", ".ci/run-cached.sh"]
+events = ["manual"]

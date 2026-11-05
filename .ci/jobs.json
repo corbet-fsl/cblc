@@ -1,168 +1,223 @@
 {
   "schema": 1,
   "generator": "ccid render v1",
-  "tool_revision": "e38f347d6941aa105ac4b55a0d4b8fec2ef22433",
-  "manifest_sha256": "a3d9fd33c171a266c0694d13563d9d01e594b4393f25d820c0ef480f08a952fe",
+  "tool_revision": "4cd68908acb198a0b01886a3d8d1dfe8155b1453",
+  "manifest_sha256": "3860bc23c8a5e7d1b19d4a3470272ec6dc5f4d39443a3295c0a3a946780251fa",
   "jobs": {
     "artifact-conformance": {
       "job": "artifact-conformance",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "artifact-conformance"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "artifact-conformance",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "coverage": {
       "job": "coverage",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "coverage"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "coverage",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "genesis-split": {
       "job": "genesis-split",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "genesis-split"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "genesis-split",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "proof-fixtures": {
       "job": "proof-fixtures",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "proof-fixtures"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "proof-fixtures",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "proof-scenario": {
       "job": "proof-scenario",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "proof-scenario"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "proof-scenario",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "record-epoch": {
       "job": "record-epoch",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "record-epoch"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "record-epoch",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "resolve-dependencies": {
       "job": "resolve-dependencies",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "resolve-dependencies"
       ],
-      "workflow": "dependency-resolution",
+      "workflow": "resolve-dependencies",
       "command": [
         "bash",
         ".ci/run-cached.sh"
-      ]
+      ],
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "resolve-npm": {
       "job": "resolve-npm",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "resolve-npm"
       ],
-      "workflow": "npm-resolution",
+      "workflow": "resolve-npm",
       "command": [
         "bash",
         ".ci/run-cached.sh"
-      ]
+      ],
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "verify": {
       "job": "verify",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "verify",
         "advisories"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "ci",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "wave-artifacts": {
       "job": "wave-artifacts",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "wave-artifacts"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "wave-artifacts",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     },
     "wave-verify": {
       "job": "wave-verify",
-      "scheduler": "crow",
+      "scheduler": "forgejo",
       "checks": [
         "wave-verify"
       ],
-      "workflow": "repository-jobs",
+      "workflow": "wave-verify",
       "command": [
         "bash",
         ".ci/run-cached.sh"
       ],
       "environment": {
         "CI_TIMEOUT": "7200"
-      }
+      },
+      "runs_on": "heavy",
+      "events": [
+        "manual"
+      ],
+      "archive_inputs": true
     }
   }
 }
