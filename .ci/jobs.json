@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "generator": "ccid render v1",
-  "tool_revision": "4cd68908acb198a0b01886a3d8d1dfe8155b1453",
-  "manifest_sha256": "3860bc23c8a5e7d1b19d4a3470272ec6dc5f4d39443a3295c0a3a946780251fa",
+  "tool_revision": "10a28f64c3bb63dfade833dd219cba0f504c9345",
+  "manifest_sha256": "2fa646450c29efd66fcb18741561e0ba170a2fca4ec20e377881739229cc6dc5",
   "jobs": {
     "artifact-conformance": {
       "job": "artifact-conformance",

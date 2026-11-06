@@ -143,8 +143,8 @@ kind = "commands"
 commands = [["cargo", "deny", "--locked", "check", "advisories", "licenses"]]
 
 [render]
-tool_revision = "4cd68908acb198a0b01886a3d8d1dfe8155b1453"
-tool_sha256 = "1f6587637f6db365d9caae9e27e3da716aefc634ff0812ba0a377a9468f15900"
+tool_revision = "10a28f64c3bb63dfade833dd219cba0f504c9345"
+tool_sha256 = "fe74ddd559238d99c9fad0655468edebac57be6031156ccbc09e35fb88959243"
 [jobs.verify]
 # Proof generation and the instrumented coverage run are separate jobs
 # (proof-scenario, record-epoch, coverage); verify keeps the static gates, the
