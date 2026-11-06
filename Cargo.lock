@@ -565,7 +565,7 @@ dependencies = [
 [[package]]
 name = "cmbl"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=main#076160ac16fbe09702a558fd27dd6c4ef16e3323"
+source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#86f3df5f2854a486802f30c1055f8fccbdfc8fd5"
 dependencies = [
  "blake3",
  "blind-rsa-signatures",
@@ -585,7 +585,7 @@ dependencies = [
 [[package]]
 name = "cmmr"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmmr.git?branch=main#c993165731e9ba7b12602e1949bae756d4d76d48"
+source = "git+https://git.corbet.ch/corbet-foss/cmmr.git?branch=v01#c1bb6bdaed9aa94fe6be7562fe8d45ff76f36f80"
 dependencies = [
  "serde",
 ]
@@ -3561,7 +3561,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.52.0",

@@ -24,7 +24,7 @@ schema = ["dep:utoipa", "dep:schemars", "czkp/schema"]
 publication = ["dep:cbcn"]
 
 [dependencies]
-cmbl = { git = "https://git.corbet.ch/corbet-foss/cmbl.git", branch = "main" }
+cmbl = { git = "https://git.corbet.ch/corbet-foss/cmbl.git", branch = "v01" }
 cbcn = { git = "https://git.corbet.ch/corbet-foss/cbcn", branch = "main", optional = true }
 csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false }
 utoipa = { version = "6", optional = true }
