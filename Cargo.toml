@@ -2,6 +2,8 @@
 name = "cblc"
 version = "0.0.0"
 edition = "2024"
+autoexamples = true
+autotests = true
 rust-version = "1.95"
 description = "Balance library: accounts, events and policies for zero-knowledge accounting, managed by cvld"
 license = "FSL-1.1-ALv2"
@@ -57,3 +59,11 @@ csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", defaul
 jsonschema = { version = "0.58", default-features = false }
 openssl = "0.10"
 tempfile = "3"
+
+[[example]]
+name = "extension_issuer"
+required-features = ["publication"]
+
+[[test]]
+name = "wave_roundtrip"
+required-features = ["publication"]
