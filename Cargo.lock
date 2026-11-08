@@ -565,7 +565,7 @@ dependencies = [
 [[package]]
 name = "cmbl"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#86f3df5f2854a486802f30c1055f8fccbdfc8fd5"
+source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=main#1f6f1eaeea5c9e9abfce499799d4a4f7b187c9f2"
 dependencies = [
  "blake3",
  "blind-rsa-signatures",
@@ -585,7 +585,7 @@ dependencies = [
 [[package]]
 name = "cmmr"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmmr.git?branch=v01#c1bb6bdaed9aa94fe6be7562fe8d45ff76f36f80"
+source = "git+https://git.corbet.ch/corbet-foss/cmmr.git?branch=main#159bd8a3e3d258c6f7297de42c14073ca6089510"
 dependencies = [
  "serde",
 ]
