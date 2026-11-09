@@ -16,10 +16,10 @@ mkdir -p "$tools"
 
 NARGO_VERSION=1.0.0-beta.26
 NARGO_SHA256=64048040befd55a987158b11137d8f38f9688f696db4d84910dd1bcf0442fb80
-NARGO_URL="https://github.com/noir-lang/noir/releases/download/v${NARGO_VERSION}/nargo-x86_64-unknown-linux-gnu.tar.gz"
+NARGO_URL="${NARGO_DOWNLOAD_BASE:-https://github.com/noir-lang/noir/releases/download}/v${NARGO_VERSION}/nargo-x86_64-unknown-linux-gnu.tar.gz"
 BB_VERSION=5.2.1
 BB_SHA256=f63a17c9bb38481e95b6a060991114ae03b032ba51e49d40e1a72e4375540683
-BB_URL="https://github.com/AztecProtocol/aztec-packages/releases/download/v${BB_VERSION}/barretenberg-amd64-linux.tar.gz"
+BB_URL="${BB_DOWNLOAD_BASE:-https://github.com/AztecProtocol/aztec-packages/releases/download}/v${BB_VERSION}/barretenberg-amd64-linux.tar.gz"
 
 # fetch_pinned NAME URL SHA256 : prints the directory that holds the unpacked, verified release.
 fetch_pinned() {

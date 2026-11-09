@@ -77,8 +77,8 @@ try {
   catch (error) { if (error.code !== 'ENOENT' || process.env.RESOLVE_SETUP !== '1') throw error; }
   if (locked && locked.numPoints !== numPoints) throw new Error('Setup size differs from pinned circuit');
   const specs = [
-    { name: 'g1.dat', url: 'https://crs.aztec-cdn.foundation/g1_compressed.dat', bytes: numPoints * 32, range: true },
-    { name: 'g2.dat', url: 'https://crs.aztec-cdn.foundation/g2.dat', bytes: 128, range: false },
+    { name: 'g1.dat', url: `${process.env.AZTEC_CRS_BASE ?? 'https://crs.aztec-cdn.foundation'}/g1_compressed.dat`, bytes: numPoints * 32, range: true },
+    { name: 'g2.dat', url: `${process.env.AZTEC_CRS_BASE ?? 'https://crs.aztec-cdn.foundation'}/g2.dat`, bytes: 128, range: false },
   ];
   const setup = [];
   for (const spec of specs) {
