@@ -1,5 +1,6 @@
 //! Existing original four-group witness outputs only; no accepting verifier.
-use crate::{common, inspection};
+use super::inspection;
+use crate::common;
 use cblc::{
     Error,
     accounting::{AccountProofScope, AccountRequest, account_request_bytes},

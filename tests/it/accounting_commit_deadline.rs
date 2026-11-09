@@ -1,14 +1,13 @@
 //! Real proofs with an atomic host that blocks around its commit decision.
-mod common;
+use crate::common::{
+    Fixture,
+    proofs::{self, RealVerifier},
+};
 use cblc::{
     Error,
     accounting::{AccountAcceptance, AccountRequest},
     accounting_ledger::{AccountLedger, AccountLedgerPolicy},
     storage::{AccountStorage, AtomicTransaction, CommitDeadline, Transaction},
-};
-use common::{
-    Fixture,
-    proofs::{self, RealVerifier},
 };
 use ed25519_dalek::{Signer, SigningKey};
 use std::{
@@ -169,7 +168,7 @@ fn run(stops: &[(StopAt, u64)], expected_error: Error) {
         ledger.apply(
             &fixture.grant(7, &fixture.device),
             &fixture.authorize(7, &fixture.device),
-            crate::current(&fixture.authorize(7, &fixture.device)),
+            self::current(&fixture.authorize(7, &fixture.device)),
             &request,
             || clock.load(Ordering::SeqCst),
         )
@@ -204,7 +203,7 @@ fn run(stops: &[(StopAt, u64)], expected_error: Error) {
                 .apply(
                     &fixture.grant(7, &fixture.device),
                     &fixture.authorize(7, &fixture.device),
-                    crate::current(&fixture.authorize(7, &fixture.device)),
+                    self::current(&fixture.authorize(7, &fixture.device)),
                     &later,
                     || clock.load(Ordering::SeqCst),
                 )
@@ -348,7 +347,7 @@ fn actual_commit_time_fences_the_next_call_and_another_ledger_handle() {
         ledger.apply(
             &fixture.grant(7, &fixture.device),
             &fixture.authorize(7, &fixture.device),
-            crate::current(&fixture.authorize(7, &fixture.device)),
+            self::current(&fixture.authorize(7, &fixture.device)),
             &request,
             || clock.load(Ordering::SeqCst),
         )

@@ -35,7 +35,7 @@ fn recipient_requires_existing_accepted_account_and_same_key_survives_restart() 
         ledger.register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &request,
             || 120
         ),
@@ -48,7 +48,7 @@ fn recipient_requires_existing_accepted_account_and_same_key_survives_restart() 
         .apply(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &genesis(&f),
             || 120,
         )
@@ -57,7 +57,7 @@ fn recipient_requires_existing_accepted_account_and_same_key_survives_restart() 
         .register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &request,
             || 130,
         )
@@ -68,7 +68,7 @@ fn recipient_requires_existing_accepted_account_and_same_key_survives_restart() 
         .register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &request,
             || 131,
         )
@@ -80,7 +80,7 @@ fn recipient_requires_existing_accepted_account_and_same_key_survives_restart() 
         ledger.register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &changed,
             || 132
         ),
@@ -96,7 +96,7 @@ fn recipient_requires_existing_accepted_account_and_same_key_survives_restart() 
         ledger.register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &changed,
             || 133
         ),
@@ -109,7 +109,7 @@ fn recipient_requires_existing_accepted_account_and_same_key_survives_restart() 
         ledger.register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &changed,
             || 134
         ),
@@ -132,7 +132,7 @@ fn recipient_live_commit_deadline_refuses_expiry_without_registering_a_key() {
         .apply(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &genesis(&f),
             || 120,
         )
@@ -148,7 +148,7 @@ fn recipient_live_commit_deadline_refuses_expiry_without_registering_a_key() {
         ledger.register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &request,
             clock
         ),
@@ -167,7 +167,7 @@ fn recipient_live_commit_deadline_refuses_expiry_without_registering_a_key() {
         .register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &self::request(&f, 42, 220),
             || 221,
         )
@@ -189,7 +189,7 @@ fn recipient_late_return_refuses_fresh_success_but_preserves_the_committed_key()
         .apply(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &genesis(&f),
             || 120,
         )
@@ -208,7 +208,7 @@ fn recipient_late_return_refuses_fresh_success_but_preserves_the_committed_key()
         ledger.register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &request(&f, 41, 120),
             clock
         ),
@@ -225,7 +225,7 @@ fn recipient_late_return_refuses_fresh_success_but_preserves_the_committed_key()
         .register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &request(&f, 41, 220),
             || 221,
         )
@@ -234,7 +234,7 @@ fn recipient_late_return_refuses_fresh_success_but_preserves_the_committed_key()
         ledger.register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&authorization),
+            super::current(&authorization),
             &request(&f, 42, 220),
             || 222
         ),
@@ -275,7 +275,7 @@ fn removed_device_gets_no_witness_and_a_foreign_witness_is_refused() {
         ledger.apply(
             &grant,
             &authorization,
-            crate::current(&other),
+            super::current(&other),
             &genesis(&f),
             || 120
         ),
@@ -285,7 +285,7 @@ fn removed_device_gets_no_witness_and_a_foreign_witness_is_refused() {
         ledger.register_record_recipient(
             &grant,
             &authorization,
-            crate::current(&other),
+            super::current(&other),
             &request(&f, 41, 120),
             || 120
         ),
@@ -304,10 +304,10 @@ fn recipient_replacement_needs_a_strictly_newer_lineage_epoch() {
         .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
     ledger
-        .apply(&grant, &a, crate::current(&a), &genesis(&f), || 120)
+        .apply(&grant, &a, super::current(&a), &genesis(&f), || 120)
         .unwrap();
     let mut register = |request: &RecipientRequest| {
-        ledger.register_record_recipient(&grant, &a, crate::current(&a), request, || 121)
+        ledger.register_record_recipient(&grant, &a, super::current(&a), request, || 121)
     };
     register(&with_epoch(&f, 41, 1, 120)).unwrap();
     // Newer epoch from a current device replaces the key.

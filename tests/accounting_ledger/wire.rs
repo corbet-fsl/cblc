@@ -16,7 +16,7 @@ fn issued_acceptance_and_status_refuse_cross_scope_and_malformed_envelopes() {
         .apply(
             &grant,
             &authority,
-            crate::current(&authority),
+            super::current(&authority),
             &original,
             || 120,
         )

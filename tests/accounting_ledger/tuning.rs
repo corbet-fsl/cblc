@@ -38,7 +38,7 @@ fn invalid_tuning_revision_clock_and_storage_failure_are_atomic() {
         .apply(
             &f.grant(7, &f.device),
             &f.authorize(7, &f.device),
-            crate::current(&f.authorize(7, &f.device)),
+            super::current(&f.authorize(7, &f.device)),
             &genesis(&f),
             || 120,
         )
@@ -121,7 +121,7 @@ fn restart_loads_durable_wait_and_preserves_genesis_and_exact_old_retry() {
         .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
     let accepted = ledger
-        .apply(&g, &a, crate::current(&a), &first, || 120)
+        .apply(&g, &a, super::current(&a), &first, || 120)
         .unwrap();
     let tuning = ledger.update_waiting_period(0, 1500, || 130).unwrap();
     drop(ledger);
@@ -133,7 +133,7 @@ fn restart_loads_durable_wait_and_preserves_genesis_and_exact_old_retry() {
     assert_eq!(reopened.account_policy().abandon_after, 1500);
     assert_eq!(
         reopened
-            .apply(&g, &a, crate::current(&a), &first, || 200)
+            .apply(&g, &a, super::current(&a), &first, || 200)
             .unwrap(),
         accepted
     );
@@ -147,7 +147,7 @@ fn restart_loads_durable_wait_and_preserves_genesis_and_exact_old_retry() {
     let second_genesis = with_policy(second_genesis, reopened.account_policy(), &f);
     let before = stored(&path);
     assert_eq!(
-        reopened.apply(&g, &a, crate::current(&a), &second_genesis, || 201),
+        reopened.apply(&g, &a, super::current(&a), &second_genesis, || 201),
         Err(Error::Replay)
     );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
@@ -213,7 +213,7 @@ fn stale_handles_and_old_proofs_reject_before_verify_then_reload_accepts_success
         .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
     writer
-        .apply(&g, &a, crate::current(&a), &first, || 120)
+        .apply(&g, &a, super::current(&a), &first, || 120)
         .unwrap();
     let verifier = RealVerifier::default();
     let calls = verifier.calls.clone();
@@ -222,7 +222,7 @@ fn stale_handles_and_old_proofs_reject_before_verify_then_reload_accepts_success
     let old_proof = successor(&first, &f, 11);
     let before = stored(&path);
     assert_eq!(
-        stale.apply(&g, &a, crate::current(&a), &old_proof, || 130),
+        stale.apply(&g, &a, super::current(&a), &old_proof, || 130),
         Err(Error::PolicyMismatch)
     );
     assert_eq!(
@@ -234,20 +234,20 @@ fn stale_handles_and_old_proofs_reject_before_verify_then_reload_accepts_success
     assert_eq!(stale.waiting_period().unwrap().revision, 0);
     assert_eq!(stale.reload_policy().unwrap(), tuning);
     assert_eq!(
-        stale.apply(&g, &a, crate::current(&a), &old_proof, || 130),
+        stale.apply(&g, &a, super::current(&a), &old_proof, || 130),
         Err(Error::PolicyMismatch)
     );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     let successor = with_policy(old_proof, stale.account_policy(), &f);
     let next = stale
-        .apply(&g, &a, crate::current(&a), &successor, || 130)
+        .apply(&g, &a, super::current(&a), &successor, || 130)
         .unwrap();
     assert_eq!(next.statement.previous_state, first.statement.next_state);
     assert_eq!(next.statement.next_version, 1);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     // Superseded acceptances are deliberately not retained as history.
     assert_eq!(
-        stale.apply(&g, &a, crate::current(&a), &first, || 200),
+        stale.apply(&g, &a, super::current(&a), &first, || 200),
         Err(Error::PolicyMismatch)
     );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
@@ -269,13 +269,13 @@ fn tuning_during_blocked_verification_rejects_the_stale_transition_atomically() 
             .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
             .unwrap();
         writer
-            .apply(&g, &a, crate::current(&a), &first, || 120)
+            .apply(&g, &a, super::current(&a), &first, || 120)
             .unwrap();
         let request = successor(&first, &f, 11);
         let (verifier, entered, release) = blocked_verifier();
         let mut slow = open(&path, &f, verifier);
         std::thread::scope(|scope| {
-            let worker = scope.spawn(|| slow.apply(&g, &a, crate::current(&a), &request, || 130));
+            let worker = scope.spawn(|| slow.apply(&g, &a, super::current(&a), &request, || 130));
             entered.recv_timeout(Duration::from_secs(180)).unwrap();
             let changed = writer.update_waiting_period(0, seconds, || 130);
             let after_tuning = stored(&path);

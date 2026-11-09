@@ -1,12 +1,12 @@
 //! Service boundary tests use actual maintained holder proofs and the shipped verifier.
-mod common;
-#[path = "support/inspect.rs"]
+#[path = "../support/inspect.rs"]
 mod inspection;
-use cblc::{Error, accounting::*, accounting_ledger::*, accounting_service::*};
-use common::{
+use crate::common;
+use crate::common::{
     Fixture,
     proofs::{self, RealVerifier},
 };
+use cblc::{Error, accounting::*, accounting_ledger::*, accounting_service::*};
 use ed25519_dalek::{Signer, SigningKey};
 use std::{
     path::Path,
@@ -40,7 +40,7 @@ fn policy() -> AccountLedgerPolicy {
     }
 }
 fn open<V: AccountProofVerifier>(path: &Path, fixture: &Fixture, verifier: V) -> AccountLedger<V> {
-    common::host_storage::open(
+    crate::common::host_storage::open(
         path,
         fixture.trust.clone(),
         policy(),
@@ -113,7 +113,7 @@ fn member_wire_cannot_supply_time_or_admin_operations() {
                 authorization: f.authorize(7, &f.device),
                 request: request.clone(),
             },
-            crate::authority(),
+            self::authority(),
         )
         .unwrap();
     let AccountServiceResponse::Status(observed) = observed else {
@@ -149,12 +149,12 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
         request: Box::new(genesis(&f)),
     };
     assert!(matches!(
-        service.handle_authorized(request.clone(), crate::authority()),
+        service.handle_authorized(request.clone(), self::authority()),
         Err(Error::Expired)
     ));
     clock.store(110, Ordering::SeqCst);
     assert!(matches!(
-        service.handle_authorized(request.clone(), crate::authority()),
+        service.handle_authorized(request.clone(), self::authority()),
         Err(Error::ClockRollback)
     ));
     // This independent scenario starts with a valid clock. Reloading the first
@@ -174,7 +174,7 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
         .publish_verified_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
     let accepted = service
-        .handle_authorized(request.clone(), crate::authority())
+        .handle_authorized(request.clone(), self::authority())
         .unwrap();
     assert!(matches!(accepted, AccountServiceResponse::Apply(_)));
     let tune = service.tune_waiting_period(0, 1100).unwrap();
@@ -185,7 +185,7 @@ fn server_clock_overrules_member_time_and_retry_recovers_after_tuning() {
     ));
     clock.store(181, Ordering::SeqCst);
     let retry = service
-        .handle_authorized(request, crate::authority())
+        .handle_authorized(request, self::authority())
         .unwrap();
     assert_eq!(
         serde_json::to_value(accepted).unwrap(),
@@ -212,7 +212,7 @@ fn invalid_authority_cannot_register_an_account() {
         request: Box::new(genesis(&f)),
     };
     assert!(matches!(
-        service.handle_authorized(bad, crate::authority()),
+        service.handle_authorized(bad, self::authority()),
         Err(Error::Admission)
     ));
     service
@@ -222,7 +222,7 @@ fn invalid_authority_cannot_register_an_account() {
                 authorization: f.authorize(7, &f.device),
                 request: Box::new(genesis(&f)),
             },
-            crate::authority(),
+            self::authority(),
         )
         .unwrap();
 }
@@ -292,9 +292,9 @@ fn native_verifier_checks_domain_input_and_refuses_unavailable_backend_without_r
     // Native process framing/timeout adversaries live in cvfy. This adapter test
     // retains the domain checks and only observes genuine backend refusal.
     let directory = std::path::PathBuf::from(std::env::var_os("CBLC_PROOF_DIRECTORY").unwrap());
-    let artifacts = common::native::account(&directory);
+    let artifacts = crate::common::native::account(&directory);
     assert_eq!(artifacts.scope(), proofs::record(0).proof_scope);
-    let mut options = common::native::options(1024 * 1024);
+    let mut options = crate::common::native::options(1024 * 1024);
     options.executable = "/unavailable/czkp-bb-worker".into();
     let verifier = NativeAccountVerifier::new(options, artifacts).unwrap();
     let statement = genesis(&Fixture::new()).statement;
@@ -333,7 +333,7 @@ fn service_capacity_rejects_invalid_bounds_and_preserves_host_policy() {
     }
 }
 
-#[path = "accounting_service/extensions.rs"]
+#[path = "../accounting_service/extensions.rs"]
 mod extensions;
 
 /// Test authority: always current, and every device is in the lineage.
@@ -402,7 +402,7 @@ fn removed_device_with_valid_grant_and_authorization_cannot_apply() {
         request: Box::new(genesis(&f)),
     };
     assert!(matches!(
-        service.handle_authorized(request.clone(), crate::removed_authority()),
+        service.handle_authorized(request.clone(), self::removed_authority()),
         Err(Error::Admission)
     ));
     // Not even an authority without any lineage can update.
@@ -413,7 +413,7 @@ fn removed_device_with_valid_grant_and_authorization_cannot_apply() {
     // The same request from a device the registry lists passes.
     assert!(matches!(
         service
-            .handle_authorized(request, crate::authority())
+            .handle_authorized(request, self::authority())
             .unwrap(),
         AccountServiceResponse::Apply(_)
     ));

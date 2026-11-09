@@ -2,7 +2,7 @@
 //! cwlt's `WaveVerifier` and the native worker: the proofs were produced by the
 //! `proof-fixtures` job and are addressed by their digest.
 #![allow(dead_code)]
-mod common;
+#![cfg(feature = "publication")]
 use cblc::artifacts::{ArtifactBytes, WaveArtifacts};
 use cwlt::wave::{
     ExtensionPolicy, VerifiedWaveOutcome, WaveContext, WaveOutcome, WaveOutcomeStatement,
@@ -60,7 +60,7 @@ fn build(
     now: u64,
     until: u64,
 ) -> Result<WaveVerifier<cvfy::NativeVerifier>, czkp::Error> {
-    let options = common::native::options(1024 * 1024);
+    let options = crate::common::native::options(1024 * 1024);
     WaveVerifier::native(
         policy,
         now,
@@ -244,7 +244,7 @@ fn a_policy_that_differs_from_the_published_material_refuses_the_proofs() {
         .proof_scope
         .verifying_key_digest[0] ^= 1;
     assert!(forged.validate(&forged.community).is_err());
-    let options = common::native::options(1024 * 1024);
+    let options = crate::common::native::options(1024 * 1024);
     let swapped = WaveVerifier::native(
         l.policy.clone(),
         l.now,

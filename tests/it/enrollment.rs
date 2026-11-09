@@ -1,17 +1,17 @@
 //! Original device delegation with actual Policy COSE and member signatures.
-mod common;
 
+use crate::common;
+use crate::common::Fixture;
 use cblc::{Error, enrollment::*};
-use common::Fixture;
 use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER as HEX};
 use ed25519_dalek::{Signer, SigningKey};
 use sha2::{Digest, Sha256};
 
-#[path = "enrollment/checkpoint.rs"]
+#[path = "../enrollment/checkpoint.rs"]
 mod checkpoint;
-#[path = "enrollment/registry.rs"]
+#[path = "../enrollment/registry.rs"]
 mod registry;
-#[path = "enrollment/service.rs"]
+#[path = "../enrollment/service.rs"]
 mod service;
 
 fn delegation(f: &Fixture) -> AccountingDelegation {
@@ -40,7 +40,7 @@ fn check(d: &AccountingDelegation, f: &Fixture, now: u64) -> Result<VerifiedDele
         ExpectedAdmission {
             trust: &f.trust,
             policy_epoch: 1,
-            passport_policy_digest: &common::encoded(10),
+            passport_policy_digest: &crate::common::encoded(10),
         },
         now,
     )
@@ -135,7 +135,7 @@ fn actual_policy_expectations_refuse_even_genuinely_resigned_wrong_epoch_or_pass
     for passport in [false, true] {
         let mut d = delegation(&f);
         if passport {
-            d.admission.passport_policy_digest = common::encoded(11);
+            d.admission.passport_policy_digest = crate::common::encoded(11);
         } else {
             d.admission.policy_epoch = 2;
         }

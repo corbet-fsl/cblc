@@ -1,5 +1,4 @@
 //! Actual Noir/Barretenberg proofs through the process verifier and libSQL issuer.
-mod common;
 use cblc::{accounting::*, accounting_ledger::*, accounting_service::*};
 use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
 use ed25519_dalek::{Signer, SigningKey};
@@ -20,8 +19,8 @@ fn real_account_proofs_round_trip_through_libsql() {
     let records: Vec<Record> =
         serde_json::from_slice(&std::fs::read(directory.join("records.json")).unwrap()).unwrap();
     assert_eq!(records.len(), 2);
-    let f = common::Fixture::new();
-    let artifacts = common::native::account(&directory);
+    let f = crate::common::Fixture::new();
+    let artifacts = crate::common::native::account(&directory);
     assert_eq!(artifacts.scope(), records[0].proof_scope);
     let policy = AccountLedgerPolicy {
         account: records[0].statement.policy.clone(),
@@ -32,12 +31,15 @@ fn real_account_proofs_round_trip_through_libsql() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("db");
     let open = || {
-        common::host_storage::open(
+        crate::common::host_storage::open(
             &path,
             f.trust.clone(),
             policy.clone(),
-            NativeAccountVerifier::new(common::native::options(1024 * 1024), artifacts.clone())
-                .unwrap(),
+            NativeAccountVerifier::new(
+                crate::common::native::options(1024 * 1024),
+                artifacts.clone(),
+            )
+            .unwrap(),
             SigningKey::from_bytes(&[9; 32]),
         )
         .unwrap()
@@ -67,7 +69,7 @@ fn real_account_proofs_round_trip_through_libsql() {
             .apply(
                 &f.grant(7, &f.device),
                 &f.authorize(7, &f.device),
-                crate::current(&f.authorize(7, &f.device)),
+                self::current(&f.authorize(7, &f.device)),
                 &request,
                 || request.issued_at,
             )
@@ -87,7 +89,7 @@ fn real_account_proofs_round_trip_through_libsql() {
             .apply(
                 &f.grant(7, &f.device),
                 &f.authorize(7, &f.device),
-                crate::current(&f.authorize(7, &f.device)),
+                self::current(&f.authorize(7, &f.device)),
                 request,
                 || 200
             )

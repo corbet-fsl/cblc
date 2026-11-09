@@ -1,7 +1,7 @@
 #![cfg(feature = "schema")]
 //! Generated owner schemas describe real wire values, not proof acceptance.
-mod common;
 
+use crate::common::{Fixture, proofs};
 use cblc::{
     accounting::*,
     accounting_ledger::*,
@@ -9,7 +9,6 @@ use cblc::{
     extensions::{Effect, ExtendedUpdate, Inbox},
     storage::MemoryStore,
 };
-use common::{Fixture, proofs};
 use ed25519_dalek::{Signer as _, SigningKey};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -109,7 +108,7 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
         .unwrap();
     let mut service = AccountService::new(ledger, || 120, 1024 * 1024).unwrap();
     let response = service
-        .handle_for_member_authorized(&[7; 48], operation, crate::authority())
+        .handle_for_member_authorized(&[7; 48], operation, self::authority())
         .unwrap();
     let accepted = valid(&response);
     let mut unexpected = accepted.clone();
@@ -165,7 +164,7 @@ fn requests_and_actual_issued_responses_share_the_owner_schema() {
         assert!(serde_json::from_value::<AccountServiceRequest>(bad).is_err());
     }
     let registered = service
-        .handle_for_member_authorized(&[7; 48], registration, crate::authority())
+        .handle_for_member_authorized(&[7; 48], registration, self::authority())
         .unwrap();
     assert!(
         matches!(&registered, AccountServiceResponse::RecordRecipient { recipient_key: key } if *key == recipient_key)

@@ -1,7 +1,6 @@
 //! Native adapter configuration and refusal paths; no accepting verifier.
 // This target reuses only the artifact and proof-record subset of the fixtures.
 #[allow(dead_code)]
-mod common;
 use cblc::{
     Error,
     artifacts::NativeVerifierOptions,
@@ -26,7 +25,7 @@ fn config() -> NativeVerifierOptions {
 
 #[test]
 fn invalid_independent_pools_refuse_construction() {
-    let artifacts = common::native::extension(&common::native::extension_directory());
+    let artifacts = crate::common::native::extension(&crate::common::native::extension_directory());
     for field in 0..5 {
         let mut invalid = config();
         match field {
@@ -49,7 +48,7 @@ fn invalid_independent_pools_refuse_construction() {
 
 #[test]
 fn missing_worker_refuses_both_pools_and_domain_confusion_without_accepting_a_proof() {
-    let artifacts = common::native::extension(&common::native::extension_directory());
+    let artifacts = crate::common::native::extension(&crate::common::native::extension_directory());
     let expected_scope = artifacts.scope();
     let verifier = NativeExtensionVerifier::new(config(), config(), artifacts).unwrap();
     assert_eq!(verifier.scope(), expected_scope);
@@ -81,7 +80,7 @@ fn missing_worker_refuses_both_pools_and_domain_confusion_without_accepting_a_pr
             shares: None,
         },
     };
-    let account = common::proofs::record(0).statement;
+    let account = crate::common::proofs::record(0).statement;
     let update = ExtensionStatement::Update {
         policy,
         account: Box::new(account.clone()),

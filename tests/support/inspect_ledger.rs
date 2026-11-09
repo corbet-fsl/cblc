@@ -1,5 +1,5 @@
 //! Scalar queries and fault injection used by the ledger SQL scenarios only.
-use crate::inspection::Connection;
+use super::inspection::Connection;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 

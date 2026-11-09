@@ -22,7 +22,7 @@ cargo build --locked --example czkp_bb_worker
 cblc_target_dir="${CARGO_TARGET_DIR:-target}"
 export CBLC_BB="$(realpath "$cblc_target_dir/debug/examples/czkp_bb_worker")"
 test -x "$CBLC_BB"
-cargo test --locked --all-features --test wave_roundtrip
+cargo test --locked --all-features --test it wave_roundtrip::
 test ! -e "$PWD/.wave-wasm" || { echo 'Existing wasm output refuses overwrite' >&2; exit 2; }
 env -u RUSTFLAGS wasm-pack build node_modules/@corbet-labs/cwlt --target web --release --out-dir "$PWD/.wave-wasm" -- --features wave
 CBLC_WAVE_WASM="$PWD/.wave-wasm" node tests/wave-browser.mts

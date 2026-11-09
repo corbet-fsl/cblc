@@ -14,13 +14,13 @@ bash .ci/update-our-crates.sh
 cargo fmt --check || { cargo fmt; git diff > formatting.patch; exit 1; }
 cargo clippy --locked --all-targets --all-features -- -D warnings
 # The portable account contracts must build and keep their wire without `host`.
-cargo test --locked --no-default-features --test contracts
-cargo test --locked --no-default-features --features schema --test contracts
+cargo test --locked --no-default-features --test it
+cargo test --locked --no-default-features --features schema --test it
 python3 -B .ci/test-commit-deadline-output.py
 python3 -B .ci/test-commit-deadline-regression.py
 python3 -B .ci/test-retain-record-fixture.py
 cargo test --locked --all-features --lib
-cargo test --locked --all-features --test service_schema generated_projection_preserves_every_serde_constraint
+cargo test --locked --all-features --test it service_schema::generated_projection_preserves_every_serde_constraint
 npm ci --ignore-scripts --no-audit --no-fund
 node .ci/check-fixture-suite.ts
 # Fixtures retained by proof-scenario and record-epoch on this commit.
