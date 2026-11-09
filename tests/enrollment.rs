@@ -16,7 +16,7 @@ mod service;
 
 fn delegation(f: &Fixture) -> AccountingDelegation {
     let account = p256::ecdsa::SigningKey::from_bytes((&[3; 32]).into()).unwrap();
-    let coordinate = account.verifying_key().to_encoded_point(false);
+    let coordinate = account.verifying_key().to_sec1_point(false);
     let mut d = AccountingDelegation {
         version: 1,
         hash_scheme: ACCOUNT_HASH_SCHEME.into(),
@@ -114,12 +114,8 @@ fn every_original_field_and_whole_authority_object_is_bound_by_the_device() {
                 );
             }
             4 => {
-                d.account_public_key = HEX.encode(
-                    &coordinate
-                        .verifying_key()
-                        .to_encoded_point(false)
-                        .as_bytes()[1..],
-                );
+                d.account_public_key =
+                    HEX.encode(&coordinate.verifying_key().to_sec1_point(false).as_bytes()[1..]);
             }
             5 => d.state_secret_commitment = HEX.encode(&[5; 32]),
             6 => d.issued_at += 1,

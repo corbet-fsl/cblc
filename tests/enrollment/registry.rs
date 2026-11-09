@@ -107,7 +107,7 @@ fn sqlite_reopen_exact_retry_and_strict_renewal_preserve_the_immutable_binding()
         if key {
             let p256 = p256::ecdsa::SigningKey::from_bytes((&[5; 32]).into()).unwrap();
             changed.account_public_key =
-                HEX.encode(&p256.verifying_key().to_encoded_point(false).as_bytes()[1..]);
+                HEX.encode(&p256.verifying_key().to_sec1_point(false).as_bytes()[1..]);
         } else {
             changed.state_secret_commitment = HEX.encode(&[5; 32]);
         }
