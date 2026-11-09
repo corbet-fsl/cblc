@@ -1,14 +1,11 @@
 //! Genuine Policy COSE envelopes; signature authentication is not policy currentness.
 
 // This target uses the signed-authority subset of the existing native fixtures.
-#[allow(dead_code)]
-mod common;
-
+use crate::common::Fixture;
 use cblc::{
     Error,
     admission::{admission_bytes, policy_key_id, verify_admission},
 };
-use common::Fixture;
 use csgn::{Kind, SecretKey, Signer};
 use data_encoding::BASE64URL_NOPAD as B64;
 use ed25519_dalek::Signer as _;
@@ -31,7 +28,7 @@ fn original_policy_envelope_authenticates_exact_claims_and_exclusive_time() {
     assert_eq!(signed.issued_at(), grant.issued_at);
     assert_eq!(signed.valid_until(), grant.expires_at);
     assert_eq!(grant.policy_epoch, 1);
-    assert_eq!(grant.passport_policy_digest, common::encoded(10));
+    assert_eq!(grant.passport_policy_digest, crate::common::encoded(10));
     for now in [grant.issued_at, 120, grant.expires_at - 1] {
         verify_admission(&grant, &fixture.trust, now).unwrap();
     }
@@ -90,7 +87,7 @@ fn epoch_and_passport_cohort_are_signed_but_currentness_belongs_to_the_facade() 
         let mut changed = grant.clone();
         match field {
             0 => changed.policy_epoch += 1,
-            _ => changed.passport_policy_digest = common::encoded(11),
+            _ => changed.passport_policy_digest = crate::common::encoded(11),
         }
         assert_eq!(
             verify_admission(&changed, &fixture.trust, 120),
@@ -138,7 +135,7 @@ fn genuine_signatures_cannot_change_purpose_protected_times_or_key_identity() {
     }
     // A genuine COSE signature over a falsely named public key is insufficient.
     let mut changed = grant.clone();
-    changed.issuer_key_id = common::encoded(90);
+    changed.issuer_key_id = crate::common::encoded(90);
     fixture.resign_grant(&mut changed);
     assert_eq!(
         verify_admission(&changed, &fixture.trust, 120),
