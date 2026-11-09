@@ -223,3 +223,33 @@ fn strict_public_shape_and_encoding_bounds_have_no_legacy_fallback() {
     assert!(unsigned.digest().is_err());
     assert!(matches!(check(&unsigned, &f, 130), Err(Error::Admission)));
 }
+
+/// Account-key point validation pinned before the move to p256 0.14 (RUSTSEC-2026-0387):
+/// the same coordinates are admitted or refused. RFC 6979 A.2.5 key, the golden issuer key
+/// [3;32] (also the key of `delegation`), the key of scalar n-1; values cross-checked
+/// against OpenSSL.
+#[test]
+fn account_key_point_verdicts_are_pinned() {
+    const RFC: &str = "60fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb67903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299";
+    const GOLDEN: &str = "591ab771ebbcfd6d9cb9094d106528add1a69d44c2c1f627f089ec58b9c61adf9f4e6abf0d045c0c693a3c68ad7c97ca72be64def4a26fecd263dd98a92780f0";
+    const MAX: &str = "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296b01cbd1c01e58065711814b583f061e9d431cca994cea1313449bf97c840ae0a";
+    const FIELD_PRIME: &str = "ffffffff00000001000000000000000000000000ffffffffffffffffffffffff";
+    let f = Fixture::new();
+    let original = delegation(&f);
+    assert_eq!(original.account_public_key, GOLDEN);
+    let off_curve = format!("{}{}", &RFC[..126], "98");
+    let unreduced = format!("{FIELD_PRIME}{}", &RFC[64..]);
+    for (coordinate, admitted) in [
+        (RFC.to_owned(), true),
+        (GOLDEN.to_owned(), true),
+        (MAX.to_owned(), true),
+        (off_curve, false),
+        ("00".repeat(64), false),
+        (unreduced, false),
+    ] {
+        let mut d = original.clone();
+        d.account_public_key = coordinate.clone();
+        resign(&mut d, &f.device);
+        assert_eq!(check(&d, &f, 130).is_ok(), admitted, "{coordinate}");
+    }
+}
