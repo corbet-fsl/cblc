@@ -4,7 +4,9 @@
 # verify and the counterpart verifiers consume the retained fixture by digest.
 set -euo pipefail
 exec 2>&1
-export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }${BB_NATIVE_RUSTFLAGS:?Missing native loader configuration}"
+# Cargo precedence: RUSTFLAGS replaces the check shell's target rustflags, and that
+# carrier (-rpath-link) is what relinks a persistent target when the shell changes.
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS:+$CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS }${BB_NATIVE_RUSTFLAGS:?Missing native loader configuration}"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
 export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
