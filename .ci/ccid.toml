@@ -12,7 +12,7 @@ cache_outputs = ["artifact-conformance-worker.json"]
 [jobs.artifact-conformance]
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["artifact-conformance"]
 workflow = "artifact-conformance"
 command = ["bash", ".ci/run-cached.sh"]
@@ -38,7 +38,7 @@ cache_pure = false
 [jobs.wave-artifacts]
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["wave-artifacts"]
 workflow = "wave-artifacts"
 command = ["bash", ".ci/run-cached.sh"]
@@ -56,7 +56,7 @@ cache_pure = false
 [jobs.proof-fixtures]
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["proof-fixtures"]
 workflow = "proof-fixtures"
 command = ["bash", ".ci/run-cached.sh"]
@@ -73,7 +73,7 @@ cache_pure = false
 [jobs.wave-verify]
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["wave-verify"]
 workflow = "wave-verify"
 command = ["bash", ".ci/run-cached.sh"]
@@ -97,7 +97,7 @@ cache_pure = false
 [jobs.proof-scenario]
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["proof-scenario"]
 workflow = "proof-scenario"
 command = ["bash", ".ci/run-cached.sh"]
@@ -114,7 +114,7 @@ cache_pure = false
 [jobs.record-epoch]
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["record-epoch"]
 workflow = "record-epoch"
 command = ["bash", ".ci/run-cached.sh"]
@@ -132,7 +132,7 @@ cache_outputs = ["coverage.json", "coverage.lcov", "coverage.txt", "dependency-m
 [jobs.coverage]
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["coverage"]
 workflow = "coverage"
 command = ["bash", ".ci/run-cached.sh"]
@@ -150,7 +150,7 @@ render_schema = 2
 # native integration tests and the replays over the retained fixtures.
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["verify", "advisories"]
 workflow = "ci"
 command = ["bash", ".ci/run-cached.sh"]
@@ -165,7 +165,7 @@ cache_outputs = ["package-lock.json"]
 
 [jobs.resolve-npm]
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["resolve-npm"]
 workflow = "resolve-npm"
 command = ["bash", ".ci/run-cached.sh"]
@@ -179,7 +179,7 @@ cache_outputs = ["Cargo.lock", "package-lock.json"]
 
 [jobs.resolve-dependencies]
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["resolve-dependencies"]
 workflow = "resolve-dependencies"
 command = ["bash", ".ci/run-cached.sh"]
@@ -197,7 +197,7 @@ cache_pure = false
 [jobs.genesis-split]
 environment = { CI_TIMEOUT = "7200" }
 scheduler = "forgejo"
-runs_on = "heavy"
+runs_on = "linux"
 checks = ["genesis-split"]
 workflow = "genesis-split"
 command = ["bash", ".ci/run-cached.sh"]

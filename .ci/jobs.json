@@ -2,7 +2,7 @@
   "schema": 1,
   "generator": "ccid render v1",
   "tool_revision": "",
-  "manifest_sha256": "9084b55c1513d7ab2bc6ffdb0321c821a70350eb7556c433edb8344b3ea42a31",
+  "manifest_sha256": "609820c7f3c53a4fe56c74badd7d8436127105fcc3346264e15ca4765197a14f",
   "jobs": {
     "artifact-conformance": {
       "job": "artifact-conformance",
@@ -18,7 +18,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -38,7 +38,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -58,7 +58,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -78,7 +78,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -98,7 +98,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -118,7 +118,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -135,7 +135,7 @@
         "bash",
         ".ci/run-cached.sh"
       ],
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -152,7 +152,7 @@
         "bash",
         ".ci/run-cached.sh"
       ],
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -173,7 +173,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -193,7 +193,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
@@ -213,7 +213,7 @@
       "environment": {
         "CI_TIMEOUT": "7200"
       },
-      "runs_on": "heavy",
+      "runs_on": "linux",
       "events": [
         "manual"
       ],
