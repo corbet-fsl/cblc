@@ -846,14 +846,9 @@ mod recipient_compaction {
         material(index).1
     }
 
-    fn move_to(
-        store: &mut MemoryStore,
-        index: u32,
-        lineage_epoch: u64,
-        now: u64,
-    ) -> Result<(), Error> {
+    fn move_to(store: &mut MemoryStore, index: u32, revision: u64, now: u64) -> Result<(), Error> {
         let mut tx = AccountStorage::transaction(store).unwrap();
-        move_recipient_in(&mut tx, &OWNER, recipient(index), lineage_epoch, now)?;
+        move_recipient_in(&mut tx, &OWNER, recipient(index), revision, now)?;
         tx.commit()
     }
 
@@ -1017,9 +1012,9 @@ mod recipient_compaction {
         assert_eq!(stored(&mut store), (recipient(2), None));
     }
 
-    // Replay protection is unchanged: the same or an older lineage epoch never moves it.
+    // Replay protection: the same or an older root revision never moves it.
     #[test]
-    fn a_move_needs_a_strictly_newer_lineage_epoch() {
+    fn a_move_needs_a_strictly_newer_root_revision() {
         let mut store = world();
         move_to(&mut store, 0, 1, 50).unwrap();
         install(&mut store, 1);

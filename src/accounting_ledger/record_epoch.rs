@@ -385,8 +385,16 @@ pub(super) fn certify_join(
 
 pub use crate::contracts::{RecipientRequest, recipient_bytes};
 
+/// Before review-s4b N2 this held the request's CLAIMED lineage epoch. It is no
+/// authority and is deleted on the next registration write.
 fn recipient_epoch_key(owner: &[u8; 32]) -> Vec<u8> {
     [b"record-recipient-epoch:v1:".as_slice(), owner.as_slice()].concat()
+}
+
+/// The account's root revision (`rotate_root`, dual-signed) of the last accepted
+/// registration or move: one move per authenticated root rotation.
+fn recipient_revision_key(owner: &[u8; 32]) -> Vec<u8> {
+    [b"record-recipient-root:v1:".as_slice(), owner.as_slice()].concat()
 }
 
 fn recipient_key(owner: &[u8; 32]) -> Vec<u8> {
@@ -421,21 +429,23 @@ pub(crate) fn effective_recipient(
         .map_or(base, |(_, key)| *key)
 }
 
-/// Register `recipient` for `owner`, or move it (K1 S4): a different key from a
-/// strictly newer lineage epoch is recorded for the NEXT record-epoch boundary; the
-/// same latest key repeats idempotently. Storage only; the caller checked authority.
+/// Register `recipient` for `owner`, or move it (K1 S4): a different key after a newer
+/// account root revision (`revision`, the authenticated `rotate_root` counter, never a
+/// claim of the request) is recorded for the NEXT record-epoch boundary; one move per
+/// root revision, and the same latest key repeats idempotently. Storage only; the
+/// caller checked authority under the account's current root.
 fn move_recipient_in(
     tx: &mut Transaction<'_>,
     owner: &[u8; 32],
     recipient: [u8; 32],
-    lineage_epoch: u64,
+    revision: u64,
     now: u64,
 ) -> Result<(), Error> {
     let key = recipient_key(owner);
-    let epoch_key = recipient_epoch_key(owner);
+    let revision_key = recipient_revision_key(owner);
     if let Some(base) = tx.get::<[u8; 32]>(&key)? {
-        // K1 S4: a move from a CURRENT device (checked by the caller) with a newer
-        // lineage epoch is pending until the next record-epoch boundary; the epoch in
+        // K1 S4: a move from a CURRENT device (checked by the caller) under a newer
+        // root revision is pending until the next record-epoch boundary; the epoch in
         // flight still resolves to the previous recipient. Installs fold what no later
         // freeze can resolve (`fold_recipient_in`), so nothing older is kept.
         let next_key = recipient_replacements_key(owner);
@@ -443,8 +453,10 @@ fn move_recipient_in(
         if pending.last().map_or(base, |(_, key)| *key) == recipient {
             return Ok(());
         }
-        let stored = tx.get::<u64>(&epoch_key)?.unwrap_or(0);
-        if lineage_epoch <= stored {
+        // A registration from before review-s4b N2 has no stored revision: it counts
+        // as revision 0, so it moves only after the first root rotation.
+        let stored = tx.get::<u64>(&revision_key)?.unwrap_or(0);
+        if revision <= stored {
             return Err(Error::Replay);
         }
         // Pending moves stay sorted by acceptance time (the fold at install relies on it):
@@ -476,11 +488,12 @@ fn move_recipient_in(
         } else {
             tx.put(&next_key, &pending)?;
         }
-        tx.put(&epoch_key, &lineage_epoch)?;
+        tx.put(&revision_key, &revision)?;
     } else {
         tx.put(&key, &recipient)?;
-        tx.put(&epoch_key, &lineage_epoch)?;
+        tx.put(&revision_key, &revision)?;
     }
+    tx.delete(&recipient_epoch_key(owner))?;
     Ok(())
 }
 
@@ -760,10 +773,11 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     }
     /// Register once, or idempotently repeat the SAME (latest) member-wide recipient.
     /// A different key replaces it only when a CURRENT device of the lineage
-    /// (witnessed by `current`; a removed device is refused) carries a strictly
-    /// greater lineage epoch than the stored one; the same or an older epoch is
-    /// refused as a replay. The replacement serves from the NEXT record epoch on;
-    /// the epoch in flight keeps the previous recipient.
+    /// (witnessed by `current`; a removed device is refused) signs under the account's
+    /// current root and that root's revision is newer than the one of the last accepted
+    /// registration: one move per root rotation, otherwise a replay. The request's
+    /// claimed `lineage_epoch` is no authority. The replacement serves from the NEXT
+    /// record epoch on; the epoch in flight keeps the previous recipient.
     /// Device loss alone never rotates it. All equal passkeys derive the same key.
     pub fn register_record_recipient(
         &mut self,
@@ -806,13 +820,17 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         )?;
         // An accepted account MUST already exist. check_root alone permits a
         // fresh genesis, which cannot authorize a recipient registry entry.
-        tx.get::<Frontier>(&key(1, &[&request.owner]))?
-            .ok_or(Error::Admission)?;
+        // The account's root revision is the authenticated rotation counter: the
+        // request's `lineage_epoch` is only the signing device's claim (review-s4b N2).
+        let revision = tx
+            .get::<Frontier>(&key(1, &[&request.owner]))?
+            .ok_or(Error::Admission)?
+            .root_revision;
         move_recipient_in(
             &mut tx,
             &request.owner,
             request.recipient_key,
-            request.lineage_epoch,
+            revision,
             now,
         )?;
         tx.commit_before(&CommitDeadline::new(

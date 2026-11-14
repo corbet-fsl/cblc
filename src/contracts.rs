@@ -165,8 +165,9 @@ pub struct RecipientRequest {
     pub owner: [u8; 32],
     pub recipient_key: [u8; 32],
     pub chat_public_key: String,
-    /// Lineage epoch of this recipient key. A replacement of the stored key must carry a strictly
-    /// greater epoch than the stored one (an unreplaced legacy entry counts as epoch 0).
+    /// Lineage epoch the signing device claims for this key. Signed, but no authority: a
+    /// replacement needs a newer account root revision (`rotate_root`), never a larger claim
+    /// (review-s4b N2: a still-current device could otherwise pin the recipient).
     pub lineage_epoch: u64,
     pub issued_at: u64,
     pub expires_at: u64,

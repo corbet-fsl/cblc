@@ -293,67 +293,215 @@ fn removed_device_gets_no_witness_and_a_foreign_witness_is_refused() {
     );
 }
 
+/// One member's ledger with its current root: `rotate` advances the account root
+/// (revision + 1) and `register` signs a recipient request under the current root.
+struct Member {
+    ledger: AccountLedger<RealVerifier>,
+    f: Fixture,
+    grant: cblc::admission::AdmissionGrant,
+    auth: cblc::admission::DeviceAuthorization,
+    root: SigningKey,
+    revision: u64,
+    _dir: tempfile::TempDir,
+}
+
+impl Member {
+    fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let f = Fixture::new();
+        let grant = f.grant(7, &f.device);
+        let auth = f.authorize(7, &f.device);
+        let mut ledger = open(
+            &dir.path().join("member.sqlite"),
+            &f,
+            RealVerifier::default(),
+        );
+        ledger
+            .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
+            .unwrap();
+        ledger
+            .apply(&grant, &auth, super::current(&auth), &genesis(&f), || 120)
+            .unwrap();
+        Self {
+            ledger,
+            f,
+            grant,
+            auth,
+            root: SigningKey::from_bytes(&[7; 32]),
+            revision: 0,
+            _dir: dir,
+        }
+    }
+
+    fn rotate(&mut self) {
+        let next = 100 + self.revision as u8;
+        let (auth, root) = rotate_root_to(
+            &mut self.ledger,
+            &self.f,
+            &self.auth,
+            &self.root,
+            next,
+            self.revision,
+        );
+        (self.auth, self.root) = (auth, root);
+        self.revision += 1;
+    }
+
+    fn register(&mut self, recipient: u8, claimed: u64) -> Result<(), Error> {
+        let request = with_epoch(&self.f, recipient, claimed, 120);
+        self.ledger.register_record_recipient(
+            &self.grant,
+            &self.auth,
+            super::current(&self.auth),
+            &request,
+            || 121,
+        )
+    }
+}
+
 #[test]
-fn recipient_replacement_needs_a_strictly_newer_lineage_epoch() {
-    let dir = tempfile::tempdir().unwrap();
-    let f = Fixture::new();
-    let grant = f.grant(7, &f.device);
-    let a = f.authorize(7, &f.device);
-    let mut ledger = open(&dir.path().join("l.sqlite"), &f, RealVerifier::default());
-    ledger
-        .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
-        .unwrap();
-    ledger
-        .apply(&grant, &a, super::current(&a), &genesis(&f), || 120)
-        .unwrap();
-    let mut register = |request: &RecipientRequest| {
-        ledger.register_record_recipient(&grant, &a, super::current(&a), request, || 121)
-    };
-    register(&with_epoch(&f, 41, 1, 120)).unwrap();
-    // Newer epoch from a current device replaces the key.
-    register(&with_epoch(&f, 42, 2, 120)).unwrap();
-    // Same epoch with another key stays refused; so does an older one.
-    assert_eq!(register(&with_epoch(&f, 43, 2, 120)), Err(Error::Replay));
-    assert_eq!(register(&with_epoch(&f, 43, 1, 120)), Err(Error::Replay));
-    // The replacement is durable: the old key is gone, the new one repeats idempotently.
-    assert_eq!(register(&with_epoch(&f, 41, 2, 120)), Err(Error::Replay));
-    register(&with_epoch(&f, 42, 2, 120)).unwrap();
-    register(&with_epoch(&f, 44, 3, 120)).unwrap();
+fn recipient_replacement_needs_a_newer_root_revision() {
+    // Review-s4b N2: the authenticated account root revision, not the request's
+    // claimed lineage epoch, decides a move: one move per root rotation.
+    let mut m = Member::new();
+    m.register(41, 1).unwrap();
+    // No rotation: another key is a replay, whatever epoch it claims.
+    assert_eq!(m.register(42, 2), Err(Error::Replay));
+    assert_eq!(m.register(42, u64::MAX), Err(Error::Replay));
+    m.rotate();
+    m.register(42, 2).unwrap();
+    // A second move under the same root stays refused; so does returning to the old key.
+    assert_eq!(m.register(43, 3), Err(Error::Replay));
+    assert_eq!(m.register(41, 3), Err(Error::Replay));
+    // The new key repeats idempotently (any claim); the next rotation moves again.
+    m.register(42, 0).unwrap();
+    m.rotate();
+    m.register(44, 1).unwrap();
 }
 
 #[test]
 fn recipient_replacement_is_recorded_for_the_next_epoch_and_the_old_key_stays_resolvable() {
-    // K1 S4: a current device's replacement is accepted; repeating the NEW key is
-    // idempotent; naming an earlier key without a newer lineage epoch is a Replay
-    // (only a newer lineage epoch from a current device moves the recipient, decision
-    // 2026-10-29). This ledger never installs a record epoch, so it knows no period
-    // and folds nothing: pending moves are bounded (16) until the first install folds
-    // them (internal record_epoch tests cover installs and 17+ moves).
+    // K1 S4: a current device's replacement after a root rotation is accepted;
+    // repeating the NEW key is idempotent; an earlier key without a newer root
+    // revision is a Replay. This ledger never installs a record epoch, so it knows no
+    // period and folds nothing: pending moves are bounded (16) until the first install
+    // folds them (internal record_epoch tests cover installs and 17+ moves).
+    let mut m = Member::new();
+    m.register(41, 1).unwrap();
+    m.rotate();
+    m.register(42, 2).unwrap();
+    m.register(42, 2).unwrap();
+    assert_eq!(m.register(41, 2), Err(Error::Replay));
+    for index in 1..16u8 {
+        m.rotate();
+        m.register(42 + index, 0).unwrap();
+    }
+    m.rotate();
+    assert_eq!(m.register(99, 0), Err(Error::Capacity));
+}
+
+/// Rotate the member's account root (the dual-signed `rotate_root`, revision + 1) from
+/// `old` to the key with seed `next`, and return the device authorization under the new
+/// root. `prior` is the authorization signed by `old`.
+fn rotate_root_to(
+    ledger: &mut AccountLedger<RealVerifier>,
+    f: &Fixture,
+    prior: &cblc::admission::DeviceAuthorization,
+    old: &SigningKey,
+    next: u8,
+    expected_revision: u64,
+) -> (cblc::admission::DeviceAuthorization, SigningKey) {
+    let new = SigningKey::from_bytes(&[next; 32]);
+    let mut auth = prior.clone();
+    auth.root_public_key = B64.encode(&new.verifying_key().to_bytes());
+    auth.signature = B64.encode(
+        &new.sign(&cblc::admission::device_authorization_bytes(&auth).unwrap())
+            .to_bytes(),
+    );
+    let first = genesis(f);
+    let mut rotation = RootRotation {
+        community: first.statement.community,
+        owner: first.statement.owner,
+        expected_revision,
+        expected_version: 0,
+        expected_state: first.statement.next_state,
+        old_root: prior.root_public_key.clone(),
+        new_root: auth.root_public_key.clone(),
+        old_signature: String::new(),
+        new_signature: String::new(),
+    };
+    let bytes = root_rotation_bytes(&rotation).unwrap();
+    rotation.old_signature = B64.encode(&old.sign(&bytes).to_bytes());
+    rotation.new_signature = B64.encode(&new.sign(&bytes).to_bytes());
+    ledger.rotate_root(&rotation).unwrap();
+    (auth, new)
+}
+
+// Review-s4b N2: the request's `lineage_epoch` is a claim the signing device makes, so
+// it is no authority. A device that is still current before its removal claims
+// u64::MAX; it must not move the recipient (no root rotation happened), and after the
+// root rotates the survivor's move under the new root succeeds, while the old root
+// can no longer move anything.
+#[test]
+fn a_claimed_lineage_epoch_cannot_pin_the_recipient_past_a_root_rotation() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("replacement.sqlite");
     let f = Fixture::new();
     let grant = f.grant(7, &f.device);
-    let a = f.authorize(7, &f.device);
-    let mut ledger = open(&path, &f, RealVerifier::default());
+    let old = f.authorize(7, &f.device);
+    let mut ledger = open(&dir.path().join("pin.sqlite"), &f, RealVerifier::default());
     ledger
         .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
     ledger
-        .apply(&grant, &a, super::current(&a), &genesis(&f), || 120)
+        .apply(&grant, &old, super::current(&old), &genesis(&f), || 120)
         .unwrap();
-    let mut register = |request: &RecipientRequest| {
-        ledger.register_record_recipient(&grant, &a, super::current(&a), request, || 121)
-    };
-    register(&with_epoch(&f, 41, 1, 120)).unwrap();
-    register(&with_epoch(&f, 42, 2, 120)).unwrap();
-    register(&with_epoch(&f, 42, 2, 120)).unwrap();
-    assert_eq!(register(&with_epoch(&f, 41, 2, 120)), Err(Error::Replay));
-    let cap = 16;
-    for epoch in 3..2 + cap {
-        register(&with_epoch(&f, 100 + epoch as u8, epoch, 120)).unwrap();
-    }
+    ledger
+        .register_record_recipient(
+            &grant,
+            &old,
+            super::current(&old),
+            &with_epoch(&f, 41, 1, 120),
+            || 121,
+        )
+        .unwrap();
+    // The still-current thief claims the largest epoch under the unrotated root.
     assert_eq!(
-        register(&with_epoch(&f, 99, 2 + cap, 120)),
-        Err(Error::Capacity)
+        ledger.register_record_recipient(
+            &grant,
+            &old,
+            super::current(&old),
+            &with_epoch(&f, 66, u64::MAX, 120),
+            || 122
+        ),
+        Err(Error::Replay)
+    );
+    // The removal rotates the root; the survivor moves with its real (small) epoch.
+    let (new, _) = rotate_root_to(
+        &mut ledger,
+        &f,
+        &old,
+        &SigningKey::from_bytes(&[7; 32]),
+        99,
+        0,
+    );
+    ledger
+        .register_record_recipient(
+            &grant,
+            &new,
+            super::current(&new),
+            &with_epoch(&f, 42, 2, 120),
+            || 123,
+        )
+        .unwrap();
+    // The old root is no longer the account's authority.
+    assert_eq!(
+        ledger.register_record_recipient(
+            &grant,
+            &old,
+            super::current(&old),
+            &with_epoch(&f, 66, u64::MAX, 120),
+            || 124
+        ),
+        Err(Error::Admission)
     );
 }
