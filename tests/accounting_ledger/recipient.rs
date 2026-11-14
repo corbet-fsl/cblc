@@ -336,10 +336,10 @@ fn recipient_replacement_is_recorded_for_the_next_epoch_and_the_old_key_stays_re
         .admit_checkpoint(0, proofs::record(0).statement.enrollment_root)
         .unwrap();
     ledger
-        .apply(&grant, &a, crate::current(&a), &genesis(&f), || 120)
+        .apply(&grant, &a, super::current(&a), &genesis(&f), || 120)
         .unwrap();
     let mut register = |request: &RecipientRequest| {
-        ledger.register_record_recipient(&grant, &a, crate::current(&a), request, || 121)
+        ledger.register_record_recipient(&grant, &a, super::current(&a), request, || 121)
     };
     register(&with_epoch(&f, 41, 1, 120)).unwrap();
     register(&with_epoch(&f, 42, 2, 120)).unwrap();
