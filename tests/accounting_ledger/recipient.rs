@@ -324,8 +324,10 @@ fn recipient_replacement_needs_a_strictly_newer_lineage_epoch() {
 #[test]
 fn recipient_replacement_is_recorded_for_the_next_epoch_and_the_old_key_stays_resolvable() {
     // K1 S4: a current device's replacement is accepted; repeating the NEW key is
-    // idempotent, the OLD key is refused (it never comes back), and the bounded
-    // replacement history refuses growth past its cap instead of evicting.
+    // idempotent; naming an earlier key without a newer lineage epoch is a Replay
+    // (only a newer lineage epoch from a current device moves the recipient, decision
+    // 2026-10-29); and the bounded replacement history refuses growth past its cap
+    // instead of evicting.
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("replacement.sqlite");
     let f = Fixture::new();
@@ -344,7 +346,7 @@ fn recipient_replacement_is_recorded_for_the_next_epoch_and_the_old_key_stays_re
     register(&with_epoch(&f, 41, 1, 120)).unwrap();
     register(&with_epoch(&f, 42, 2, 120)).unwrap();
     register(&with_epoch(&f, 42, 2, 120)).unwrap();
-    assert_eq!(register(&with_epoch(&f, 41, 3, 120)), Err(Error::Replay));
+    assert_eq!(register(&with_epoch(&f, 41, 2, 120)), Err(Error::Replay));
     let cap = cblc::accounting_ledger::record_epoch::MAX_RECIPIENT_REPLACEMENTS as u64;
     for epoch in 3..2 + cap {
         register(&with_epoch(&f, 100 + epoch as u8, epoch, 120)).unwrap();
