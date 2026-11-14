@@ -125,6 +125,8 @@ fn populate(path: &Path, f: &Fixture, d: &AccountingDelegation, limits: Enrollme
 struct Registry {
     revoked: Mutex<Vec<(String, [u8; 32])>>,
     asked: Mutex<Vec<(String, [u8; 32])>>,
+    /// The registry cannot be read (its storage fails): every question errs.
+    broken: Mutex<bool>,
 }
 impl cblc::current_device::CurrentDevices for Registry {
     fn is_current(&self, pseudonym: &str, device: &[u8; 32]) -> Result<bool, Error> {
@@ -132,6 +134,9 @@ impl cblc::current_device::CurrentDevices for Registry {
             .lock()
             .unwrap()
             .push((pseudonym.to_owned(), *device));
+        if *self.broken.lock().unwrap() {
+            return Err(Error::Storage);
+        }
         Ok(!self
             .revoked
             .lock()
@@ -300,7 +305,10 @@ fn a_slot_long_after_enrollment_keeps_the_member_with_a_grant_long_delegation() 
     // The registry was asked only what the roster entry already names: pseudonym and device.
     assert_eq!(
         *registry.asked.lock().unwrap(),
-        vec![(d.admission.pseudonym.clone(), f.device.verifying_key().to_bytes())]
+        vec![(
+            d.admission.pseudonym.clone(),
+            f.device.verifying_key().to_bytes()
+        )]
     );
 }
 
@@ -323,11 +331,10 @@ fn a_revoked_devices_unexpired_delegation_is_excluded_from_the_next_slot() {
     drop(first);
     // The device is revoked in the registry. Its delegation is still unexpired, yet the next
     // slot leaves it out; the frozen slot 1 keeps its original bytes.
-    registry
-        .revoked
-        .lock()
-        .unwrap()
-        .push((revoked.admission.pseudonym.clone(), lost.verifying_key().to_bytes()));
+    registry.revoked.lock().unwrap().push((
+        revoked.admission.pseudonym.clone(),
+        lost.verifying_key().to_bytes(),
+    ));
     now.store(230, Ordering::Release);
     let next = prepare_with(&mut source, &f, 1, current(&f, &kept), &registry).unwrap();
     assert_eq!(next.publication().slot, 2);
@@ -431,4 +438,33 @@ fn forwarding_retains_source_owner_and_current_epoch_refusal_prevents_actual_ins
         read(&path, &f.trust.community_id, b"clock").unwrap(),
         serde_json::json!(130)
     );
+}
+
+/// Review L4: a registry that cannot answer refuses the whole build (fail closed): no slot is
+/// built and nothing is stored, rather than admitting delegations it could not check.
+#[test]
+fn an_unreadable_registry_refuses_the_slot_build_and_stores_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("common.db");
+    let f = Fixture::new();
+    let kept = grant_long(&f, 7, &f.device, 2400);
+    let limits = registry::config(&f);
+    populate(&path, &f, &kept, limits.clone());
+    let now = Arc::new(AtomicU64::new(130));
+    let mut source = producer(&path, &f, limits, now.clone());
+    let registry = Registry::default();
+    *registry.broken.lock().unwrap() = true;
+    assert!(matches!(
+        prepare_with(&mut source, &f, 1, current(&f, &kept), &registry),
+        Err(Error::Storage)
+    ));
+    assert!(
+        !registry.asked.lock().unwrap().is_empty(),
+        "the builder asked the registry"
+    );
+    assert!(read(&path, &f.trust.community_id, &pending_key(1)).is_none());
+    // Once the registry answers again, the same slot builds with the delegation.
+    *registry.broken.lock().unwrap() = false;
+    let slot = prepare_with(&mut source, &f, 1, current(&f, &kept), &registry).unwrap();
+    assert_eq!(slot.publication().delegations.len(), 1);
 }
