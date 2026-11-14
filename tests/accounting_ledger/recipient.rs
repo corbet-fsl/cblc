@@ -326,8 +326,9 @@ fn recipient_replacement_is_recorded_for_the_next_epoch_and_the_old_key_stays_re
     // K1 S4: a current device's replacement is accepted; repeating the NEW key is
     // idempotent; naming an earlier key without a newer lineage epoch is a Replay
     // (only a newer lineage epoch from a current device moves the recipient, decision
-    // 2026-10-29); and the bounded replacement history refuses growth past its cap
-    // instead of evicting.
+    // 2026-10-29). This ledger never installs a record epoch, so it knows no period
+    // and folds nothing: pending moves are bounded (16) until the first install folds
+    // them (internal record_epoch tests cover installs and 17+ moves).
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("replacement.sqlite");
     let f = Fixture::new();
@@ -347,7 +348,7 @@ fn recipient_replacement_is_recorded_for_the_next_epoch_and_the_old_key_stays_re
     register(&with_epoch(&f, 42, 2, 120)).unwrap();
     register(&with_epoch(&f, 42, 2, 120)).unwrap();
     assert_eq!(register(&with_epoch(&f, 41, 2, 120)), Err(Error::Replay));
-    let cap = cblc::accounting_ledger::record_epoch::MAX_RECIPIENT_REPLACEMENTS as u64;
+    let cap = 16;
     for epoch in 3..2 + cap {
         register(&with_epoch(&f, 100 + epoch as u8, epoch, 120)).unwrap();
     }

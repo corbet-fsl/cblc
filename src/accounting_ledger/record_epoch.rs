@@ -393,10 +393,13 @@ fn recipient_key(owner: &[u8; 32]) -> Vec<u8> {
     [RECIPIENT_PREFIX, owner.as_slice()].concat()
 }
 
-/// Replacements of a member's record-witness recipient, each with the server time it
-/// was accepted, oldest first. Refused past this cap (never evicted): a lineage
-/// rotation is a rare, member-driven event.
-pub const MAX_RECIPIENT_REPLACEMENTS: usize = 16;
+/// Pending recipient moves of one member, each with the server time it was accepted,
+/// oldest first: only moves that no installed record epoch has folded yet. Once a period
+/// is known (the newest installed epoch's), a later move inside the same record epoch
+/// supersedes the pending one, so this bound only refuses more than 16 record epochs of
+/// moves without an install (or 16 moves before the first install). A guard per install
+/// interval, never a lifetime count: every install folds what it can.
+const MAX_PENDING_RECIPIENT_MOVES: usize = 16;
 
 fn recipient_replacements_key(owner: &[u8; 32]) -> Vec<u8> {
     [b"record-recipient-next:v1:".as_slice(), owner.as_slice()].concat()
@@ -416,6 +419,95 @@ pub(crate) fn effective_recipient(
         .rev()
         .find(|(accepted_at, _)| *accepted_at < epoch_start)
         .map_or(base, |(_, key)| *key)
+}
+
+/// Register `recipient` for `owner`, or move it (K1 S4): a different key from a
+/// strictly newer lineage epoch is recorded for the NEXT record-epoch boundary; the
+/// same latest key repeats idempotently. Storage only; the caller checked authority.
+fn move_recipient_in(
+    tx: &mut Transaction<'_>,
+    owner: &[u8; 32],
+    recipient: [u8; 32],
+    lineage_epoch: u64,
+    now: u64,
+) -> Result<(), Error> {
+    let key = recipient_key(owner);
+    let epoch_key = recipient_epoch_key(owner);
+    if let Some(base) = tx.get::<[u8; 32]>(&key)? {
+        // K1 S4: a move from a CURRENT device (checked by the caller) with a newer
+        // lineage epoch is pending until the next record-epoch boundary; the epoch in
+        // flight still resolves to the previous recipient. Installs fold what no later
+        // freeze can resolve (`fold_recipient_in`), so nothing older is kept.
+        let next_key = recipient_replacements_key(owner);
+        let mut pending: Vec<(u64, [u8; 32])> = tx.get(&next_key)?.unwrap_or_default();
+        if pending.last().map_or(base, |(_, key)| *key) == recipient {
+            return Ok(());
+        }
+        let stored = tx.get::<u64>(&epoch_key)?.unwrap_or(0);
+        if lineage_epoch <= stored {
+            return Err(Error::Replay);
+        }
+        // Pending moves stay sorted by acceptance time (the fold at install relies on it):
+        // a server time behind the newest pending move is refused, never reordered.
+        if pending
+            .last()
+            .is_some_and(|(accepted_at, _)| now < *accepted_at)
+        {
+            return Err(Error::ClockRollback);
+        }
+        // One pending move per record epoch: no boundary lies between two moves of the
+        // same epoch, so the earlier one could never serve an epoch.
+        let period = tx
+            .get::<PublishedAnchor>(ANCHOR)?
+            .map(|anchor| anchor.period_seconds);
+        if let (Some(period @ 1..), Some(&(at, _))) = (period, pending.last())
+            && at / period == now / period
+        {
+            pending.pop();
+        }
+        if pending.last().map_or(base, |(_, key)| *key) != recipient {
+            if pending.len() >= MAX_PENDING_RECIPIENT_MOVES {
+                return Err(Error::Capacity);
+            }
+            pending.push((now, recipient));
+        }
+        if pending.is_empty() {
+            tx.delete(&next_key)?;
+        } else {
+            tx.put(&next_key, &pending)?;
+        }
+        tx.put(&epoch_key, &lineage_epoch)?;
+    } else {
+        tx.put(&key, &recipient)?;
+        tx.put(&epoch_key, &lineage_epoch)?;
+    }
+    Ok(())
+}
+
+/// Called by the install of the record epoch that ends at `boundary`: no later freeze or
+/// install can resolve an earlier start, so the last move accepted before `boundary`
+/// becomes the recipient and every earlier recipient and acceptance time is dropped.
+/// Moves accepted at or after `boundary` stay pending. This keeps only what decision
+/// 2026-10-29 (a)-(c) needs, under one record-epoch period per community.
+fn fold_recipient_in(
+    tx: &mut Transaction<'_>,
+    owner: &[u8; 32],
+    boundary: u64,
+) -> Result<(), Error> {
+    let next_key = recipient_replacements_key(owner);
+    let Some(pending) = tx.get::<Vec<(u64, [u8; 32])>>(&next_key)? else {
+        return Ok(());
+    };
+    let folded = pending.partition_point(|(accepted_at, _)| *accepted_at < boundary);
+    let Some((_, current)) = folded.checked_sub(1).map(|last| pending[last]) else {
+        return Ok(());
+    };
+    tx.put(&recipient_key(owner), &current)?;
+    if folded == pending.len() {
+        tx.delete(&next_key)
+    } else {
+        tx.put(&next_key, &pending[folded..].to_vec())
+    }
 }
 
 /// The stored recipient for the epoch starting at `epoch_start`; `None` if unregistered.
@@ -716,32 +808,13 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
         // fresh genesis, which cannot authorize a recipient registry entry.
         tx.get::<Frontier>(&key(1, &[&request.owner]))?
             .ok_or(Error::Admission)?;
-        let key = recipient_key(&request.owner);
-        let epoch_key = recipient_epoch_key(&request.owner);
-        if let Some(base) = tx.get::<[u8; 32]>(&key)? {
-            // K1 S4: a replacement from a CURRENT device (`current` above) with a newer
-            // lineage epoch is recorded for the NEXT record-epoch boundary; the base and
-            // earlier replacements stay stored so the epoch in flight still resolves to
-            // the previous recipient.
-            let next_key = recipient_replacements_key(&request.owner);
-            let mut replacements: Vec<(u64, [u8; 32])> = tx.get(&next_key)?.unwrap_or_default();
-            let latest = replacements.last().map_or(base, |(_, key)| *key);
-            if latest != request.recipient_key {
-                let stored = tx.get::<u64>(&epoch_key)?.unwrap_or(0);
-                if request.lineage_epoch <= stored {
-                    return Err(Error::Replay);
-                }
-                if replacements.len() >= MAX_RECIPIENT_REPLACEMENTS {
-                    return Err(Error::Capacity);
-                }
-                replacements.push((now, request.recipient_key));
-                tx.put(&next_key, &replacements)?;
-                tx.put(&epoch_key, &request.lineage_epoch)?;
-            }
-        } else {
-            tx.put(&key, &request.recipient_key)?;
-            tx.put(&epoch_key, &request.lineage_epoch)?;
-        }
+        move_recipient_in(
+            &mut tx,
+            &request.owner,
+            request.recipient_key,
+            request.lineage_epoch,
+            now,
+        )?;
         tx.commit_before(&CommitDeadline::new(
             &clock,
             now,

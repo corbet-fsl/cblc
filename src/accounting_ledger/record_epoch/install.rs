@@ -87,6 +87,17 @@ pub(in crate::accounting_ledger) fn install_in(
         {
             return Err(Error::Replay);
         }
+        // K1 S4: what this install makes unresolvable leaves the recipient registry.
+        fold_recipient_in(
+            tx,
+            &leaf.owner,
+            frozen
+                .0
+                .epoch
+                .checked_add(1)
+                .and_then(|next| next.checked_mul(frozen.0.period_seconds))
+                .ok_or(Error::Storage)?,
+        )?;
         current.record_ancestry = Some(Lineage {
             epoch: frozen.0.epoch,
             leaf: czkp::record::Leaf {

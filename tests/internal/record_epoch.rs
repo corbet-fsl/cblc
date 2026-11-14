@@ -810,3 +810,222 @@ fn recipient_replacement_takes_effect_only_at_the_next_epoch_boundary() {
     assert_eq!(super::effective_recipient(base, &two, 400), [42; 32]);
     assert_eq!(super::effective_recipient(base, &two, 500), [44; 32]);
 }
+
+// K1 S4 compaction (manager decision on review M2, 2026-11-14). The registry keeps only
+// what decision 2026-10-29 (a)-(c) needs: the current recipient, at most one pending move
+// per record epoch with its acceptance time until an install folds it, and the previous
+// recipient only while the epoch in flight still resolves to it. These tests run the real
+// freeze (`prepare_in`), encryption and install (`install_in`) over a MemoryStore.
+mod recipient_compaction {
+    use super::*;
+    use crate::storage::{AccountStorage, MemoryStore};
+
+    const PERIOD: u64 = 100;
+    const OWNER: [u8; 32] = [77; 32];
+
+    fn world() -> MemoryStore {
+        let mut store = MemoryStore::default();
+        let mut tx = AccountStorage::transaction(&mut store).unwrap();
+        tx.put(
+            &crate::storage::key(1, &[&OWNER]),
+            &Frontier {
+                root_key: [1; 32],
+                root_revision: 1,
+                version: 1,
+                state: [2; 32],
+                latest_request: [3; 32],
+                record_ancestry: None,
+            },
+        )
+        .unwrap();
+        tx.commit().unwrap();
+        store
+    }
+
+    fn recipient(index: u32) -> [u8; 32] {
+        material(index).1
+    }
+
+    fn move_to(
+        store: &mut MemoryStore,
+        index: u32,
+        lineage_epoch: u64,
+        now: u64,
+    ) -> Result<(), Error> {
+        let mut tx = AccountStorage::transaction(store).unwrap();
+        move_recipient_in(&mut tx, &OWNER, recipient(index), lineage_epoch, now)?;
+        tx.commit()
+    }
+
+    /// Freeze, encrypt and install record epoch `epoch` at its 60th second.
+    fn install(store: &mut MemoryStore, epoch: u64) -> (FrozenEpoch, RecordEpochPublication) {
+        let issuer = cssr::certificate::RecordIssuer::new(&[19; 32]);
+        let scope = AccountProofScope {
+            circuit_digest: [4; 32],
+            verifying_key_digest: [5; 32],
+        };
+        let now = epoch * PERIOD + 60;
+        let mut tx = AccountStorage::transaction(store).unwrap();
+        let frozen = prepare::prepare_in(
+            &mut tx,
+            &prepare::Inputs {
+                community: [1; 32],
+                issuer_key: issuer.public_key(),
+                policy_epoch: 1,
+                epoch,
+                period_seconds: PERIOD,
+                now,
+                configuration: &[1],
+                extension_configuration: &[2],
+                proof_scope: &scope,
+            },
+            &|| now,
+        )
+        .unwrap();
+        let published = frozen.encrypt(&issuer).unwrap();
+        install::install_in(&mut tx, &frozen, &published, now).unwrap();
+        tx.commit().unwrap();
+        (frozen, published)
+    }
+
+    /// The stored recipient and the pending moves (with their acceptance times).
+    type Registry = ([u8; 32], Option<Vec<(u64, [u8; 32])>>);
+
+    fn stored(store: &mut MemoryStore) -> Registry {
+        let mut tx = AccountStorage::transaction(store).unwrap();
+        (
+            tx.get(&recipient_key(&OWNER)).unwrap().unwrap(),
+            tx.get(&recipient_replacements_key(&OWNER)).unwrap(),
+        )
+    }
+
+    // 40 rotations, one per record epoch, each between that epoch's start and its
+    // install: every move succeeds; the epoch in flight still goes to the previous
+    // recipient, whose witness opens and verifies, the new one opens nothing; after
+    // each install the registry holds the current recipient alone, no past key, no time.
+    #[test]
+    fn forty_rotations_succeed_and_every_install_leaves_only_the_current_recipient() {
+        let mut store = world();
+        move_to(&mut store, 0, 1, 50).unwrap();
+        install(&mut store, 1);
+        for index in 1..=40u32 {
+            let epoch = u64::from(index) + 1;
+            move_to(&mut store, index, epoch, epoch * PERIOD + 10).unwrap();
+            let (frozen, published) = install(&mut store, epoch);
+            // (c): the epoch in flight keeps the previous recipient.
+            assert_eq!(frozen.0.frontiers[0].recipient_key, recipient(index - 1));
+            let witnesses = open_matches(&published, &material(index - 1).0);
+            assert_eq!(witnesses.len(), 1);
+            assert_witness(&published, &witnesses[0], OWNER);
+            assert!(open_matches(&published, &material(index).0).is_empty());
+            // After the install: only the current recipient, no history, no timestamp.
+            assert_eq!(stored(&mut store), (recipient(index), None));
+        }
+        // The next epoch is witnessed to the last recipient.
+        let (_, published) = install(&mut store, 42);
+        assert_eq!(open_matches(&published, &material(40).0).len(), 1);
+    }
+
+    // Twenty moves inside one record epoch: all succeed, exactly one pending move with
+    // its acceptance time is kept (a later move in the same epoch supersedes it, since
+    // no boundary lies between them), and the epoch in flight resolves to the previous
+    // recipient while the next epoch resolves to the last move.
+    #[test]
+    fn many_moves_inside_one_epoch_keep_one_pending_move() {
+        let mut store = world();
+        move_to(&mut store, 0, 1, 50).unwrap();
+        install(&mut store, 1);
+        for index in 1..=20u32 {
+            move_to(
+                &mut store,
+                index,
+                u64::from(index) + 1,
+                270 + u64::from(index),
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            stored(&mut store),
+            (recipient(0), Some(vec![(290, recipient(20))]))
+        );
+        let mut tx = AccountStorage::transaction(&mut store).unwrap();
+        assert_eq!(
+            recipient_for_epoch(&mut tx, &OWNER, 200).unwrap(),
+            Some(recipient(0))
+        );
+        assert_eq!(
+            recipient_for_epoch(&mut tx, &OWNER, 300).unwrap(),
+            Some(recipient(20))
+        );
+        drop(tx);
+        // A move accepted after epoch 2 was installed, still inside epoch 2, serves epoch 3.
+        install(&mut store, 2);
+        assert_eq!(stored(&mut store), (recipient(20), None));
+        move_to(&mut store, 21, 22, 295).unwrap();
+        let (frozen, _) = install(&mut store, 3);
+        assert_eq!(frozen.0.frontiers[0].recipient_key, recipient(21));
+        assert_eq!(stored(&mut store), (recipient(21), None));
+    }
+
+    // Before any record epoch was installed the ledger knows no period, so pending moves
+    // cannot be folded: they are bounded per install interval (16), never per lifetime;
+    // the first install folds them and moves succeed again.
+    #[test]
+    fn pending_moves_before_the_first_install_are_bounded_until_it_folds_them() {
+        let mut store = world();
+        move_to(&mut store, 0, 1, 10).unwrap();
+        for index in 1..=16u32 {
+            move_to(
+                &mut store,
+                index,
+                u64::from(index) + 1,
+                10 + u64::from(index),
+            )
+            .unwrap();
+        }
+        assert_eq!(move_to(&mut store, 17, 18, 40), Err(Error::Capacity));
+        let (frozen, _) = install(&mut store, 1);
+        assert_eq!(frozen.0.frontiers[0].recipient_key, recipient(16));
+        assert_eq!(stored(&mut store), (recipient(16), None));
+        for index in 17..=40u32 {
+            move_to(
+                &mut store,
+                index,
+                u64::from(index) + 1,
+                150 + u64::from(index),
+            )
+            .unwrap();
+        }
+    }
+
+    // The fold at install relies on pending moves sorted by acceptance time; a move
+    // whose server time steps back behind the newest pending move is refused, and the
+    // registry is unchanged.
+    #[test]
+    fn a_move_behind_the_newest_pending_move_is_refused() {
+        let mut store = world();
+        move_to(&mut store, 0, 1, 50).unwrap();
+        install(&mut store, 1);
+        move_to(&mut store, 1, 2, 250).unwrap();
+        let before = stored(&mut store);
+        assert_eq!(move_to(&mut store, 2, 3, 190), Err(Error::ClockRollback));
+        assert_eq!(stored(&mut store), before);
+        // The same time, or later, moves as usual.
+        move_to(&mut store, 2, 3, 250).unwrap();
+        let (frozen, _) = install(&mut store, 2);
+        assert_eq!(frozen.0.frontiers[0].recipient_key, recipient(0));
+        assert_eq!(stored(&mut store), (recipient(2), None));
+    }
+
+    // Replay protection is unchanged: the same or an older lineage epoch never moves it.
+    #[test]
+    fn a_move_needs_a_strictly_newer_lineage_epoch() {
+        let mut store = world();
+        move_to(&mut store, 0, 1, 50).unwrap();
+        install(&mut store, 1);
+        move_to(&mut store, 1, 2, 150).unwrap();
+        assert_eq!(move_to(&mut store, 2, 2, 151), Err(Error::Replay));
+        assert_eq!(move_to(&mut store, 0, 1, 152), Err(Error::Replay));
+        move_to(&mut store, 1, 2, 153).unwrap();
+    }
+}
