@@ -16,6 +16,8 @@
 //                              setup/) to prove under; its bytecode and keys must equal this tree's
 //   --policy-epoch <n> --record-period <s>     record epoch descriptor (default 1, 86400)
 //   --pin-member <i> --pin-field <f> --pin-expected <hex32>:<revision> --pin-replacement <hex32>
+//   --deposit [--deposit-sender <i>] [--deposit-punisher <j>] [--settlement-period <s> (default --record-period)]: a contact
+//                              from i punished by j, its deposit proved and staged under daily settlement
 // Environment: CBLC_EXTENSION_DIRECTORY (work directory holding `compile.mts --record-epoch`
 // output), CBLC_BB (native worker), CBLC_MEMBER_WORLD_ISSUER (examples/member_world_issuer),
 // ARTIFACT_ROOT + CI_COMMIT_SHA to retain.
@@ -27,11 +29,11 @@ import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {parseArgs} from 'node:util';
 import {Barretenberg,BackendType,UltraHonkBackend} from '@aztec/bb.js';
-import {OPTIONS,hex} from '@corbet-labs/czkp/encoding';
+import {OPTIONS,hex,canonicalSignature} from '@corbet-labs/czkp/encoding';
 import {publicInputs,witnessInputs} from '@corbet-labs/czkp/abi';
 import {createProver} from '@corbet-labs/czkp/prove';
 import {fieldBytes} from '@corbet-labs/czkp/primitives';
-import {extensionHashes,checkpointFromVerified} from '@corbet-labs/cwlt/extensions';
+import {extensionHashes,checkpointFromVerified,contactBytes} from '@corbet-labs/cwlt/extensions';
 import {VoucherWitness} from '@corbet-labs/cwlt/voucher-wallet';
 import {STANDING,STANDING_DIGEST,STANDING_TABLES} from './holder/standing-fixture.mts';
 import {loadArtifacts} from '../runtime/extensions/artifacts.mts';
@@ -49,7 +51,9 @@ const {values:args}=parseArgs({strict:true,options:{
   community:{type:'string'},now:{type:'string'},members:{type:'string'},policy:{type:'string'},
   'device-seed':{type:'string',default:'2'},group:{type:'string'},'policy-epoch':{type:'string',default:'1'},
   'record-period':{type:'string',default:'86400'},'pin-member':{type:'string',default:'1'},'pin-field':{type:'string',default:'age'},
-  'pin-expected':{type:'string',default:`${'01'.repeat(32)}:1`},'pin-replacement':{type:'string',default:'02'.repeat(32)}}});
+  'pin-expected':{type:'string',default:`${'01'.repeat(32)}:1`},'pin-replacement':{type:'string',default:'02'.repeat(32)},
+  deposit:{type:'boolean',default:false},'deposit-sender':{type:'string',default:'2'},'deposit-punisher':{type:'string',default:'0'},
+  'settlement-period':{type:'string'}}});
 const integer=(name,text,minimum=0)=>{assert.match(text??'',/^[0-9]+$/,`--${name} integer`);const v=Number(text);assert(Number.isSafeInteger(v)&&v>=minimum,`--${name} bound`);return v;};
 const communityId=args.community;
 assert(typeof communityId==='string'&&communityId.length>0&&communityId.length<=128,'--community required');
@@ -65,6 +69,11 @@ const [pinExpected,pinRevision]=args['pin-expected'].split(':');
 const pinChange={community:communityId,member:pseudonyms[pinMember].toString('hex'),field:args['pin-field'],
   expected:{fingerprint:unhex(pinExpected,32).toString('hex'),revision:integer('pin-expected revision',pinRevision,1)},
   replacement:unhex(args['pin-replacement'],32).toString('hex')};
+const depositSender=integer('deposit-sender',args['deposit-sender']),depositPunisher=integer('deposit-punisher',args['deposit-punisher']);
+assert(!args.deposit||depositSender<pseudonyms.length&&depositPunisher<pseudonyms.length&&depositSender!==depositPunisher&&depositSender!==pinMember&&depositPunisher!==pinMember,
+  'The deposit contact joins two members other than the pin member');
+// Under daily settlement the record epochs are its cuts: both periods are the same by default.
+const settlementPeriod=args['settlement-period']===undefined?recordPeriod:integer('settlement-period',args['settlement-period'],1);
 
 // ---- Policy: alpha-style defaults measured from NOW (tests/holder/fixtures/alpha-native-request.json).
 const configured=args.policy?JSON.parse(await readFile(resolve(args.policy))):{};
@@ -167,8 +176,10 @@ const issuerKey=toArray(certificateIssuer.getPublicKey().subarray(1));
 const world={version:1,community:communityId,now:NOW,policy,extension,ledger,enrollment:{},members:[]};
 try {
   // ---- Enrollment: public entries only. The member secrets and account keys stay here.
+  // The members' fictional account keys sign contacts; only their public halves are enrolled.
+  const signing=pseudonyms.map(()=>generateKeyPairSync('ec',{namedCurve:'prime256v1'}));
   const entries=pseudonyms.map((pseudonym,i)=>{
-    const key=generateKeyPairSync('ec',{namedCurve:'prime256v1'}).publicKey.export({format:'jwk'});
+    const key=signing[i].publicKey.export({format:'jwk'});
     return {memberId:sha(pseudonym).toString('base64url'),accountKey:Buffer.concat([Buffer.from(key.x,'base64url'),Buffer.from(key.y,'base64url')]).toString('hex'),
       secretHash:undefined,issuedAt:NOW-1,expiresAt:NOW+10000,delegationDigest:hex(bytes(30+i))};
   });
@@ -200,6 +211,9 @@ try {
   world.ledgerPolicy=ledgerPolicy;
   world.activation=activation;
   world.keys={...keysOut,certificateIssuerPublicKey:issuerKey};
+  // Daily settlement installs only on a fresh ledger (no clock floor, no account yet), as a host
+  // reconciles it before members arrive; its epoch must hold the later staging time.
+  const settlement=args.deposit?await call({op:'settlement',now:NOW,periodSeconds:settlementPeriod,policyEpoch}):undefined;
 
   // ---- Accept each genesis through the account service, then register its recipient.
   const members=[];
@@ -259,6 +273,43 @@ try {
     const evidence=await call({op:'pinSpend',change:pinChange});
     world.pinChange={member:index,change:pinChange,binding,changeToken:{statement,update,proof:bundle(change)},apply:applied,evidence:'pin-spend.json'};
     await writeFile(resolve(directory,'pin-spend.json'),JSON.stringify(evidence));
+    const holder=change.next;holder.certificate=applied.certificate;members[index]=holder;
+  }
+
+  // ---- Verified native deposit (opt-in): a contact punished by its recipient, the punisher's
+  // deposit proved, then staged under daily settlement through the anonymous route.
+  if(args.deposit) {
+    const A=depositSender,B=depositPunisher,delay=extension.depositDelaySeconds;
+    // The pin spend's historical check ran at the change request's deadline; later steps follow it.
+    let t=Number(world.pinChange.changeToken.statement.validUntil);
+    const advance=async(index,c,label)=>{
+      c.preparedProof=await proof('update',c.input,label);
+      const update={previousInbox:{root:toArray(c.input.previous_inbox)},inbox:{root:toArray(c.input.inbox)},effect:c.update?.effect??{kind:'update'}};
+      const applied=await call({op:'apply',member:MEMBER_BASE+index,pseudonym:pseudonyms[index].toString('hex'),statement:c.statement,update,proof:bundle(c)});
+      const holder=c.next;holder.certificate=applied.certificate;members[index]=holder;
+      return {member:index,label,statement:c.statement,update,proof:bundle(c),apply:applied};
+    };
+    const nonce=bytes(60),group=bytes(61),contactPolicy=bytes(62),steps=[];
+    const outgoing=await members[A].reserve({peerIndex:B,role:0,nonce,group,contactPolicy,now:t++});
+    steps.push(await advance(A,outgoing,'reserve outgoing'));
+    const sent=members[A].slots.get(outgoing.event.toString());
+    const incoming=await members[B].reserve({peerIndex:A,role:1,nonce,group,contactPolicy,openedAt:sent.admittedAt,expiresAt:sent.expiresAt,now:t++});
+    steps.push(await advance(B,incoming,'reserve incoming'));
+    const received=members[B].slots.get(incoming.event.toString());
+    // The sender's account key signs the contact; the recipient punishes it.
+    const senderSignature=canonicalSignature(sign('sha256',contactBytes(community,members[B].owner.member,received),{key:signing[A].privateKey,dsaEncoding:'ieee-p1363'}));
+    const punishment=await members[B].punish(incoming.event,t++,senderSignature);
+    steps.push(await advance(B,punishment,'punishment'));
+    t=Math.ceil((t+delay)/delay)*delay;
+    const issuance={publicKey:issuerKey,validFrom:1,identity:Array(32).fill(0x1d)};
+    const candidate=await members[B].deposit(punishment.delivery,members[B].certificate,artifacts.scope.circuitDigest,issuance,t/delay);
+    assert.equal(candidate.statement.kind,'deposit');
+    const proved=await proof('deposit',candidate.input,'deposit'),depositProof=encodeBundle([{proof:proved}]);
+    // A changed proof under a genuine pass is refused by the native verifier and stages nothing.
+    await call({op:'stage',member:MEMBER_BASE+B,pseudonym:pseudonyms[B].toString('hex'),deposit:candidate.statement.deposit,operation:1,
+      proof:encodeBundle([{proof:(proved.startsWith('00')?'01':'00')+proved.slice(2)}]),now:t},false);
+    const staged=await call({op:'stage',member:MEMBER_BASE+B,pseudonym:pseudonyms[B].toString('hex'),deposit:candidate.statement.deposit,operation:2,proof:depositProof,now:t});
+    world.deposit={sender:A,punisher:B,releaseEpoch:t/delay,stagedAt:t,issuance,steps,deposit:candidate.statement.deposit,proof:depositProof,settlement,staged};
   }
 } finally {child.stdin.end();await activeProver?.prover.destroy();await hashApi.destroy();}
 
@@ -277,7 +328,9 @@ const readme=[`# Native member world: ${communityId} at ${NOW}`,'',
   `Producer: cblc ${sourceCommit??'(uncommitted)'}, tests/native-member-world.mts with examples/member_world_issuer.rs.`,
   `Regenerate: bash .ci/member-world.sh ${process.argv.slice(2).join(' ')}`,
   '(needs CI_COMMIT_SHA and ARTIFACT_ROOT; the tools of .ci/record-epoch.sh). Proofs are not reproducible bytes: a rerun is a new capture under a new digest.',
-  'Pin: this directory name is the SHA-256 of member-world.json, which lists every other file with its SHA-256.','',
+  'Pin: this directory name is the SHA-256 of member-world.json, which lists every other file with its SHA-256.',
+  'A consumer may store the capture without setup/: member-world.json still pins setup/g1.dat and setup/g2.dat by SHA-256 (the files of',
+  'cblc circuits/extensions/setup-lock.json), so the SRS taken from the setup lock is authenticated under the same digest; no second digest exists.','',
   '## Install the same ledger',
   `- AccountLedgerPolicy: ledger-policy.json. ExtensionPolicy: member-world.json "extension". Trust: community "${communityId}", policy digest base64url([3;32]).`,
   `- Artifacts: config.json (directory "." is this capture; rebase it), manifest ${manifestSha256}, native worker CBLC_BB.`,
@@ -291,7 +344,8 @@ const readme=[`# Native member world: ${communityId} at ${NOW}`,'',
   `- Genesis applies: members[i].apply.request (signed AccountRequest) with members[i].genesis.update, at a clock in [${NOW}, ${world.members[0].genesis.statement.validUntil}).`,
   '- Recipients: members[i].recipient.request (signed RecipientRequest), valid 100 s from its issuedAt; then a record epoch can be prepared.',
   `- Pin spend: pin-spend.json are the exact evidence bytes for verify_completed_pin_change of the change in world.json pinChange.change (member index ${world.pinChange.member}); clock >= acceptance.acceptedAt.`,
-  `- Record epoch of this producer: world.json recordEpoch (policy epoch ${policyEpoch}, period ${recordPeriod} s), with one natively checked record-epoch proof.`,''].join('\n');
+  `- Record epoch of this producer: world.json recordEpoch (policy epoch ${policyEpoch}, period ${recordPeriod} s), with one natively checked record-epoch proof.`,
+  ...(world.deposit?[`- Deposit: world.json deposit {deposit, proof} (ownerIndex ${world.deposit.punisher} punished a contact of ownerIndex ${world.deposit.sender}; release epoch ${world.deposit.releaseEpoch}, delay ${extension.depositDelaySeconds} s). The producer activated daily settlement on the fresh ledger right after init (it refuses a ledger that already holds an account, so a consumer reconciles settlement before replaying any apply) and staged it at ${world.deposit.stagedAt} (period ${settlementPeriod} s, incarnation native-member-world, its own RSA key). A consumer builds its own SettlementSubmission: pass via IssueSettlementPass, token proof under its key, then StageSettlement at a clock >= ${world.deposit.stagedAt}.`]:[]),''].join('\n');
 await writeFile(resolve(directory,'README.md'),readme);
 const holds={
   'README.md':'consumer notes: regeneration command, ledger installation, members, replay windows',
@@ -319,6 +373,8 @@ const metadata={version:1,purpose:'cblc.native-member-world.v1',sourceCommit:sou
   keys:world.keys,members:world.members.map(m=>({index:m.index,ownerIndex:m.ownerIndex,member:m.member,activation:m.activation,pseudonym:m.pseudonym,
     owner:m.owner,memberId:m.memberId,recipientKey:m.recipient.request.recipientKey})),
   pinChange:{member:world.pinChange.member,change:pinChange,binding:world.pinChange.binding},
+  ...(world.deposit?{deposit:{sender:world.deposit.sender,punisher:world.deposit.punisher,releaseEpoch:world.deposit.releaseEpoch,
+    stagedAt:world.deposit.stagedAt,settlementPeriodSeconds:settlementPeriod,depositDigest:world.deposit.staged.depositDigest}}:{}),
   producer:producer.receipt,files};
 const metadataBytes=Buffer.from(JSON.stringify(metadata));
 await writeFile(resolve(directory,'member-world.json'),metadataBytes);

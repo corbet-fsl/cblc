@@ -28,6 +28,10 @@ use cblc::{
     },
     extensions::*,
     pins::{PinSpendVerifier, SpentChange, change_binding},
+    settlement::{
+        SettlementConfig, SettlementPassRequest, SettlementSubmission, deposit_digest,
+        settlement_pass_request_bytes,
+    },
     verification::{ExtensionLimits, NativeExtensionVerifier},
 };
 use cpns::{
@@ -72,6 +76,8 @@ const OPERATOR_SEED: u8 = 9;
 const CERTIFICATE_SEED: u8 = 3;
 /// Policy key lifetime from its activation; long enough for every grant of the world.
 const POLICY_VALIDITY: u64 = 30 * 86_400;
+/// The daily-settlement incarnation of this world's ledger (token proofs name it).
+const INCARNATION: &str = "native-member-world";
 
 impl World {
     fn new(community: &str, now: u64, device_seed: u8) -> Self {
@@ -220,6 +226,7 @@ fn main() {
     let mut extension_policy = None;
     let mut scope = None;
     let mut records = records::Records::default();
+    let mut settlement: Option<cmbl::settlement::Epoch> = None;
     for line in io::stdin().lock().lines() {
         let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
         let result = (|| -> Result<Value, Error> {
@@ -427,6 +434,122 @@ fn main() {
                     let descriptor = json!(publication.descriptor());
                     records.published(publication);
                     Ok(descriptor)
+                }
+                // Daily settlement for this world: a fresh fixture RSA key for the epoch of `now`.
+                "settlement" => {
+                    let now = v["now"].as_u64().unwrap();
+                    let period = v["periodSeconds"].as_u64().unwrap();
+                    let epoch = now / period;
+                    let key = openssl::rsa::Rsa::generate(3072).unwrap();
+                    let config = SettlementConfig {
+                        epoch: cmbl::settlement::Epoch {
+                            purpose: cmbl::settlement::Purpose::OutcomeDeposit,
+                            community: world.as_ref().unwrap().community.clone(),
+                            epoch,
+                            valid_from: epoch * period * 1000,
+                            valid_until: (epoch + 1) * period * 1000,
+                            public_key_der: key.public_key_to_der().unwrap(),
+                        },
+                        policy_epoch: v["policyEpoch"].as_u64().unwrap(),
+                        period_seconds: period,
+                        quota: 4,
+                        pending_capacity: 16,
+                        issuance_members_capacity: 16,
+                        room_epochs: Vec::new(),
+                    };
+                    let installed = ledger.as_mut().unwrap().activate_daily_settlement(
+                        config,
+                        &zeroize::Zeroizing::new(key.private_key_to_der().unwrap()),
+                        INCARNATION.into(),
+                        || now,
+                    )?;
+                    let value = json!({"epoch": installed.epoch, "periodSeconds": period});
+                    settlement = Some(installed);
+                    Ok(value)
+                }
+                // One verified native deposit staged through the anonymous service route; the
+                // settlement pass comes from the member route under that member's session.
+                "stage" => {
+                    let world = world.as_mut().unwrap();
+                    let epoch = settlement.as_ref().unwrap();
+                    let now = v["now"].as_u64().unwrap();
+                    let pseudonym = pseudonym(&v);
+                    let member = member(&v);
+                    let deposit: Deposit = serde_json::from_value(v["deposit"].clone()).unwrap();
+                    let proof = HEXLOWER
+                        .decode(v["proof"].as_str().unwrap().as_bytes())
+                        .unwrap();
+                    let digest = deposit_digest(&deposit)?;
+                    let prepared =
+                        cmbl::settlement::PreparedToken::new(epoch, digest, now * 1000).unwrap();
+                    let mut request = SettlementPassRequest {
+                        community: sha2::Sha256::digest(world.community.as_bytes()).into(),
+                        owner: sha2::Sha256::digest(pseudonym).into(),
+                        operation: [u8::try_from(v["operation"].as_u64().unwrap()).unwrap(); 16],
+                        blind: prepared.request(),
+                        issued_at: now,
+                        expires_at: (now + 10).min(epoch.valid_until / 1000),
+                        signature: String::new(),
+                    };
+                    request.signature = B64.encode(
+                        &world
+                            .device
+                            .sign(&settlement_pass_request_bytes(&request)?)
+                            .to_bytes(),
+                    );
+                    let grant = world.grant(&pseudonym, now + 1000);
+                    let authorization = world.authorize(&pseudonym, member, now + 1000);
+                    let mut service =
+                        AccountService::new(ledger.take().unwrap(), || now, 16 * 1024 * 1024)?;
+                    let pass = service.handle_for_member_authorized(
+                        &pseudonym,
+                        AccountServiceRequest::IssueSettlementPass {
+                            grant,
+                            authorization,
+                            request: request.clone(),
+                        },
+                        authority(),
+                    );
+                    let staged = pass.and_then(|pass| {
+                        let AccountServiceResponse::SettlementPass { pass } = pass else {
+                            return Err(Error::InvalidInput);
+                        };
+                        let client = prepared.finalize(&pass, now * 1000).unwrap();
+                        let submission = SettlementSubmission {
+                            deposit,
+                            proof,
+                            operation: request.operation,
+                            token_proof: client
+                                .prove(
+                                    &cmbl::settlement::Request {
+                                        deposit: digest,
+                                        operation: request.operation,
+                                    },
+                                    INCARNATION,
+                                    now * 1000,
+                                )
+                                .unwrap(),
+                        };
+                        let staged =
+                            service.handle_anonymous(AccountServiceRequest::StageSettlement {
+                                submission: submission.clone(),
+                            })?;
+                        // An exact retry returns the same durable status, never a second fact.
+                        let retried =
+                            service.handle_anonymous(AccountServiceRequest::StageSettlement {
+                                submission,
+                            })?;
+                        assert_eq!(
+                            serde_json::to_value(&staged).unwrap(),
+                            serde_json::to_value(&retried).unwrap()
+                        );
+                        Ok(staged)
+                    });
+                    ledger = Some(service.into_ledger());
+                    let AccountServiceResponse::Settlement(status) = staged? else {
+                        return Err(Error::InvalidInput);
+                    };
+                    Ok(json!({"status": status, "depositDigest": digest}))
                 }
                 // Member-only output (HPKE trial opening); the driver never retains it.
                 "recordWitness" => Ok(records.witness(member(&v))),

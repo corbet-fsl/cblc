@@ -133,7 +133,10 @@ SDKs behind unchanged artifact metadata.
 The native member world is the downstream fixture of a member-bearing community at one
 chosen time: an enrollment of two or more fictional members, every member's genesis proved
 and accepted through the account service, record recipients, a record epoch with one
-natively checked record-epoch proof, and one completed pin spend. Run it as
+natively checked record-epoch proof, and one completed pin spend. With `--deposit` it also
+proves a contact punished by its recipient and the punisher's deposit, and stages that deposit
+under daily settlement, which the ledger installs only while it is empty (before any
+genesis is accepted); the record and settlement periods are then the same. Run it as
 `bash .ci/member-world.sh --community <id> --now <N> [options]` (options in the header of
 `tests/native-member-world.mts`, issuer `examples/member_world_issuer.rs`). It needs
 `CI_COMMIT_SHA`, `ARTIFACT_ROOT` and the environment of the record-epoch job (Node 24,
