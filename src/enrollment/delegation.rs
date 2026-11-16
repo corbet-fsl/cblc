@@ -178,6 +178,32 @@ pub fn verify_delegation(
     })
 }
 
+/// Authenticate a stored delegation for a new slot: `Some` under the current expectations, `None`
+/// for a delegation from an OLDER policy epoch (after any epoch advance, e.g. a revocation) that
+/// passes every other check at its own epoch, which the slot leaves out like an expired row
+/// (L20261114e). Any other failure, including a newer epoch than expected, still refuses (the
+/// caller refuses the build).
+#[cfg(feature = "host")]
+pub(super) fn slot_candidate(
+    d: &AccountingDelegation,
+    expected: ExpectedAdmission<'_>,
+    now: u64,
+) -> Result<Option<VerifiedDelegation>, Error> {
+    if expected.policy_epoch == 0 || d.admission.policy_epoch >= expected.policy_epoch {
+        return verify_delegation(d, expected, now).map(Some);
+    }
+    authenticate(
+        d,
+        ExpectedAdmission {
+            trust: expected.trust,
+            policy_epoch: d.admission.policy_epoch,
+            passport_policy_digest: expected.passport_policy_digest,
+        },
+        now,
+    )?;
+    Ok(None)
+}
+
 // Historical correspondence is private to reconstruction of the actual
 // operator-authenticated original frozen slot. It is not current admission.
 #[cfg(feature = "host")]

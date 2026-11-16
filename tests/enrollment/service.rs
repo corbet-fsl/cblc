@@ -468,3 +468,161 @@ fn an_unreadable_registry_refuses_the_slot_build_and_stores_nothing() {
     let slot = prepare_with(&mut source, &f, 1, current(&f, &kept), &registry).unwrap();
     assert_eq!(slot.publication().delegations.len(), 1);
 }
+
+/// The delegation `d` re-signed by `device` under policy epoch `epoch` at `issued_at` (a member
+/// that re-signed after a revocation advanced the community epoch).
+fn at_epoch(
+    f: &Fixture,
+    mut d: AccountingDelegation,
+    device: &SigningKey,
+    epoch: u64,
+    issued_at: u64,
+) -> AccountingDelegation {
+    d.admission.policy_epoch = epoch;
+    f.resign_grant(&mut d.admission);
+    d.issued_at = issued_at;
+    resign(&mut d, device);
+    d
+}
+/// Enroll `d` at `now` under policy epoch `epoch`.
+fn enroll_at(
+    path: &Path,
+    f: &Fixture,
+    d: &AccountingDelegation,
+    limits: EnrollmentConfig,
+    epoch: u64,
+    now: u64,
+) {
+    let mut store = common::host_storage::open_enrollment(path, limits).unwrap();
+    let owner = current(f, d);
+    owner.epoch.store(epoch, Ordering::Release);
+    store
+        .enroll(
+            d,
+            ExpectedAdmission {
+                trust: &f.trust,
+                policy_epoch: epoch,
+                passport_policy_digest: &common::encoded(10),
+            },
+            owner,
+            || now,
+        )
+        .unwrap();
+}
+fn owner_at(f: &Fixture, d: &AccountingDelegation, epoch: u64) -> Arc<Current> {
+    let owner = current(f, d);
+    owner.epoch.store(epoch, Ordering::Release);
+    owner
+}
+
+/// L20261114e (P1): a revocation advances the community policy epoch. The next slot leaves a
+/// delegation from the older epoch out, like an expired row, instead of refusing the whole build:
+/// the member who re-signed under the current epoch stays in the roster, the member who has not
+/// (offline) is absent, and it is back in the slot after it re-signs.
+#[test]
+fn an_older_epoch_delegation_is_left_out_of_the_next_slot_instead_of_refusing_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("common.db");
+    let f = Fixture::new();
+    let offline_device = SigningKey::from_bytes(&[5; 32]);
+    let offline = grant_long(&f, 8, &offline_device, 2400);
+    let online = at_epoch(&f, grant_long(&f, 7, &f.device, 2400), &f.device, 2, 125);
+    let limits = registry::config(&f);
+    populate(&path, &f, &offline, limits.clone());
+    enroll_at(&path, &f, &online, limits.clone(), 2, 130);
+    let now = Arc::new(AtomicU64::new(130));
+    let registry = Registry::default();
+    let mut source = producer(&path, &f, limits.clone(), now.clone());
+    let slot = prepare_with(&mut source, &f, 2, owner_at(&f, &online, 2), &registry).unwrap();
+    assert_eq!(slot.publication().slot, 1);
+    assert_eq!(slot.publication().delegations.len(), 1);
+    assert_eq!(
+        slot.publication().delegations[0].entry.member_id,
+        online.admission.member_id
+    );
+    // The left-out delegation never reaches the registry question.
+    assert_eq!(
+        *registry.asked.lock().unwrap(),
+        vec![(
+            online.admission.pseudonym.clone(),
+            f.device.verifying_key().to_bytes()
+        )]
+    );
+    drop(slot);
+    drop(source);
+    // The offline member comes back and re-signs under the current epoch: the next slot holds both.
+    let back = at_epoch(&f, offline, &offline_device, 2, 140);
+    enroll_at(&path, &f, &back, limits.clone(), 2, 230);
+    now.store(230, Ordering::Release);
+    let mut source = producer(&path, &f, limits, now);
+    let next = prepare_with(&mut source, &f, 2, owner_at(&f, &online, 2), &registry).unwrap();
+    assert_eq!(next.publication().slot, 2);
+    assert_eq!(next.publication().delegations.len(), 2);
+}
+
+/// L20261114e (P1) keeps every other refusal: an older-epoch row that fails any other check (here a
+/// grant whose Policy signature does not cover it) still refuses the whole build and stores nothing,
+/// and so does a delegation from a NEWER epoch than the slot's.
+#[test]
+fn an_older_epoch_delegation_that_fails_another_check_and_a_newer_epoch_still_refuse_the_build() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("common.db");
+    let f = Fixture::new();
+    let offline_device = SigningKey::from_bytes(&[5; 32]);
+    let offline = grant_long(&f, 8, &offline_device, 2400);
+    let online = at_epoch(&f, grant_long(&f, 7, &f.device, 2400), &f.device, 2, 125);
+    let limits = registry::config(&f);
+    populate(&path, &f, &offline, limits.clone());
+    enroll_at(&path, &f, &online, limits.clone(), 2, 130);
+    // A newer epoch than the slot's (2 > 1) is not left out: the whole build refuses.
+    let mut source = producer(&path, &f, limits.clone(), Arc::new(AtomicU64::new(130)));
+    assert!(matches!(
+        prepare(&mut source, &f, 1, current(&f, &offline)),
+        Err(Error::Admission)
+    ));
+    assert!(read(&path, &f.trust.community_id, &pending_key(1)).is_none());
+    drop(source);
+    // Storage corruption of the older-epoch row: its grant carries another grant's Policy
+    // signature; the device signature and the row's own digest are consistent again.
+    let mut key = b"enrollment/member/".to_vec();
+    key.extend_from_slice(offline.admission.member_id.as_bytes());
+    let mut record = read(&path, &f.trust.community_id, &key).unwrap();
+    let mut forged = offline.clone();
+    forged.admission.signature = f.grant_until(9, &offline_device, 2400).signature;
+    resign(&mut forged, &offline_device);
+    record["record"]["delegation"] = serde_json::to_value(&forged).unwrap();
+    record["record"]["entry"]["delegationDigest"] =
+        serde_json::json!(HEX.encode(&forged.digest().unwrap()));
+    let mut sql = cssr::LibsqlStore::local(&path, &f.trust.community_id).unwrap();
+    let mut tx = cssr::Storage::transaction(&mut sql).unwrap();
+    tx.put(&key, &serde_json::to_vec(&record).unwrap()).unwrap();
+    tx.commit().unwrap();
+    drop(sql);
+    let mut source = producer(&path, &f, limits, Arc::new(AtomicU64::new(130)));
+    assert!(matches!(
+        prepare(&mut source, &f, 2, owner_at(&f, &online, 2)),
+        Err(Error::Admission)
+    ));
+    assert!(read(&path, &f.trust.community_id, &pending_key(1)).is_none());
+}
+
+/// L20261114e (P1) keeps the epoch-0 refusal: no row is older than an expected epoch 0, so none is
+/// left out; a stored, unexpired row under expectations of epoch 0 refuses the whole build and
+/// stores nothing.
+#[test]
+fn an_expected_policy_epoch_of_zero_refuses_the_build_instead_of_leaving_rows_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("common.db");
+    let f = Fixture::new();
+    let kept = grant_long(&f, 7, &f.device, 2400);
+    let limits = registry::config(&f);
+    populate(&path, &f, &kept, limits.clone());
+    let mut source = producer(&path, &f, limits, Arc::new(AtomicU64::new(130)));
+    let registry = Registry::default();
+    assert!(matches!(
+        prepare_with(&mut source, &f, 0, current(&f, &kept), &registry),
+        Err(Error::Admission)
+    ));
+    assert!(registry.asked.lock().unwrap().is_empty());
+    assert!(read(&path, &f.trust.community_id, &pending_key(1)).is_none());
+}

@@ -85,8 +85,11 @@ impl<C: Fn() -> u64> EnrollmentService<C> {
             clock(self.observed.clone(), &self.clock),
         )
     }
-    /// Freeze the original complete current slot. Old unexpired policy epochs
-    /// refuse the whole build; expired rows are retained but never enter the tree.
+    /// Freeze the original complete current slot. Expired rows and rows from an
+    /// older policy epoch (any epoch advance, e.g. a revocation) are retained but
+    /// never enter the tree; the member is back once it re-signs under the current
+    /// epoch. Any other refusal of a row, also of an older-epoch one, refuses the
+    /// whole build.
     /// Exact retained same-slot bytes keep their original end, never a renewed one.
     /// The captured owner must bind these SAME current Policy/epoch/cohort
     /// expectations at the actual commit; sampled input alone is not authority.
@@ -141,7 +144,7 @@ impl<C: Fn() -> u64> EnrollmentService<C> {
                 if row.entry().expires_at <= now {
                     continue;
                 }
-                let value = verify_delegation(
+                let value = match super::delegation::slot_candidate(
                     row.delegation(),
                     ExpectedAdmission {
                         trust: expected.trust,
@@ -149,7 +152,11 @@ impl<C: Fn() -> u64> EnrollmentService<C> {
                         passport_policy_digest: expected.passport_policy_digest,
                     },
                     now,
-                )?;
+                )? {
+                    Some(value) => value,
+                    // Older policy epoch: absent until the member re-signs (L20261114e).
+                    None => continue,
+                };
                 let delegation = row.delegation();
                 if value.valid_until() >= end
                     && listed(
