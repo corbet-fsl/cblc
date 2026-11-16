@@ -238,6 +238,8 @@ fn main() {
                         max_proof_bytes: EXTENSION_PROOF_BYTES,
                         checkpoint_period_seconds: v["checkpointPeriodSeconds"].as_u64().unwrap(),
                     };
+                    // The exact ledger policy, for consumers that install the same ledger.
+                    let ledger_policy = serde_json::to_value(&settings).unwrap();
                     let artifacts = common::native::extension_config(&PathBuf::from(
                         v["artifacts"].as_str().unwrap(),
                     ))?;
@@ -293,6 +295,7 @@ fn main() {
                         "operatorPublicKey": SigningKey::from_bytes(&[OPERATOR_SEED; 32]).verifying_key().to_bytes(),
                         "devicePublicKey": world.as_ref().unwrap().device.verifying_key().to_bytes(),
                         "policyKeyId": policy_key_id(&SigningKey::from_bytes(&[POLICY_SEED; 32]).verifying_key().to_bytes()),
+                        "ledgerPolicy": ledger_policy,
                     }))
                 }
                 "apply" => {

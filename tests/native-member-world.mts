@@ -196,7 +196,8 @@ try {
   const forged=structuredClone(initialize);const original=genesis[0].preparedProof;
   forged.activation.proof=encodeBundle([{state:genesis[0].statement.nextState,inbox:Array(32).fill(0),proof:(original.startsWith('00')?'01':'00')+original.slice(2)}]);
   await call(forged,false);
-  const keysOut=await call(initialize);
+  const {ledgerPolicy,...keysOut}=await call(initialize);
+  world.ledgerPolicy=ledgerPolicy;
   world.activation=activation;
   world.keys={...keysOut,certificateIssuerPublicKey:issuerKey};
 
@@ -207,7 +208,7 @@ try {
     const update={previousInbox:{root:toArray(c.input.previous_inbox)},inbox:{root:toArray(c.input.inbox)},effect:c.update?.effect??{kind:'update'}};
     const applied=await call({op:'apply',member:MEMBER_BASE+i,pseudonym:pseudonyms[i].toString('hex'),statement:c.statement,update,proof:bundle(c)});
     const holder=c.next;holder.certificate=applied.certificate;members.push(holder);
-    world.members.push({index:i,member:MEMBER_BASE+i,activation:i===0,pseudonym:pseudonyms[i].toString('hex'),
+    world.members.push({index:i,ownerIndex:i,member:MEMBER_BASE+i,activation:i===0,pseudonym:pseudonyms[i].toString('hex'),
       owner:toArray(c.statement.owner),memberId:entries[i].memberId,
       genesis:{statement:c.statement,update,proof:bundle(c)},apply:applied});
   }
@@ -269,7 +270,32 @@ const activationProbe={version:1,use:`${communityId}-member-world-activation`,au
 await writeFile(resolve(directory,'activation.json'),JSON.stringify(activationProbe));
 await writeFile(resolve(directory,'world.json'),JSON.stringify(world));
 const portableConfig=JSON.stringify({directory:'.',manifestSha256});
+await writeFile(resolve(directory,'ledger-policy.json'),JSON.stringify(world.ledgerPolicy));
+const sourceCommit=process.env.CI_COMMIT_SHA;
+// Plain consumer notes: how to install the same ledger and replay this world.
+const readme=[`# Native member world: ${communityId} at ${NOW}`,'',
+  `Producer: cblc ${sourceCommit??'(uncommitted)'}, tests/native-member-world.mts with examples/member_world_issuer.rs.`,
+  `Regenerate: bash .ci/member-world.sh ${process.argv.slice(2).join(' ')}`,
+  '(needs CI_COMMIT_SHA and ARTIFACT_ROOT; the tools of .ci/record-epoch.sh). Proofs are not reproducible bytes: a rerun is a new capture under a new digest.',
+  'Pin: this directory name is the SHA-256 of member-world.json, which lists every other file with its SHA-256.','',
+  '## Install the same ledger',
+  `- AccountLedgerPolicy: ledger-policy.json. ExtensionPolicy: member-world.json "extension". Trust: community "${communityId}", policy digest base64url([3;32]).`,
+  `- Artifacts: config.json (directory "." is this capture; rebase it), manifest ${manifestSha256}, native worker CBLC_BB.`,
+  '- Activation: activation.json "activation" {account, proof} (owner index 0 genesis).',
+  `- Enrollment: admit root world.json enrollment.root at slot ${slot} (checkpoint period ${ledger.checkpointPeriodSeconds} s) through the trusted checkpoint path; the real enrollment flow cannot produce this root.`,
+  '- Keys: operator Ed25519 seed [9;32], certificate issuer P-256 scalar [3;32] (identity [0x1d;32], period from 1), '+
+    `Policy key seed [1;32], device seed [${deviceSeed};32] signs every AccountRequest and RecipientRequest.`,'',
+  '## Members (world.json "members", in owner index order)',
+  ...world.members.map(m=>`- ownerIndex ${m.ownerIndex}${m.activation?' (activation owner)':''}: pseudonym ${m.pseudonym}, fixture member ${m.member} (root and recipient seed [${m.member};32])`),
+  '','## Replay',
+  `- Genesis applies: members[i].apply.request (signed AccountRequest) with members[i].genesis.update, at a clock in [${NOW}, ${world.members[0].genesis.statement.validUntil}).`,
+  '- Recipients: members[i].recipient.request (signed RecipientRequest), valid 100 s from its issuedAt; then a record epoch can be prepared.',
+  `- Pin spend: pin-spend.json are the exact evidence bytes for verify_completed_pin_change of the change in world.json pinChange.change (member index ${world.pinChange.member}); clock >= acceptance.acceptedAt.`,
+  `- Record epoch of this producer: world.json recordEpoch (policy epoch ${policyEpoch}, period ${recordPeriod} s), with one natively checked record-epoch proof.`,''].join('\n');
+await writeFile(resolve(directory,'README.md'),readme);
 const holds={
+  'README.md':'consumer notes: regeneration command, ledger installation, members, replay windows',
+  'ledger-policy.json':'the exact AccountLedgerPolicy of the producing ledger (serde of cblc AccountLedgerPolicy)',
   'world.json':'community, NOW, policies, enrollment (public entries, root, slot), per member: genesis statement/update/proof bundle, the signed AccountRequest and its acceptance and certificate, the signed RecipientRequest; the record epoch descriptor and one record-epoch proof; the pin change',
   'activation.json':'activation probe (statement and proof bundle of member 0 genesis), in the shape of the alpha/omega startup probes',
   'pin-spend.json':'completed SpentChange evidence bytes {request, acceptance, update} as verify_completed_pin_change decodes them',
@@ -283,13 +309,12 @@ for(const name of Object.keys(holds)) {
   const data=await readFile(resolve(directory,sources[name]??name));
   files[name]={sha256:sha(data).toString('hex'),bytes:data.length,holds:holds[name]};
 }
-const sourceCommit=process.env.CI_COMMIT_SHA;
 const metadata={version:1,purpose:'cblc.native-member-world.v1',sourceCommit:sourceCommit??null,community:communityId,
   communityDigest:toArray(community),now:NOW,policy,extension,ledger,slot,manifestSha256,proofScope:artifacts.scope,
   recordEpoch:{policyEpoch,periodSeconds:recordPeriod,epoch:world.recordEpoch.descriptor.epoch},
   seeds:{policyKey:1,operator:9,certificateIssuer:3,device:deviceSeed,memberRoot:'[member; 32]',recipient:'[member; 32]',
     note:'fictional public test seeds, never trust'},
-  keys:world.keys,members:world.members.map(m=>({index:m.index,member:m.member,activation:m.activation,pseudonym:m.pseudonym,
+  keys:world.keys,members:world.members.map(m=>({index:m.index,ownerIndex:m.ownerIndex,member:m.member,activation:m.activation,pseudonym:m.pseudonym,
     owner:m.owner,memberId:m.memberId,recipientKey:m.recipient.request.recipientKey})),
   pinChange:{member:world.pinChange.member,change:pinChange,binding:world.pinChange.binding},
   producer:producer.receipt,files};
