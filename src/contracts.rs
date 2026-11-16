@@ -167,7 +167,7 @@ pub struct RecipientRequest {
     pub chat_public_key: String,
     /// Lineage epoch the signing device claims for this key. Signed, but no authority: a
     /// replacement needs a newer account root revision (`rotate_root`), never a larger claim
-    /// (review-s4b N2: a still-current device could otherwise pin the recipient).
+    /// (a still-current device could otherwise pin the recipient).
     pub lineage_epoch: u64,
     pub issued_at: u64,
     pub expires_at: u64,
