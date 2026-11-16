@@ -10,7 +10,7 @@ use cblc::{
 };
 use data_encoding::{BASE64URL_NOPAD as B64, HEXLOWER};
 use ed25519_dalek::{Signer as _, SigningKey};
-use serde_json::{Value, json};
+use serde_json::json;
 
 fn recipient() -> RecipientRequest {
     RecipientRequest {
