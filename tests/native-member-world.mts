@@ -74,6 +74,8 @@ assert(!args.deposit||depositSender<pseudonyms.length&&depositPunisher<pseudonym
   'The deposit contact joins two members other than the pin member');
 // Under daily settlement the record epochs are its cuts: both periods are the same by default.
 const settlementPeriod=args['settlement-period']===undefined?recordPeriod:integer('settlement-period',args['settlement-period'],1);
+// The ledger publishes daily settlement only at its record epochs (freeze.rs refuses other periods).
+assert(!args.deposit||settlementPeriod===recordPeriod,'--settlement-period must equal --record-period under daily settlement');
 
 // ---- Policy: alpha-style defaults measured from NOW (tests/holder/fixtures/alpha-native-request.json).
 const configured=args.policy?JSON.parse(await readFile(resolve(args.policy))):{};
@@ -306,8 +308,9 @@ try {
     assert.equal(candidate.statement.kind,'deposit');
     const proved=await proof('deposit',candidate.input,'deposit'),depositProof=encodeBundle([{proof:proved}]);
     // A changed proof under a genuine pass is refused by the native verifier and stages nothing.
-    await call({op:'stage',member:MEMBER_BASE+B,pseudonym:pseudonyms[B].toString('hex'),deposit:candidate.statement.deposit,operation:1,
+    const refused=await call({op:'stage',member:MEMBER_BASE+B,pseudonym:pseudonyms[B].toString('hex'),deposit:candidate.statement.deposit,operation:1,
       proof:encodeBundle([{proof:(proved.startsWith('00')?'01':'00')+proved.slice(2)}]),now:t},false);
+    assert.match(refused,/^CryptoProvider$/,'The changed deposit proof is refused by the native proof check');
     const staged=await call({op:'stage',member:MEMBER_BASE+B,pseudonym:pseudonyms[B].toString('hex'),deposit:candidate.statement.deposit,operation:2,proof:depositProof,now:t});
     world.deposit={sender:A,punisher:B,releaseEpoch:t/delay,stagedAt:t,issuance,steps,deposit:candidate.statement.deposit,proof:depositProof,settlement,staged};
   }
