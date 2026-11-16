@@ -21,8 +21,8 @@
 // ARTIFACT_ROOT + CI_COMMIT_SHA to retain.
 import assert from 'node:assert/strict';
 import {createECDH,createHash,generateKeyPairSync,sign,randomBytes} from 'node:crypto';
-import {readFile,writeFile,mkdir,copyFile,rename,rm,stat,readdir} from 'node:fs/promises';
-import {resolve,isAbsolute} from 'node:path';
+import {readFile,writeFile,mkdir,copyFile,rename,rm,stat,readdir,chmod} from 'node:fs/promises';
+import {resolve,isAbsolute,relative} from 'node:path';
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {parseArgs} from 'node:util';
@@ -309,7 +309,9 @@ for(const name of Object.keys(holds)) {
   const data=await readFile(resolve(directory,sources[name]??name));
   files[name]={sha256:sha(data).toString('hex'),bytes:data.length,holds:holds[name]};
 }
-const metadata={version:1,purpose:'cblc.native-member-world.v1',sourceCommit:sourceCommit??null,community:communityId,
+const metadata={version:1,purpose:'cblc.native-member-world.v1',sourceCommit:sourceCommit??null,
+  // The exact producer invocation (run by .ci/member-world.sh in CI), relative to the cblc root.
+  command:['node',relative(process.cwd(),process.argv[1]),...process.argv.slice(2)],community:communityId,
   communityDigest:toArray(community),now:NOW,policy,extension,ledger,slot,manifestSha256,proofScope:artifacts.scope,
   recordEpoch:{policyEpoch,periodSeconds:recordPeriod,epoch:world.recordEpoch.descriptor.epoch},
   seeds:{policyKey:1,operator:9,certificateIssuer:3,device:deviceSeed,memberRoot:'[member; 32]',recipient:'[member; 32]',
@@ -336,6 +338,9 @@ if(process.env.ARTIFACT_ROOT) {
       await writeFile(resolve(staging,'member-world.json'),metadataBytes);
       await rename(staging,destination);
     } finally {await rm(staging,{recursive:true,force:true});}
+    // Read-only once retained: files first, then the directories that hold them.
+    for(const name of [...Object.keys(holds),'member-world.json'])await chmod(resolve(destination,name),0o444);
+    for(const name of ['setup','.'])await chmod(resolve(destination,name),0o555);
   }
   assert.deepEqual(await readFile(resolve(destination,'member-world.json')),metadataBytes);
   for(const [name,file] of Object.entries(files))assert.equal(sha(await readFile(resolve(destination,name))).toString('hex'),file.sha256);

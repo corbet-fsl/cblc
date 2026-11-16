@@ -130,16 +130,21 @@ SDK range, resolved here to5.2.1. Each CI consumer uses the committed fixture
 lock unchanged, recording its source and digest rather than refreshing different
 SDKs behind unchanged artifact metadata.
 
-The native member world (`tests/native-member-world.mts --community <id> --now <N>`,
-issuer `examples/member_world_issuer.rs`) is the downstream fixture of a member-bearing
-community at one chosen time: an enrollment of two or more fictional members, every
-member's genesis proved and accepted through the account service, record recipients,
-a record epoch with one natively checked record-epoch proof, and one completed pin spend.
-It proves under this tree's five-circuit group, or under an existing group given with
-`--group` once its bytecode and keys equal this tree's. The capture is retained once
-under `native-member-world-retained/<sha256 of member-world.json>/`; that manifest
-names the community, time, policies, members and every file with its digest. Only
-public statements, proofs, signed requests and acceptances are written.
+The native member world is the downstream fixture of a member-bearing community at one
+chosen time: an enrollment of two or more fictional members, every member's genesis proved
+and accepted through the account service, record recipients, a record epoch with one
+natively checked record-epoch proof, and one completed pin spend. Run it as
+`bash .ci/member-world.sh --community <id> --now <N> [options]` (options in the header of
+`tests/native-member-world.mts`, issuer `examples/member_world_issuer.rs`). It needs
+`CI_COMMIT_SHA`, `ARTIFACT_ROOT` and the environment of the record-epoch job (Node 24,
+wasm-pack, jq, `BB_NATIVE_RUSTFLAGS` from the check shell); remove `.member-world/` before a
+second run. It proves under this tree's five-circuit group, or under an existing group given
+with `--group` once its bytecode and keys equal this tree's. The capture is retained once,
+read-only, under `native-member-world-retained/<sha256 of member-world.json>/`; that
+manifest names the exact command, the community, time, policies, members and every file with
+its digest. Only public statements, proofs, signed requests and acceptances are written.
+A capture is not byte-reproducible: proofs, blindings and the fictional account keys are
+fresh on every run, so a re-run is a new capture under a new digest that consumers pin anew.
 
 
 ## Admission signer catchup at startup

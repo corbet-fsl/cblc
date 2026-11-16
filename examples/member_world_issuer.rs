@@ -216,6 +216,7 @@ fn main() {
     let mut ledger: Option<AccountLedger<RejectLegacy>> = None;
     let mut spent: Option<SpentChange> = None;
     let mut sequence = 0_u8;
+    let mut opened_stores = 0_u32;
     let mut extension_policy = None;
     let mut scope = None;
     let mut records = records::Records::default();
@@ -224,6 +225,8 @@ fn main() {
         let result = (|| -> Result<Value, Error> {
             match v["op"].as_str().unwrap() {
                 "init" => {
+                    // Every start-up opens a store of its own: a refused attempt leaves nothing behind.
+                    opened_stores += 1;
                     let now = v["now"].as_u64().unwrap();
                     let community = v["community"].as_str().unwrap();
                     let device = u8::try_from(v["deviceSeed"].as_u64().unwrap()).unwrap();
@@ -250,7 +253,7 @@ fn main() {
                     let verifier =
                         NativeExtensionVerifier::new(options.clone(), options, artifacts)?;
                     let mut opened = common::host_storage::open(
-                        directory.path().join("issuer.db"),
+                        directory.path().join(format!("issuer-{opened_stores}.db")),
                         created.trust(),
                         settings,
                         RejectLegacy,
