@@ -130,6 +130,17 @@ SDK range, resolved here to5.2.1. Each CI consumer uses the committed fixture
 lock unchanged, recording its source and digest rather than refreshing different
 SDKs behind unchanged artifact metadata.
 
+The native member world (`tests/native-member-world.mts --community <id> --now <N>`,
+issuer `examples/member_world_issuer.rs`) is the downstream fixture of a member-bearing
+community at one chosen time: an enrollment of two or more fictional members, every
+member's genesis proved and accepted through the account service, record recipients,
+a record epoch with one natively checked record-epoch proof, and one completed pin spend.
+It proves under this tree's five-circuit group, or under an existing group given with
+`--group` once its bytecode and keys equal this tree's. The capture is retained once
+under `native-member-world-retained/<sha256 of member-world.json>/`; that manifest
+names the community, time, policies, members and every file with its digest. Only
+public statements, proofs, signed requests and acceptances are written.
+
 
 ## Admission signer catchup at startup
 

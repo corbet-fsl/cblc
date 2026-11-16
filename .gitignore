@@ -6,6 +6,7 @@
 .proof-test/
 .extension-test/
 .extension-wasm/
+.member-world*/
 dependency-metadata.json
 
 .runtime-v8/
