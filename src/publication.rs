@@ -187,6 +187,7 @@ impl cbcn::document::Document for PublicVerifierMaterial {
         Ok(cbcn::document::Version {
             revision: self.revision,
             epoch: self.policy_epoch,
+            fresh: 0,
         })
     }
 }
