@@ -137,6 +137,7 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
 
     /// Issue ancestry only inside the original verified update transaction.
     /// The configured issuer must be the current key of the recorded ring.
+    #[allow(clippy::too_many_arguments)] // public ledger API used across repositories; a parameter struct would change every call site
     pub fn apply_extended_certified(
         &mut self,
         grant: &AdmissionGrant,

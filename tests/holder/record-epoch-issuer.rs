@@ -322,12 +322,14 @@ impl cblc::storage::CommitAuthority for TestAuthority {
         Some(&TestLineage)
     }
 }
+#[allow(dead_code)]
 pub(crate) struct TestLineage;
 impl cblc::current_device::CurrentLineage for TestLineage {
     fn is_current(&self, _: &[u8; 32]) -> bool {
         true
     }
 }
+#[allow(dead_code)]
 pub(crate) fn authority() -> std::sync::Arc<dyn cblc::storage::CommitAuthority> {
     std::sync::Arc::new(TestAuthority)
 }

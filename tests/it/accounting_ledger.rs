@@ -1041,7 +1041,7 @@ fn genesis_lifetime_is_bounded_by_the_code_window_not_the_rulebook() {
     short.max_authorization_seconds = lifetime - 1;
     let open_with = |name: &str, policy: AccountLedgerPolicy| {
         let mut ledger = crate::common::host_storage::open(
-            &dir.path().join(name),
+            dir.path().join(name),
             f.trust.clone(),
             policy,
             RealVerifier::default(),
