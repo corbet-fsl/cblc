@@ -374,7 +374,7 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-libre/cbcn.git?branch=main#7d15de2782e3b0392976cd01ab4fec28b6e6f572"
+source = "git+https://git.corbet.ch/corbet-libre/cbcn.git?branch=main#ee259009c772cc2323f35aea78db1ca0aa2e8c78"
 dependencies = [
  "csgn",
  "serde",
@@ -741,7 +741,7 @@ dependencies = [
 [[package]]
 name = "csgn"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-libre/csgn.git?branch=main#e33d6c943d83328ee91f7804d833c9d3be3ac4cf"
+source = "git+https://git.corbet.ch/corbet-libre/csgn.git?branch=main#b300d5f1aff8646d474bce7b57148b3673adbf5a"
 dependencies = [
  "ciborium-ll",
  "coset",
@@ -3286,7 +3286,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",
