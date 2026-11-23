@@ -64,18 +64,6 @@
       ],
       "archive_inputs": true
     },
-    "portable-paths": {
-      "job": "portable-paths",
-      "scheduler": "forgejo",
-      "checks": [
-        "portable-paths"
-      ],
-      "workflow": "portable-paths",
-      "command": [
-        "ccid:run-declared-checks"
-      ],
-      "runs_on": "linux"
-    },
     "proof-fixtures": {
       "job": "proof-fixtures",
       "scheduler": "forgejo",
@@ -189,6 +177,7 @@
       "events": [
         "manual"
       ],
+      "fold_portable_paths": "report",
       "archive_inputs": true
     },
     "wave-artifacts": {
