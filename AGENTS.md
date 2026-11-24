@@ -1,6 +1,6 @@
 # cblc — agent notes
 
-Commands (repo root; work in a lane, never edit `~/agents/scratch/ws`; lane-wide checks run via `cargo xtask check/test`):
+Commands (repo root; never edit a shared checkout; workspace-wide checks run via `cargo xtask check/test`):
 - `bash .ci/update-our-crates.sh` first: advances internal crates to newest main; the `--locked` gates below assume it
 - `cargo fmt --check`
 - `cargo clippy --locked --all-targets --all-features -- -D warnings`
